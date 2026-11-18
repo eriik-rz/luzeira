@@ -63,7 +63,7 @@ from luzeira.temas import ThemeError, load_theme, resolve_font
 from luzeira.temas.cargar import MAX_ZIP_BYTES
 from luzeira.temas.modelo import ORIENTATION_SIZES, ImageWidget
 
-from .ajustes import SettingsBackend, parse_display, parse_update
+from .ajustes import SettingsBackend, parse_answer, parse_display, parse_update
 from .almacen import EditorError, ThemeStore, friendly_theme_error, parse_json, parse_theme
 
 log = logging.getLogger(__name__)
@@ -363,6 +363,9 @@ class EditorServer:
             "message": message,
             "sizes": sizes,
             "active_theme": active,
+            # «¿Se ve bien?» de una pantalla elegida en el editor: la interfaz la muestra
+            # en cuanto la ve aquí (pregunta por /api/info cada pocos segundos).
+            "question": self._settings.question() if self._settings is not None else None,
         }
 
     def sensor_rows(self) -> list[dict]:
@@ -461,7 +464,8 @@ def _route_label(path: str) -> str:
     if len(parts) > 2 and parts[1] == "api":
         known = {
             "info", "temas", "sensores", "vista-previa", "copiar", "aplicar", "recursos",
-            "ajustes", "pantalla", "acceso-escritorio", "carpeta-temas", "importar-tema",
+            "ajustes", "pantalla", "respuesta", "acceso-escritorio", "carpeta-temas",
+            "importar-tema",
         }  # fmt: skip
         return "/" + "/".join(p if p in known or p == "api" else "*" for p in parts[1:6])
     return "/(estático)"
@@ -677,6 +681,9 @@ class _Handler(BaseHTTPRequestHandler):
                 choice_id, confirmed = parse_display(self._json_body())
                 editor.settings().choose_display(choice_id, confirmed=confirmed)
                 return self._json(200, {"ok": True})
+            case ("POST", "pantalla", "respuesta"):
+                looks_right = parse_answer(self._json_body())
+                return self._json(200, {"message": editor.settings().answer(looks_right)})
             case ("POST", "acceso-escritorio"):
                 return self._json(200, {"message": editor.settings().create_shortcut()})
             case ("POST", "carpeta-temas"):

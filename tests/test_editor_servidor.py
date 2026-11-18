@@ -1333,6 +1333,12 @@ class FakeSettings:
     def import_theme(self, zip_path: Path) -> str:
         return cargar.import_theme_zip(zip_path, self.user).name
 
+    def question(self) -> dict | None:
+        return None
+
+    def answer(self, looks_right: bool) -> str:
+        raise AssertionError("sin pregunta pendiente")
+
 
 @pytest.fixture
 def with_settings(env):
@@ -1435,3 +1441,23 @@ def test_import_too_big_is_413(with_settings):
     big = b"x" * (cargar.MAX_ZIP_BYTES + 1)
     headers = {"X-Luzeira-Filename": "t.zip"}
     assert client.json("POST", "/api/importar-tema", big, headers=headers)[0] == 413
+
+
+def test_question_is_in_info_and_is_answered(with_settings):
+    client, fake, _ = with_settings
+    fake.question = lambda: {"title": "¿Se ve bien?", "text": "…"}
+    fake.answer = lambda looks_right: f"respuesta {looks_right}"
+    status, info = client.json("GET", "/api/info")
+    assert status == 200 and info["question"]["title"] == "¿Se ve bien?"
+    body = {"looks_right": False}
+    assert client.json("POST", "/api/pantalla/respuesta", body) == (
+        200,
+        {"message": "respuesta False"},
+    )
+    for bad in [{}, {"looks_right": 1}, {"looks_right": True, "x": 1}]:
+        assert client.json("POST", "/api/pantalla/respuesta", bad)[0] == 400
+
+
+def test_info_without_tray_has_no_question(env):
+    _, client, *_ = env
+    assert client.json("GET", "/api/info")[1]["question"] is None

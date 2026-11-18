@@ -40,6 +40,14 @@ class SettingsBackend(Protocol):
         """Importa el zip y devuelve el nombre del tema nuevo."""
         ...
 
+    def question(self) -> dict | None:
+        """La pregunta «¿se ve bien?» pendiente en el editor (``{title, text}``), si hay."""
+        ...
+
+    def answer(self, looks_right: bool) -> str:
+        """Contesta esa pregunta; devuelve el texto para el usuario."""
+        ...
+
 
 def _optional(body: dict, key: str, kind: type) -> object:
     value = body.get(key)
@@ -58,6 +66,17 @@ def parse_update(body: object) -> dict:
         "flip": _optional(body, "flip", bool),
         "autostart": _optional(body, "autostart", bool),
     }
+
+
+def parse_answer(body: object) -> bool:
+    """``{"looks_right": bool}``."""
+    if (
+        isinstance(body, dict)
+        and set(body) == {"looks_right"}
+        and type(body["looks_right"]) is bool
+    ):
+        return body["looks_right"]
+    raise EditorError(400, "La respuesta no es válida.")
 
 
 def parse_display(body: object) -> tuple[str | None, bool]:

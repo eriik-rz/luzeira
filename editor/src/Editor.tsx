@@ -63,19 +63,24 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
   // Estado de la pantalla (arriba a la derecha). Se vuelve a preguntar cada pocos segundos:
   // leído solo al abrir, se quedaba para siempre en «Preparando la imagen…».
   const [info, setInfo] = useState<Info | null>(initialInfo)
-  useEffect(() => {
-    let alive = true
-    const refresh = () =>
+  const aliveRef = useRef(true)
+  const refreshInfo = useCallback(
+    () =>
       void api
         .info()
-        .then((next) => alive && setInfo(next))
-        .catch(() => undefined) // sin respuesta, se deja lo último conocido
-    const timer = window.setInterval(refresh, INFO_REFRESH_MS)
+        .then((next) => aliveRef.current && setInfo(next))
+        .catch(() => undefined), // sin respuesta, se deja lo último conocido
+    [api],
+  )
+  useEffect(() => {
+    aliveRef.current = true
+    const timer = window.setInterval(refreshInfo, INFO_REFRESH_MS)
     return () => {
-      alive = false
+      aliveRef.current = false
       window.clearInterval(timer)
     }
-  }, [api])
+  }, [refreshInfo])
+  const [answering, setAnswering] = useState(false)
   const [state, dispatch] = useReducer(reducer, undefined, () => initialState())
   const [themes, setThemes] = useState(initialThemes)
   const [current, setCurrent] = useState<Current | null>(null)
@@ -414,6 +419,22 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
     [toast],
   )
 
+  // «¿Se ve bien?» de una pantalla elegida en «Ajustes». Cerrarla cuenta como «No», igual
+  // que el diálogo de Windows: sin respuesta clara, no se recuerda una pantalla dudosa.
+  const answerQuestion = async (looksRight: boolean) => {
+    if (answering) return
+    setAnswering(true)
+    try {
+      toast(await api.answerQuestion(looksRight), looksRight ? 'ok' : 'info')
+    } catch (e) {
+      toast(errorMessage(e), 'error')
+    } finally {
+      setInfo((i) => (i ? { ...i, question: null } : i))
+      setAnswering(false)
+      refreshInfo()
+    }
+  }
+
   const selectTheme = async (name: string) => {
     if (!current || name === current.name) return
     if (current.builtin && theme !== savedRef.current) {
@@ -728,6 +749,11 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
         <SettingsDialog
           api={api}
           toast={toast}
+          onDisplayChosen={() => {
+            // La prueba tarda un poco: se mira ahora y otra vez al rato.
+            refreshInfo()
+            window.setTimeout(refreshInfo, 1500)
+          }}
           onClose={() => setDialog(null)}
           onImported={(name) => {
             setDialog(null)
@@ -738,6 +764,24 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
               .catch((e: unknown) => toast(errorMessage(e), 'error'))
           }}
         />
+      )}
+      {info?.question && (
+        <Dialog
+          title={info.question.title}
+          onClose={() => void answerQuestion(false)}
+          actions={
+            <>
+              <button type="button" className="btn primary" disabled={answering} onClick={() => void answerQuestion(false)}>
+                No
+              </button>
+              <button type="button" className="btn" disabled={answering} onClick={() => void answerQuestion(true)}>
+                Sí, se ve bien
+              </button>
+            </>
+          }
+        >
+          <p className="settings-confirm">{info.question.text}</p>
+        </Dialog>
       )}
       {dialog?.kind === 'restore' && (
         <Dialog

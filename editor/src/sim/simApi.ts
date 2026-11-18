@@ -50,6 +50,7 @@ export class SimulatedApi implements EditorApi {
       message: 'Modo simulado: no hay pantalla conectada, los datos son inventados.',
       active_theme: this.applied,
       simulated: true,
+      question: this.question,
     }
   }
 
@@ -179,6 +180,31 @@ export class SimulatedApi implements EditorApi {
     for (const o of all) o.current = o.id === id
     this.appSettings.display_auto = id === null
     this.appSettings.display_text = option ? `Probando ${option.label}` : 'Ninguna pantalla conectada'
+    this.question = null
+    if (option?.id?.includes('kipye')) {
+      this.questionFor = option.label
+      this.question = {
+        title: '¿Se ve bien?',
+        text: 'Luzeira está mandando el tema a la Kipye, pero no puede comprobar por sí sola que se vea.\n\n¿Se ve bien el tema en la pantalla?\n\nSi contestas «Sí», la recordaré para la próxima vez. Si ves rayas, colores raros o nada, contesta «No» y dejaré de usarla. (simulado)',
+      }
+    }
+  }
+
+  /** La Kipye (sin saludo) pregunta «¿se ve bien?» al elegirla, como en la app. */
+  private question: Info['question'] = null
+  private questionFor: string | null = null
+
+  async answerQuestion(looksRight: boolean): Promise<string> {
+    await wait(80)
+    if (!this.question) throw new ApiError('Esa pregunta ya no está pendiente.', 409)
+    this.question = null
+    if (!looksRight) {
+      for (const o of [...this.appSettings.choices, ...this.appSettings.advanced]) o.current = false
+      this.appSettings.display_auto = true
+      this.appSettings.display_text = 'Ninguna pantalla conectada'
+      return 'Vale: no la recuerdo y dejo de mandarle nada. (simulado)'
+    }
+    return `Listo: Luzeira usará ${this.questionFor ?? 'tu pantalla'}. Lo recordaré. (simulado)`
   }
 
   async createShortcut(): Promise<string> {

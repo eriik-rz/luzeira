@@ -16,12 +16,14 @@ const AFTER_CHOICE_MS = 800
 
 interface Props {
   api: EditorApi
+  /** Se ha elegido pantalla: que el editor mire pronto si hay pregunta «¿se ve bien?». */
+  onDisplayChosen: () => void
   onClose: () => void
   onImported: (name: string) => void
   toast: (message: string, kind?: ToastItem['kind']) => void
 }
 
-export function SettingsDialog({ api, onClose, onImported, toast }: Props) {
+export function SettingsDialog({ api, onDisplayChosen, onClose, onImported, toast }: Props) {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<DisplayOption | null>(null)
@@ -69,7 +71,10 @@ export function SettingsDialog({ api, onClose, onImported, toast }: Props) {
     } catch (e) {
       toast(errorMessage(e), 'error')
     }
-    window.setTimeout(() => void reload(), AFTER_CHOICE_MS)
+    window.setTimeout(() => {
+      void reload()
+      onDisplayChosen()
+    }, AFTER_CHOICE_MS)
   }
 
   const pick = (id: string) => {

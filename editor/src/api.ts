@@ -22,6 +22,8 @@ export interface Info {
   /** Tema que está en la pantalla ahora (para abrir el editor con él). */
   active_theme?: string | null
   simulated?: boolean
+  /** «¿Se ve bien?» de una pantalla elegida en «Ajustes», esperando respuesta. */
+  question?: { title: string; text: string } | null
 }
 
 export interface ThemeSummary {
@@ -125,6 +127,8 @@ export interface EditorApi {
   updateSettings(change: SettingsChange): Promise<void>
   /** `null`: volver a detectarla sola. `confirmed`: el usuario ha aceptado el aviso. */
   chooseDisplay(id: string | null, confirmed: boolean): Promise<void>
+  /** Contesta «¿se ve bien?»; devuelve el texto para el usuario. */
+  answerQuestion(looksRight: boolean): Promise<string>
   /** Devuelve el texto para el usuario. */
   createShortcut(): Promise<string>
   openThemesFolder(): Promise<void>
@@ -299,6 +303,10 @@ class HttpApi implements EditorApi {
   }
   async chooseDisplay(id: string | null, confirmed: boolean) {
     await this.json('POST', '/api/pantalla', id === null ? { auto: true } : { id, confirmed })
+  }
+  async answerQuestion(looksRight: boolean) {
+    const r = await this.json<{ message: string }>('POST', '/api/pantalla/respuesta', { looks_right: looksRight })
+    return r.message
   }
   async createShortcut() {
     const r = await this.json<{ message: string }>('POST', '/api/acceso-escritorio', {})

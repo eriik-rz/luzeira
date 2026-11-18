@@ -111,8 +111,8 @@ MSG_BETA_UNCHECKED = (
     "Este modelo está en beta: todavía no se ha probado con una pantalla de verdad.\n\n"
     "Además, este modelo no contesta a ningún saludo, así que Luzeira no puede comprobar "
     "que sea tu pantalla: le mandará la imagen directamente.\n\n"
-    "Si ves rayas o no se ve nada, desconéctala o elige «Pantalla» > «Volver a "
-    "detectarla sola».\n\n¿Quieres probarlo?"
+    "Si ves rayas o no se ve nada, desconéctala o elige «Volver a detectarla sola» "
+    "(en «Pantalla», en el menú del icono, o en «Ajustes» del editor).\n\n¿Quieres probarlo?"
 )
 TITLE_LOOKS_RIGHT = "Luzeira: ¿se ve bien?"
 MSG_LOOKS_RIGHT = (
@@ -126,6 +126,7 @@ MSG_TRIAL_REJECTED = (
     "Vale: no la recuerdo y dejo de mandarle nada. Si la pantalla se ha quedado con rayas, "
     "desconéctala y vuelve a conectarla."
 )
+TITLE_LOOKS_RIGHT_EDITOR = "¿Se ve bien?"
 MSG_DIALOG_OPEN = "Antes contesta la pregunta de Luzeira que tienes abierta."
 TITLE_ADVANCED = "Luzeira: modo avanzado"
 MSG_ADVANCED = (
@@ -308,7 +309,24 @@ class EditorSettings:
         if option["warning"] is not None and not confirmed:
             raise EditorError(400, "Falta confirmar el aviso antes de probar esa pantalla.")
         choice = DisplayChoice.for_port(model, port, advanced=is_advanced)
-        app._post(app._safe(lambda: app._try_choice(choice)))
+        app._post(app._safe(lambda: app._try_choice(choice, from_editor=True)))
+
+    def question(self) -> dict | None:
+        choice = self._app.editor_question()
+        if choice is None:
+            return None
+        text = MSG_LOOKS_RIGHT.format(model=model_label(choice.model), device=choice.device)
+        return {"title": TITLE_LOOKS_RIGHT_EDITOR, "text": text}
+
+    def answer(self, looks_right: bool) -> str:
+        app = self._app
+        choice = app.editor_question()
+        if choice is None:
+            raise EditorError(409, "Esa pregunta ya no está pendiente.")
+        app._post(app._safe(lambda: app._answer_from_editor(choice, looks_right)))
+        if looks_right:
+            return MSG_CHOICE_SAVED.format(model=model_label(choice.model), device=choice.device)
+        return MSG_TRIAL_REJECTED
 
     def create_shortcut(self) -> str:
         from luzeira.sistema.accesos import ShortcutError, create_shortcut
@@ -345,6 +363,10 @@ class TrayApp:
         # ventana mientras está abierto, así que el menú y la cola pueden volver a entrar.
         self._dialog_open = False
         self._asking: DisplayChoice | None = None  # la de «¿se ve bien?», mientras se pregunta
+        # True: esa pregunta está en la ventana del editor (se eligió desde allí), no en un
+        # diálogo de Windows. Se contesta con ``EditorSettings.answer``.
+        self._asking_in_editor = False
+        self._trial_from_editor = False  # la elección que se prueba se hizo en el editor
         self._question_waiting: DisplayChoice | None = None  # esperando a otro diálogo
         self._ports_cache: tuple[float, list[PortInfo]] | None = None
         if not is_theme_valid(config.theme):
@@ -474,15 +496,18 @@ class TrayApp:
         if status is not Status.RUNNING or info is None or info.choice != trial:
             return
         self._trial = None
+        from_editor = self._trial_from_editor
         found = replace(trial, device=info.device or trial.device)
         if info.verified:
             self._remember(found)
         else:
-            self._post(lambda: self._ask_looks_right(found))
+            self._post(lambda: self._ask_looks_right(found, in_editor=from_editor))
 
-    def _remember(self, choice: DisplayChoice) -> None:
+    def _remember(self, choice: DisplayChoice, *, notify: bool = True) -> None:
         self._save(self.config.model_copy(update={"display": setting_from_choice(choice)}))
-        self._notify(MSG_CHOICE_SAVED.format(model=model_label(choice.model), device=choice.device))
+        if notify:
+            text = MSG_CHOICE_SAVED.format(model=model_label(choice.model), device=choice.device)
+            self._notify(text)
 
     def _ask(self, title: str, text: str, **flags: bool) -> bool:
         """Un diálogo Sí/No (nunca dos a la vez: quien llame mira ``_dialog_open``)."""
@@ -497,23 +522,51 @@ class TrayApp:
             if waiting is not None:
                 self._post(lambda: self._ask_looks_right(waiting))
 
-    def _ask_looks_right(self, choice: DisplayChoice) -> None:
+    def _ask_looks_right(self, choice: DisplayChoice, *, in_editor: bool = False) -> None:
         """«¿Se ve bien?» para una elección cuya prueba no podía fallar. Sí → se recuerda;
-        No (o cerrar el diálogo) → se deja de usar y se vuelve a lo que hubiera guardado."""
+        No (o cerrar el diálogo) → se deja de usar y se vuelve a lo que hubiera guardado.
+
+        ``in_editor``: se eligió en la ventana del editor; si sigue abierta, la pregunta
+        sale allí (``editor_question``) en vez de en un diálogo de Windows."""
+        if in_editor and self.editor.window.is_open:
+            self._asking = choice
+            self._asking_in_editor = True
+            return
         if self._dialog_open:
             self._question_waiting = choice  # en cuanto se cierre el que hay
             return
         self._asking = choice
+        self._asking_in_editor = False
         text = MSG_LOOKS_RIGHT.format(model=model_label(choice.model), device=choice.device)
         looks_right = self._ask(TITLE_LOOKS_RIGHT, text, default_no=True)
         if self._asking is not choice:
             return  # mientras se preguntaba, el usuario eligió otra cosa en el menú
         self._asking = None
+        self._settle_answer(choice, looks_right)
+
+    def _settle_answer(
+        self, choice: DisplayChoice, looks_right: bool, *, notify: bool = True
+    ) -> None:
+        """Lo que pasa al contestar «¿se ve bien?». ``notify=False``: la respuesta llegó
+        del editor, que ya se lo dice al usuario (sin repetirlo en un aviso de Windows)."""
         if looks_right:
-            self._remember(choice)
+            self._remember(choice, notify=notify)
             return
         self.service.choose_display(choice_from_setting(self.config.display))
-        self._notify(MSG_TRIAL_REJECTED)
+        if notify:
+            self._notify(MSG_TRIAL_REJECTED)
+
+    def editor_question(self) -> DisplayChoice | None:
+        """La pregunta «¿se ve bien?» que espera respuesta en el editor, si hay."""
+        choice = self._asking
+        return choice if choice is not None and self._asking_in_editor else None
+
+    def _answer_from_editor(self, choice: DisplayChoice, looks_right: bool) -> None:
+        if self._asking is not choice or not self._asking_in_editor:
+            return  # ya se contestó, o se eligió otra cosa mientras tanto
+        self._asking = None
+        self._asking_in_editor = False
+        self._settle_answer(choice, looks_right, notify=False)
 
     # --- acciones del menú (todas en el hilo del icono) -----------------------------
 
@@ -591,9 +644,11 @@ class TrayApp:
         info = self.service.display_info
         return info is not None and (info.model_key, info.device) == (model.key, port.device)
 
-    def _try_choice(self, choice: DisplayChoice) -> None:
+    def _try_choice(self, choice: DisplayChoice, *, from_editor: bool = False) -> None:
         self._trial = choice
+        self._trial_from_editor = from_editor
         self._asking = self._question_waiting = None  # una pregunta pendiente ya no vale
+        self._asking_in_editor = False
         self.service.choose_display(choice)
 
     def _pick(self, model: DisplayModel, port: PortInfo, *, advanced: bool) -> None:
@@ -616,6 +671,7 @@ class TrayApp:
     def _back_to_auto(self) -> None:
         self._trial = None
         self._asking = self._question_waiting = None
+        self._asking_in_editor = False
         self._save(self.config.model_copy(update={"display": None}))
         self.service.choose_display(None)
         self._notify(MSG_BACK_TO_AUTO)
@@ -708,6 +764,17 @@ class TrayApp:
         """La ventana del editor ha terminado (llega desde un hilo vigilante)."""
         if code == EXIT_NO_WEBVIEW2:
             self._post(lambda: self._notify(MSG_NO_WEBVIEW2))
+        self._post(self._question_back_to_windows)
+
+    def _question_back_to_windows(self) -> None:
+        """Se ha cerrado el editor con «¿se ve bien?» sin contestar: se pregunta con un
+        diálogo de Windows (sin respuesta, la pantalla no se recordaría nunca)."""
+        choice = self.editor_question()
+        if choice is None:
+            return
+        self._asking = None
+        self._asking_in_editor = False
+        self._ask_looks_right(choice)
 
     def _open_editor(self) -> None:
         if not EditorLink.is_built():

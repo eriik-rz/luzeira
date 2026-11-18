@@ -749,3 +749,70 @@ def test_settings_import_goes_to_the_user_themes(settings, monkeypatch, tmp_path
 
 def test_tray_passes_its_settings_to_the_editor(app):
     assert isinstance(app.editor._settings, bandeja.EditorSettings)
+
+
+# --- «¿se ve bien?» dentro del editor ------------------------------------------------------
+
+
+def editor_open(monkeypatch, app, value=True):
+    monkeypatch.setattr(type(app.editor.window), "is_open", property(lambda _s: value))
+
+
+def editor_trial(app, monkeypatch, settings):
+    kipye = settings.snapshot()["choices"][1]
+    settings.choose_display(kipye["id"], confirmed=True)
+    app._drain()  # se prueba
+    set_info(monkeypatch, app, DisplayInfo("kipye-rev-d", "COM8", KIPYE_CHOICE, verified=False))
+    app._show_status(Status.RUNNING, "Mostrando el tema «Esencial».")
+    app._drain()  # llega la pregunta
+
+
+def test_question_from_the_editor_is_asked_in_the_editor(
+    app, settings, chosen, answers, monkeypatch
+):
+    editor_open(monkeypatch, app)
+    editor_trial(app, monkeypatch, settings)
+    assert answers.asked == []  # ningún diálogo de Windows
+    question = settings.question()
+    assert question is not None and "¿Se ve bien el tema en la pantalla?" in question["text"]
+    message = settings.answer(True)
+    app._drain()
+    assert "Lo recordaré" in message and settings.question() is None
+    assert app.config.display is not None and app.config.display.model == "kipye-rev-d"
+    assert app.notes == []  # el editor ya lo dice: sin aviso de Windows repetido
+
+
+def test_question_from_the_editor_answered_no(app, settings, chosen, answers, monkeypatch):
+    editor_open(monkeypatch, app)
+    editor_trial(app, monkeypatch, settings)
+    assert settings.answer(False) == bandeja.MSG_TRIAL_REJECTED
+    app._drain()
+    assert app.saved == [] and chosen[-1] is None and app.notes == []
+    with pytest.raises(bandeja.EditorError):
+        settings.answer(True)  # ya contestada
+
+
+def test_question_goes_to_windows_if_the_editor_closes(app, settings, chosen, answers, monkeypatch):
+    editor_open(monkeypatch, app)
+    editor_trial(app, monkeypatch, settings)
+    editor_open(monkeypatch, app, False)
+    answers.replies.append(True)
+    app._on_editor_exit(0)
+    app._drain()
+    assert len(answers.asked) == 1 and "se ve bien" in answers.asked[0][0].lower()
+    assert app.config.display is not None and settings.question() is None
+
+
+def test_choice_from_the_menu_still_asks_with_windows(app, chosen, answers, monkeypatch):
+    editor_open(monkeypatch, app)  # aunque el editor esté abierto
+    run_unverified_trial(app, monkeypatch)
+    app._drain()
+    assert len(answers.asked) == 1 and app.editor_question() is None
+
+
+def test_question_from_the_editor_with_the_editor_closed_uses_windows(
+    app, settings, chosen, answers, monkeypatch
+):
+    editor_open(monkeypatch, app, False)
+    editor_trial(app, monkeypatch, settings)
+    assert len(answers.asked) == 1 and settings.question() is None
