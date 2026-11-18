@@ -15,7 +15,13 @@ Solo la última versión publicada recibe arreglos de seguridad.
 La única fuente oficial de Visoria son las **Releases de este repositorio** (y, cuando existan, los canales que se anuncien aquí). Cada versión publica la suma `SHA256SUMS` y una atestación de procedencia de GitHub:
 
 ```bash
-gh attestation verify <fichero-descargado> --repo <propietario>/visoria
+gh attestation verify <fichero-descargado> --repo eriik-rz/visoria
+```
+
+Sin `gh`, basta con comparar la huella del fichero con la que pone `SHA256SUMS` en la misma release. En PowerShell:
+
+```powershell
+Get-FileHash .\Visoria-<versión>-instalador.exe -Algorithm SHA256
 ```
 
 Si alguien distribuye Visoria desde otro sitio, no podemos garantizar que no esté modificada.
@@ -26,4 +32,4 @@ Si alguien distribuye Visoria desde otro sitio, no podemos garantizar que no est
 - **Sin telemetría** y sin anuncios.
 - La app normal corre **sin permisos de administrador**. El módulo opcional de sensores de CPU (futuro) será un componente separado y mínimo.
 - Los temas son **datos** (JSON e imágenes), nunca código ejecutable.
-- Las actualizaciones se verifican con firma antes de instalarse.
+- La app **no se conecta a internet** ni se actualiza sola. Para actualizar, descarga el instalador nuevo de Releases y ejecútalo encima: conserva tus temas y tu configuración. Si algún día hay aviso de versiones nuevas, será opcional y las actualizaciones irán verificadas con firma.
