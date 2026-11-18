@@ -14,6 +14,12 @@
 ; - Al desinstalar borra el autoarranque y PREGUNTA antes de borrar temas y configuración
 ;   (por defecto, no se borran).
 
+; Desde Inno 6.3 el .iss se lee como UTF-8 sin BOM (lleva acentos y «») y existe
+; «x64compatible». Con una versión anterior los textos saldrían mal sin avisar.
+#if Ver < EncodeVer(6, 3, 0)
+  #error Hace falta Inno Setup 6.3 o posterior
+#endif
+
 #ifndef AppVersion
   #error Falta /DAppVersion=X.Y.Z (lo pasa scripts/empaquetar.py)
 #endif
@@ -27,9 +33,14 @@
   #define IconFile AddBackslash(SourcePath) + "..\src\visoria\recursos\visoria.ico"
 #endif
 
-; Estos cinco solo se cambian en las pruebas automáticas del instalador, para recorrer el
+; Estos solo se cambian en las pruebas automáticas del instalador, para recorrer el
 ; ciclo instalar/desinstalar sin tocar el autoarranque, el menú Inicio ni los datos reales
 ; del usuario que prueba. En una build normal valen lo que se ve aquí.
+; AppGuid: las pruebas usan otro para no mezclarse con una Visoria instalada de verdad
+; (mismo AppId = Inno las trataría como la misma app y la prueba borraría su desinstalador).
+#ifndef AppGuid
+  #define AppGuid "75B00440-8495-4923-A848-A5B3982D17C3"
+#endif
 #ifndef MutexName
   #define MutexName "Visoria"
 #endif
@@ -42,6 +53,9 @@
 #ifndef ProgramsDir
   #define ProgramsDir "{userprograms}"
 #endif
+#ifndef DesktopDir
+  #define DesktopDir "{userdesktop}"
+#endif
 #ifndef UserDataDir
   #define UserDataDir "{userappdata}\Visoria"
 #endif
@@ -53,8 +67,9 @@
 #define AppIcon "{app}\python\Lib\site-packages\visoria\recursos\visoria.ico"
 
 [Setup]
-; AppId fijo: identifica a Visoria entre versiones (actualizar = instalar encima). NO cambiarlo.
-AppId={{75B00440-8495-4923-A848-A5B3982D17C3}
+; AppId fijo: identifica a Visoria entre versiones (actualizar = instalar encima). NO cambiar
+; AppGuid (solo en pruebas). «{{» es una llave literal en Inno.
+AppId={{{#AppGuid}}
 AppName=Visoria
 AppVersion={#AppVersion}
 AppVerName=Visoria {#AppVersion}
@@ -117,7 +132,7 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Excludes: "Visoria.cmd"; Flags: igno
 [Icons]
 ; AppUserModelID = visoria.sistema.identidad.APP_ID: al anclar la ventana sale «Visoria», no «pythonw».
 Name: "{#ProgramsDir}\Visoria"; Filename: "{#PythonW}"; Parameters: "-m visoria"; WorkingDir: "{%USERPROFILE}"; IconFilename: "{#AppIcon}"; Comment: "{cm:Descripcion}"; AppUserModelID: "Visoria.Visoria"
-Name: "{userdesktop}\Visoria"; Filename: "{#PythonW}"; Parameters: "-m visoria"; WorkingDir: "{%USERPROFILE}"; IconFilename: "{#AppIcon}"; Comment: "{cm:Descripcion}"; AppUserModelID: "Visoria.Visoria"; Tasks: escritorio
+Name: "{#DesktopDir}\Visoria"; Filename: "{#PythonW}"; Parameters: "-m visoria"; WorkingDir: "{%USERPROFILE}"; IconFilename: "{#AppIcon}"; Comment: "{cm:Descripcion}"; AppUserModelID: "Visoria.Visoria"; Tasks: escritorio
 
 [Registry]
 ; La misma línea que escribe la app (visoria.sistema.autoarranque.default_command):
@@ -155,32 +170,65 @@ begin
   Result := HasVersion(HKLM32, 'SOFTWARE\' + WebView2Client) or HasVersion(HKCU, 'Software\' + WebView2Client);
 end;
 
-procedure CurStepChanged(CurStep: TSetupStep);
-var
-  ErrorCode: Integer;
-begin
-  if (CurStep = ssPostInstall) and not WizardSilent and not WebView2Installed then
-    if MsgBox(CustomMessage('FaltaWebView2'), mbInformation, MB_YESNO) = IDYES then
-      ShellExec('open', WebView2Url, '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
-end;
-
-{ ¿Apunta esta línea de Run a ESTA instalación? Solo entonces se borra: si el usuario
-  tiene otra Visoria (portable, de desarrollo) con autoarranque, no se le toca. }
+{ ¿Apunta esta línea de Run (o este destino) a ESTA instalación? Solo entonces se borra:
+  si el usuario tiene otra Visoria (portable, de desarrollo) con autoarranque, no se toca. }
 function PointsHere(Command: String): Boolean;
 begin
   Result := Pos(Lowercase(ExpandConstant('{app}\python\')), Lowercase(Command)) > 0;
 end;
 
+{ Borra el autoarranque solo si es de esta instalación. }
+procedure RemoveRunValueIfHere;
+var
+  Command: String;
+begin
+  if RegQueryStringValue(HKCU, '{#RunKey}', '{#RunValue}', Command) and PointsHere(Command) then
+    RegDeleteValue(HKCU, '{#RunKey}', '{#RunValue}');
+end;
+
+{ ¿Este acceso directo abre ESTA instalación? (lo pudo crear la app desde la bandeja) }
+function ShortcutPointsHere(Path: String): Boolean;
+var
+  Shell, Link: Variant;
+begin
+  Result := False;
+  if not FileExists(Path) then
+    exit;
+  try
+    Shell := CreateOleObject('WScript.Shell');
+    Link := Shell.CreateShortcut(Path);
+    Result := PointsHere(Link.TargetPath);
+  except
+    Result := False;
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ErrorCode: Integer;
+begin
+  { Al actualizar con «Iniciar con Windows» desmarcado, Inno no toca [Registry] y el valor
+    anterior seguiría ahí: se quita aquí (solo si apunta a esta instalación). }
+  if (CurStep = ssPostInstall) and not WizardIsTaskSelected('autoarranque') then
+    RemoveRunValueIfHere;
+  if (CurStep = ssPostInstall) and not WizardSilent and not WebView2Installed then
+    if MsgBox(CustomMessage('FaltaWebView2'), mbInformation, MB_YESNO) = IDYES then
+      ShellExec('open', WebView2Url, '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
-  Command, DataDir, LogsDir: String;
+  DataDir, LogsDir, Desktop: String;
 begin
   if CurUninstallStep = usUninstall then
   begin
     { El valor puede haberlo creado la app (opción de la bandeja) y no la tarea del
       instalador: entonces Inno no lo tiene apuntado y hay que borrarlo aquí. }
-    if RegQueryStringValue(HKCU, '{#RunKey}', '{#RunValue}', Command) and PointsHere(Command) then
-      RegDeleteValue(HKCU, '{#RunKey}', '{#RunValue}');
+    RemoveRunValueIfHere;
+    { Igual con el acceso del escritorio que crea la app: sin esto quedaría roto. }
+    Desktop := ExpandConstant('{#DesktopDir}\Visoria.lnk');
+    if ShortcutPointsHere(Desktop) then
+      DeleteFile(Desktop);
   end;
   if CurUninstallStep = usPostUninstall then
   begin

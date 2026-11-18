@@ -26,6 +26,7 @@ Red: solo la que use ``uv`` para bajar de PyPI las wheels ya fijadas en ``uv.loc
 from __future__ import annotations
 
 import argparse
+import contextlib
 import email.parser
 import hashlib
 import os
@@ -80,6 +81,10 @@ PRUNE_FILES = {
     # importa cada plugin dentro de un try: sin estos .pyd sigue funcionando.
     "PIL/_avif.cp312-win_amd64.pyd",
     "PIL/_imagingtk.cp312-win_amd64.pyd",
+    # nvidia-ml-py instala un ejemplo suelto como módulo de primer nivel «example».
+    "example.py",
+    # Candado que deja uv --target en la carpeta destino.
+    ".lock",
 }
 #: Patrones (relativos a site-packages) que se borran: otras arquitecturas y Android.
 PRUNE_GLOBS = (
@@ -117,9 +122,48 @@ def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, check=True, **kwargs)  # noqa: S603 — órdenes fijas del script
 
 
+#: Inno (VersionInfoVersion) solo admite números: ``X.Y.Z``. Una «0.2.0rc1» daría un error
+#: poco claro de ISCC; mejor parar aquí.
+VERSION_RE = re.compile(r"\d+\.\d+\.\d+")
+
+
 def project_version() -> str:
     data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    return data["project"]["version"]
+    version = data["project"]["version"]
+    if not VERSION_RE.fullmatch(version):
+        sys.exit(f"Versión «{version}» no válida para el instalador: tiene que ser X.Y.Z.")
+    return version
+
+
+def iss_defines() -> set[str]:
+    """Los nombres que el ``.iss`` deja cambiar desde fuera (sus ``#ifndef``)."""
+    text = ISS.read_text(encoding="utf-8")
+    return set(re.findall(r"^#ifndef (\w+)", text, flags=re.MULTILINE))
+
+
+def check_defines(defines: list[str]) -> None:
+    """``--define`` solo con nombres que el ``.iss`` conoce y valores sin caracteres que
+    cambien su sentido allí (comillas de Pascal, llaves de constantes de Inno)."""
+    allowed = iss_defines() - {"AppVersion", "SourceDir", "OutputDir", "IconFile"}
+    for item in defines:
+        name, sep, value = item.partition("=")
+        if not sep or name not in allowed:
+            sys.exit(f"--define {item!r}: se admiten {', '.join(sorted(allowed))}.")
+        if any(c in value for c in "'\"{}"):
+            sys.exit(f"--define {item!r}: el valor no puede llevar comillas ni llaves.")
+
+
+def editor_is_stale() -> bool:
+    """¿Hay fuentes del editor más nuevas que el editor compilado?"""
+    if not EDITOR_INDEX.is_file():
+        return True
+    sources = [
+        *(ROOT / "editor" / "src").rglob("*"),
+        ROOT / "editor" / "index.html",
+        ROOT / "editor" / "package-lock.json",
+    ]
+    newest = max((p.stat().st_mtime for p in sources if p.is_file()), default=0)
+    return newest > EDITOR_INDEX.stat().st_mtime
 
 
 # --- 1. Editor ---------------------------------------------------------------------------
@@ -484,10 +528,55 @@ def mb(n: int) -> str:
     return f"{n / 1_000_000:.1f} MB"
 
 
+def _git_emails() -> set[str]:
+    """Emails de git de esta máquina (global y del repo), menos el ``noreply`` de GitHub,
+    que ya es público a propósito."""
+    git = shutil.which("git")
+    if git is None:
+        return set()
+    try:
+        out = subprocess.run(  # noqa: S603 — git de la máquina, órdenes fijas
+            [git, "config", "--get-all", "user.email"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        ).stdout
+        out += subprocess.run(  # noqa: S603
+            [git, "config", "--global", "--get-all", "user.email"],
+            capture_output=True,
+            text=True,
+            check=False,
+        ).stdout
+    except OSError:
+        return set()
+    return {
+        line.strip().lower()
+        for line in out.splitlines()
+        if "@" in line and not line.strip().lower().endswith("@users.noreply.github.com")
+    }
+
+
+def personal_needles() -> set[str]:
+    """Lo que identifica a quien construye: no debe aparecer en nada que se publique.
+
+    Se lee en el momento (nada de nombres escritos aquí) y se busca en minúsculas.
+    Medido en la build de 2026-11-18: cero coincidencias en todos los ficheros, también
+    en los binarios, así que se buscan todos sin lista de extensiones."""
+    home = Path.home()
+    needles = {str(home).lower(), *_git_emails()}
+    for var in ("USERNAME", "USER", "COMPUTERNAME"):
+        value = os.environ.get(var, "")
+        if len(value) >= 3:
+            needles.add(value.lower())
+    needles |= {n.replace("\\", "/") for n in needles}
+    return needles
+
+
 def check_no_personal_paths(base: Path) -> None:
-    """Falla si algún fichero de texto del paquete lleva la ruta de esta máquina."""
-    # Rutas de la máquina de build (repo, Pythons, temporales, caché de uv). No se busca
-    # la carpeta de usuario a secas: un comentario de ejemplo daría un falso positivo.
+    """Falla si algún fichero del paquete (de cualquier tipo) lleva rutas de esta máquina
+    o datos de quien construye (usuario, equipo, email)."""
+    # Rutas de la máquina de build (repo, Pythons, temporales, caché de uv).
     home = Path.home()
     places = [
         ROOT,
@@ -498,24 +587,16 @@ def check_no_personal_paths(base: Path) -> None:
         home / ".local",
         home / ".cache",
     ]
-    needles = {str(p).lower() for p in places}
+    needles = {str(p).lower() for p in places} | personal_needles()
     needles |= {n.replace("\\", "/") for n in needles}
+    encoded = [(n, n.encode()) for n in needles] + [(n, n.encode("utf-16-le")) for n in needles]
     for path in base.rglob("*"):
-        if path.is_file() and path.suffix.lower() in {
-            ".txt",
-            ".json",
-            ".py",
-            ".pth",
-            ".cfg",
-            ".toml",
-            ".cmd",
-            ".pyc",
-            "",
-        }:
+        if path.is_file():
             data = path.read_bytes().lower()
-            for n in needles:
-                if n.encode() in data or n.encode("utf-16-le") in data:
-                    sys.exit(f"Ruta personal dentro del paquete: {path}")
+            for _needle, raw in encoded:
+                if raw in data:
+                    # Sin decir cuál: el mensaje acabaría en un log público de CI.
+                    sys.exit(f"Dato personal o ruta de la máquina dentro del paquete: {path}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -542,6 +623,15 @@ def main(argv: list[str] | None = None) -> int:
         help="define extra para el .iss (solo pruebas: MutexName, RunKey...)",
     )
     args = p.parse_args(argv)
+    # Con la salida redirigida a un fichero, Windows usa cp1252 y «→» rompería el build.
+    for stream in (sys.stdout, sys.stderr):
+        with contextlib.suppress(AttributeError, ValueError):
+            stream.reconfigure(errors="replace")
+    check_defines(args.define)
+    if args.define and args.salida.resolve() == (ROOT / "dist").resolve():
+        # Un instalador con mutex o claves de prueba no puede acabar en dist/ con el
+        # nombre del de verdad.
+        sys.exit("Con --define, indica otra carpeta con --salida (no dist/).")
 
     epoch = int(os.environ.get("SOURCE_DATE_EPOCH", DEFAULT_EPOCH))
     version = project_version()
@@ -549,10 +639,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.editor:
         build_editor()
-    if not EDITOR_INDEX.is_file():
+    if editor_is_stale():
+        # El editor compilado está en .gitignore: podría ser de otra versión.
         sys.exit(
-            f"Falta el editor compilado ({EDITOR_INDEX.relative_to(ROOT)}). "
-            "Compílalo con «npm run build» en editor/ o usa --editor."
+            f"El editor compilado ({EDITOR_INDEX.relative_to(ROOT)}) falta o es más viejo "
+            "que sus fuentes. Usa --editor (o «npm run build» en editor/)."
         )
 
     app_dir = args.build.resolve() / "Visoria"

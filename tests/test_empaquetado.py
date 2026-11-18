@@ -9,6 +9,7 @@ que la app, limpieza al desinstalar y nada de ``import site``.
 from __future__ import annotations
 
 import importlib.util
+import os
 import re
 import shutil
 import subprocess
@@ -66,7 +67,9 @@ def test_installs_per_user_without_admin():
 
 
 def test_app_id_is_a_fixed_guid():
-    assert re.fullmatch(r"\{\{[0-9A-F]{8}(-[0-9A-F]{4}){3}-[0-9A-F]{12}\}", _setup("AppId"))
+    assert _setup("AppId") == "{{{#AppGuid}}"
+    # El de verdad, fijo para siempre: cambiarlo = Windows vería otra app al actualizar.
+    assert _define("AppGuid") == "75B00440-8495-4923-A848-A5B3982D17C3"
 
 
 def test_spanish_and_64_bit():
@@ -365,3 +368,76 @@ def test_only_the_end_of_install_opens_the_editor():
     assert "postinstall" in run_line and "skipifsilent" in run_line
     # Los accesos directos y el autoarranque abren solo la bandeja.
     assert "--abrir-editor" not in _section("Icons") + _section("Registry")
+
+
+def test_personal_data_check_looks_inside_binaries(tmp_path, monkeypatch):
+    monkeypatch.setattr(emp, "_git_emails", lambda: {"alguien@ejemplo.org"})
+    (tmp_path / "libreria.dll").write_bytes(b"\x00MZ" + "Alguien@Ejemplo.org".encode("utf-16-le"))
+    with pytest.raises(SystemExit, match="Dato personal"):
+        emp.check_no_personal_paths(tmp_path)
+
+
+def test_defines_only_known_names_and_safe_values():
+    emp.check_defines(["MutexName=VisoriaPrueba", "RunValue=VisoriaPrueba"])
+    for bad in ("Nada=1", "MutexName", "AppVersion=9.9.9", "RunKey=a'b", "MutexName={app}"):
+        with pytest.raises(SystemExit):
+            emp.check_defines([bad])
+
+
+def test_test_builds_never_land_in_dist():
+    with pytest.raises(SystemExit, match="--salida"):
+        emp.main(["--python-embebible", "x.zip", "--define", "MutexName=Prueba"])
+
+
+@pytest.mark.parametrize("version", ["0.1.0", "1.10.200"])
+def test_version_accepted(version):
+    assert emp.VERSION_RE.fullmatch(version)
+
+
+@pytest.mark.parametrize("version", ["0.2.0rc1", "1.0", "v1.0.0", "1.0.0-beta"])
+def test_version_rejected(version):
+    assert not emp.VERSION_RE.fullmatch(version)
+
+
+def test_stale_editor_is_detected(tmp_path, monkeypatch):
+    index = tmp_path / "web" / "index.html"
+    index.parent.mkdir()
+    index.touch()
+    src = tmp_path / "editor" / "src"
+    src.mkdir(parents=True)
+    old = src / "viejo.ts"
+    old.touch()
+    os.utime(old, (1, 1))
+    monkeypatch.setattr(emp, "ROOT", tmp_path)
+    monkeypatch.setattr(emp, "EDITOR_INDEX", index)
+    assert not emp.editor_is_stale()
+    (src / "nuevo.tsx").touch()
+    os.utime(index, (2, 2))
+    assert emp.editor_is_stale()
+
+
+def test_prune_removes_stray_top_level_files(tmp_path):
+    for name in ("example.py", ".lock", "pynvml.py"):
+        (tmp_path / name).write_text("x")
+    removed = emp.prune(tmp_path)
+    assert {"example.py", ".lock"} <= set(removed)
+    assert (tmp_path / "pynvml.py").exists()
+
+
+def test_requires_inno_6_3():
+    assert "#if Ver < EncodeVer(6, 3, 0)" in ISS
+
+
+def test_update_without_autostart_task_removes_only_our_value():
+    code = _section("Code")
+    step = code[code.index("procedure CurStepChanged") :]
+    assert "not WizardIsTaskSelected('autoarranque') then\n    RemoveRunValueIfHere" in step
+    remove = code[code.index("procedure RemoveRunValueIfHere") :]
+    assert "PointsHere(Command) then" in remove.split("end;")[0]
+
+
+def test_uninstall_removes_the_desktop_shortcut_made_by_the_app():
+    code = _section("Code")
+    assert _define("DesktopDir") == "{userdesktop}"
+    assert r"{#DesktopDir}\Visoria.lnk" in code and "ShortcutPointsHere(Desktop)" in code
+    assert r'Name: "{#DesktopDir}\Visoria"' in _section("Icons")
