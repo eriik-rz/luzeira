@@ -21,6 +21,8 @@ from luzeira.sistema.identidad import set_shortcut_app_id
 
 ICON = Path(__file__).resolve().parent.parent / "recursos" / "luzeira.ico"
 SHORTCUT_NAME = "Luzeira.lnk"
+#: Lo que añade el acceso del escritorio: abrir el editor (ver bandeja.main).
+OPEN_EDITOR_FLAG = "--abrir-editor"
 
 _PS_SCRIPT = r"""
 $ErrorActionPreference = 'Stop'
@@ -82,7 +84,11 @@ def create_shortcut(
         "LUZEIRA_FOLDER": folder,
         "LUZEIRA_NAME": SHORTCUT_NAME,
         "LUZEIRA_TARGET": cmd.target,
-        "LUZEIRA_ARGS": cmd.arguments,
+        # El del escritorio abre también el editor (es lo que espera quien
+        # hace doble clic en un icono: ver la app). El de Inicio, solo la bandeja.
+        "LUZEIRA_ARGS": f"{cmd.arguments} {OPEN_EDITOR_FLAG}".strip()
+        if folder == "Desktop"
+        else cmd.arguments,
         "LUZEIRA_WORKDIR": str(Path.home()),
         "LUZEIRA_ICON": str(ICON),
     }

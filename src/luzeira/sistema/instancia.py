@@ -24,6 +24,8 @@ from __future__ import annotations
 import ctypes
 import logging
 import sys
+import threading
+from collections.abc import Callable
 from types import TracebackType
 from typing import Self
 
@@ -117,3 +119,94 @@ class SingleInstance:
         tb: TracebackType | None,
     ) -> None:
         self.release()
+
+
+#: Nombre del evento con el que otra copia de Luzeira pide «abre el editor».
+EDITOR_EVENT = "Luzeira-AbrirEditor"
+_WAIT_OBJECT_0 = 0
+_EVENT_MODIFY_STATE = 0x0002
+
+
+def _load_events() -> ctypes.WinDLL | None:
+    if sys.platform != "win32":
+        return None
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateEventW.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_wchar_p]
+    kernel32.CreateEventW.restype = ctypes.c_void_p
+    kernel32.OpenEventW.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_wchar_p]
+    kernel32.OpenEventW.restype = ctypes.c_void_p
+    kernel32.SetEvent.argtypes = [ctypes.c_void_p]
+    kernel32.SetEvent.restype = ctypes.c_int
+    kernel32.WaitForSingleObject.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+    kernel32.WaitForSingleObject.restype = ctypes.c_uint32
+    kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+    kernel32.CloseHandle.restype = ctypes.c_int
+    return kernel32
+
+
+class EditorRequests:
+    """Avisos de «abre el editor» desde otra copia de Luzeira.
+
+    Concepto: un *evento con nombre* es otro objeto del núcleo de Windows, como el mutex
+    de arriba, pero con dos estados: señalado o no. La Luzeira abierta lo crea y espera a
+    que alguien lo señale; el acceso directo del escritorio arranca otra copia que, al ver
+    que ya hay una, lo señala (``request``) y se cierra. Es de reinicio automático: tras
+    despertar a quien espera, vuelve solo a «no señalado».
+
+    Fuentes: «CreateEventW», «OpenEventW», «SetEvent», «WaitForSingleObject», Microsoft
+    Learn (consultadas 2026-11-18).
+    """
+
+    def __init__(self, name: str = EDITOR_EVENT, kernel32: object | None = None) -> None:
+        self.event_name = _PREFIX + name
+        self._kernel32 = kernel32 if kernel32 is not None else _load_events()
+        self._handle: int | None = None
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def request(self) -> bool:
+        """Pide a la Luzeira abierta que abra el editor. ``False`` si no hay ninguna."""
+        k = self._kernel32
+        if k is None:
+            return False
+        handle = k.OpenEventW(_EVENT_MODIFY_STATE, False, self.event_name)
+        if not handle:
+            return False
+        try:
+            return bool(k.SetEvent(handle))
+        finally:
+            k.CloseHandle(handle)
+
+    def listen(self, on_request: Callable[[], None], poll_ms: int = 500) -> bool:
+        """Empieza a escuchar en un hilo. ``on_request`` se llama en ese hilo."""
+        k = self._kernel32
+        if k is None:
+            return False
+        # Reinicio automático (bManualReset = FALSE), empieza sin señalar.
+        handle = k.CreateEventW(None, False, False, self.event_name)
+        if not handle:
+            log.warning("No se pudo crear el aviso para abrir el editor desde fuera")
+            return False
+        self._handle = handle
+
+        def loop() -> None:
+            # Espera a trozos para poder parar sin cerrar el handle con alguien esperando.
+            while not self._stop.is_set():
+                if k.WaitForSingleObject(handle, poll_ms) == _WAIT_OBJECT_0:
+                    try:
+                        on_request()
+                    except Exception:
+                        log.exception("Falló abrir el editor a petición de otra copia")
+
+        self._thread = threading.Thread(target=loop, name="luzeira-abrir-editor", daemon=True)
+        self._thread.start()
+        return True
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=2)
+            self._thread = None
+        if self._handle is not None and self._kernel32 is not None:
+            self._kernel32.CloseHandle(self._handle)
+            self._handle = None

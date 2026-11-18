@@ -61,7 +61,7 @@ from luzeira.pantallas.modelos import (
 from luzeira.servicio import DisplayService, Settings, Status
 from luzeira.sistema import autoarranque
 from luzeira.sistema.energia import PowerListener
-from luzeira.sistema.instancia import APP_MUTEX, SingleInstance
+from luzeira.sistema.instancia import APP_MUTEX, EditorRequests, SingleInstance
 from luzeira.sistema.registro import default_log_dir, setup_logging
 from luzeira.sistema.sesion import SessionWatcher
 from luzeira.temas import ThemeError, load_theme
@@ -744,6 +744,10 @@ class TrayApp:
             on_suspend=lambda: self.service.suspend(), on_resume=lambda: self.service.resume()
         )
         session = SessionWatcher(self._on_end_session)
+        # El acceso directo del escritorio pide abrir el editor aunque Luzeira ya esté
+        # abierta: otra copia señala el aviso y aquí se abre (en el hilo del icono).
+        requests = EditorRequests()
+        requests.listen(lambda: self._post(self._safe(self._open_editor)))
         if not power.start():
             log.warning("Sin avisos de suspensión: la pantalla no se apagará al suspender.")
         if not session.start():
@@ -757,6 +761,7 @@ class TrayApp:
                 self._worker.join(timeout=6)
             session.stop()
             power.stop()
+            requests.stop()
 
 
 def _already_running_message() -> None:
@@ -776,7 +781,10 @@ def main(open_editor: bool = False) -> int:
         if not instance.acquired:
             # Otra Luzeira ya está en la bandeja: no abrir dos sobre el mismo puerto.
             log.info("Luzeira ya estaba abierta; esta instancia termina.")
-            _already_running_message()
+            # Con --abrir-editor (acceso del escritorio) se le pide que abra el editor; si
+            # no puede recibir el aviso, se dice que ya está abierta, como siempre.
+            if not (open_editor and EditorRequests().request()):
+                _already_running_message()
             return 0
         migrate_old_name()  # «Visoria» → «Luzeira» (D-14)
         config_dir().mkdir(parents=True, exist_ok=True)

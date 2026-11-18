@@ -79,3 +79,12 @@ def test_powershell_by_full_path():
     exe = run.calls[0][0][0]
     # Por nombre, Windows lo buscaría antes en la carpeta actual y en la de la app.
     assert exe.lower().endswith(r"system32\windowspowershell\v1.0\powershell.exe")
+
+
+def test_desktop_shortcut_opens_the_editor_and_start_menu_does_not():
+    run = FakeRun()
+    accesos.create_shortcut("Desktop", run=run, mark=lambda p: None)
+    assert run.calls[0][1]["env"]["LUZEIRA_ARGS"] == "-m luzeira --abrir-editor"
+    run = FakeRun()
+    accesos.create_shortcut("Programs", run=run, mark=lambda p: None)
+    assert run.calls[0][1]["env"]["LUZEIRA_ARGS"] == "-m luzeira"

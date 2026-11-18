@@ -617,3 +617,34 @@ def test_looks_right_question_waits_for_an_open_dialog(app, chosen, answers, mon
     advanced_kipye.submenu.items[2](app.icon)
     app._drain()
     assert asked == [bandeja.TITLE_ADVANCED, bandeja.TITLE_LOOKS_RIGHT]
+
+
+@pytest.mark.parametrize(
+    ("open_editor", "delivered", "message_shown"),
+    [(True, True, False), (True, False, True), (False, False, True)],
+)
+def test_second_copy_asks_the_open_one_for_the_editor(
+    monkeypatch, open_editor, delivered, message_shown
+):
+    # El acceso del escritorio (--abrir-editor) con Luzeira ya abierta: se le pide a la
+    # abierta que abra el editor y no sale el aviso «ya está abierta». Sin la opción, o si
+    # el aviso no llega, sale el de siempre.
+    class Busy:
+        acquired = False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    asked, shown = [], []
+    monkeypatch.setattr(bandeja, "setup_logging", lambda _d: None)
+    monkeypatch.setattr(bandeja, "SingleInstance", lambda _n: Busy())
+    monkeypatch.setattr(
+        bandeja.EditorRequests, "request", lambda self: asked.append(True) or delivered
+    )
+    monkeypatch.setattr(bandeja, "_already_running_message", lambda: shown.append(True))
+    assert bandeja.main(open_editor=open_editor) == 0
+    assert bool(asked) == open_editor
+    assert bool(shown) == message_shown

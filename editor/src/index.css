@@ -456,3 +456,16 @@ textarea.input { height: auto; min-height: 60px; padding: 6px 8px; resize: verti
   font-size: 10px; font-weight: 600; line-height: 1; cursor: help; vertical-align: 1px;
 }
 .info-tip:hover { color: var(--text); border-color: var(--text-3); }
+
+/* --- Barra de arriba con poco ancho (la ventana del editor baja hasta 960 px) -------------
+   Nada se aplasta (antes deshacer/rehacer quedaban en 18 px y «Aplicar» se salía por la
+   derecha). Primero se recoge la marca y luego los botones secundarios se quedan solo con
+   su icono (el texto sigue en su bocadillo y en aria-label). */
+.topbar > .btn, .topbar > .status-pill, .topbar > .brand { flex: none; }
+
+.topbar { container-type: inline-size; container-name: barra; }
+@container barra (max-width: 1360px) {
+  .topbar .brand-text { display: none; }
+  .topbar .btn .btn-label { display: none; }
+  .topbar .btn:has(.btn-label) { width: 32px; padding: 0; }
+}

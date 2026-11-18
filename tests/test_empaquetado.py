@@ -136,7 +136,7 @@ def test_launch_after_install_is_optional_and_not_in_silent_mode():
 def test_shortcuts_launch_pythonw_with_the_package_icon():
     assert _define("PythonW") == r"{app}\python\pythonw.exe"
     icons = _section("Icons")
-    assert icons.count('Parameters: "-m luzeira"') == 2
+    assert icons.count('Parameters: "-m luzeira') == 2
     icon = _define("AppIcon").replace("{app}\\python\\Lib\\site-packages\\", "")
     assert (ROOT / "src" / Path(icon)).is_file()
 
@@ -368,8 +368,14 @@ def test_only_the_end_of_install_opens_the_editor():
     run_line = next(x for x in _section("Run").splitlines() if x.startswith("Filename"))
     assert 'Parameters: "-m luzeira --abrir-editor"' in run_line
     assert "postinstall" in run_line and "skipifsilent" in run_line
-    # Los accesos directos y el autoarranque abren solo la bandeja.
-    assert "--abrir-editor" not in _section("Icons") + _section("Registry")
+    # El autoarranque y el acceso de Inicio abren solo la bandeja; el del escritorio, también
+    # el editor (si Luzeira ya está abierta, se lo pide a la abierta).
+    assert "--abrir-editor" not in _section("Registry")
+    icons = _section("Icons").splitlines()
+    desktop = next(x for x in icons if x.startswith('Name: "{#DesktopDir}'))
+    programs = next(x for x in icons if x.startswith('Name: "{#ProgramsDir}'))
+    assert 'Parameters: "-m luzeira --abrir-editor"' in desktop
+    assert 'Parameters: "-m luzeira";' in programs
 
 
 def test_personal_data_check_looks_inside_binaries(tmp_path, monkeypatch):

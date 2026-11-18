@@ -73,3 +73,35 @@ def test_other_process_is_refused(name):
 def test_invalid_names(bad):
     with pytest.raises(ValueError):
         SingleInstance(bad)
+
+
+# --- Aviso «abre el editor» entre copias ------------------------------------------------
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="eventos con nombre de Windows")
+def test_another_copy_can_ask_to_open_the_editor():
+    import threading
+
+    from luzeira.sistema.instancia import EditorRequests
+
+    name = f"LuzeiraPrueba-{uuid.uuid4().hex}"  # nunca el de la app de verdad
+    asked = threading.Event()
+    listener = EditorRequests(name)
+    assert EditorRequests(name).request() is False  # nadie escucha todavía
+    assert listener.listen(asked.set, poll_ms=50)
+    try:
+        assert EditorRequests(name).request() is True
+        assert asked.wait(2)
+    finally:
+        listener.stop()
+    assert EditorRequests(name).request() is False  # tras parar, ya no hay nadie
+
+
+def test_editor_requests_without_windows_do_nothing():
+    from luzeira.sistema.instancia import EditorRequests
+
+    requests = EditorRequests("x", kernel32=None)
+    requests._kernel32 = None
+    assert requests.request() is False
+    assert requests.listen(lambda: None) is False
+    requests.stop()

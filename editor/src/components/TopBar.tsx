@@ -59,7 +59,7 @@ export function TopBar(p: Props) {
     <header className="topbar">
       <div className="brand">
         <BrandMark />
-        <span>
+        <span className="brand-text">
           Luzeira <small>· Editor de temas</small>
         </span>
       </div>
@@ -70,7 +70,7 @@ export function TopBar(p: Props) {
       <select
         id="theme-select"
         className="input"
-        style={{ width: 230 }}
+        style={{ width: 230, minWidth: 150, flex: "0 1 230px" }}
         value={p.current}
         title="Tema que estás editando. Cambia para abrir otro."
         onChange={(e) => p.onSelectTheme(e.target.value)}
@@ -96,6 +96,7 @@ export function TopBar(p: Props) {
       <button
         type="button"
         className="btn ghost danger"
+        aria-label="Borrar tema"
         disabled={p.builtin}
         onClick={p.onDeleteTheme}
         title={
@@ -104,7 +105,7 @@ export function TopBar(p: Props) {
             : 'Mover este tema a la papelera de Luzeira (se puede recuperar).'
         }
       >
-        <IconTrash /> Borrar
+        <IconTrash /> <span className="btn-label">Borrar</span>
       </button>
 
       <span className="sep" />
@@ -134,24 +135,26 @@ export function TopBar(p: Props) {
         type="button"
         className="btn ghost"
         onClick={p.onRestore}
+        aria-label="Restaurar"
         disabled={!p.canRestore}
         title="Volver a como estaba el tema al abrirlo (se puede deshacer con Ctrl+Z)"
       >
-        <IconUndo /> Restaurar
+        <IconUndo /> <span className="btn-label">Restaurar</span>
       </button>
       {p.builtin ? (
         <button
           type="button"
           className="btn primary highlight"
+          aria-label="Guardar como…"
           onClick={p.onSaveAs}
           title="Los temas incluidos no se cambian: guarda una copia tuya en «Mis temas»"
         >
-          <IconSaveAs /> Guardar como…
+          <IconSaveAs /> <span className="btn-label">Guardar como…</span>
         </button>
       ) : (
         <>
-          <button type="button" className="btn ghost" onClick={p.onSaveAs} title="Guardar una copia con otro nombre en «Mis temas»">
-            Guardar como…
+          <button type="button" className="btn ghost" aria-label="Guardar como…" onClick={p.onSaveAs} title="Guardar una copia con otro nombre en «Mis temas»">
+            <IconSaveAs /> <span className="btn-label">Guardar como…</span>
           </button>
           <button
             type="button"
