@@ -52,7 +52,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .app {
   display: grid;
-  grid-template-rows: auto auto 1fr;
+  /* minmax(0, 1fr): la fila del lienzo no crece con lo que tiene dentro (con zoom, el
+     lienzo hace scroll y la barra de abajo se queda en su sitio). */
+  grid-template-rows: auto auto minmax(0, 1fr);
   grid-template-columns: 248px 1fr 308px;
   grid-template-areas:
     'top top top'
@@ -63,7 +65,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .topbar { grid-area: top; }
 .banner-area { grid-area: banner; }
 .left { grid-area: left; border-right: 1px solid var(--line); }
-.center { grid-area: center; min-width: 0; }
+.center { grid-area: center; min-width: 0; min-height: 0; }
 .right { grid-area: right; border-left: 1px solid var(--line); }
 .left, .right { background: var(--panel); overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
 /* El menú «Añadir» es más ancho que el panel izquierdo y tiene que salir por encima del
@@ -205,7 +207,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* --- Lienzo ------------------------------------------------------------------------ */
 
-.center { display: flex; flex-direction: column; background: var(--bg); }
+.center { display: flex; flex-direction: column; background: var(--bg); overflow: hidden; }
+.canvas-bar { flex: none; }
 .canvas-scroll {
   flex: 1; overflow: auto; display: flex; min-height: 0;
   background-color: #0b0d10;
