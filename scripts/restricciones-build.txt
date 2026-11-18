@@ -1,0 +1,8 @@
+# Dependencias de COMPILACIÓN fijadas con hash (C-37). Las usa scripts/empaquetar.py al
+# construir lo que PyPI solo publica como código fuente (hoy, proxy-tools: setup.py sin
+# pyproject, así que uv usa setuptools). uv comprueba el hash al descargarlas: si no
+# coincide, el build se para (probado 2026-11-18 con un hash falso).
+# Hashes de la wheel en PyPI (https://pypi.org/pypi/<paquete>/json, 2026-11-18).
+# El backend de Visoria (uv_build) no está aquí: viene dentro del propio uv.
+setuptools==84.2.1 --hash=sha256:ca140b45d5325a9478f880e351484f62fef15f336462e449ca0c03c873d589c2
+wheel==0.48.0 --hash=sha256:3217dcc807155e45db462d7ef2431f5ddda0d7273b700d05a67b271ceb1287ab

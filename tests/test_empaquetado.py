@@ -234,6 +234,8 @@ def test_install_packages_requires_hashes_and_binaries(tmp_path):
     export, deps, _build, own = calls
     assert "--frozen" in export and "--no-dev" in export
     assert "--require-hashes" in deps and "--no-deps" in deps
+    # Lo que compila los sdist (setuptools) va fijado con hash.
+    assert deps[deps.index("--build-constraints") + 1] == str(emp.BUILD_CONSTRAINTS)
     assert deps[deps.index("--only-binary") + 1] == "pillow"
     assert ["--only-binary", "proxy-tools"] not in [deps[i : i + 2] for i in range(len(deps))]
     assert "--no-deps" in own
@@ -461,3 +463,14 @@ def test_app_and_installer_share_the_mutex_name():
     assert _define("MutexName") == instancia.APP_MUTEX
     bandeja_src = (ROOT / "src" / "visoria" / "bandeja.py").read_text(encoding="utf-8")
     assert "SingleInstance(APP_MUTEX)" in bandeja_src
+
+
+def test_build_constraints_are_pinned_with_hashes():
+    lines = [
+        x
+        for x in emp.BUILD_CONSTRAINTS.read_text(encoding="utf-8").splitlines()
+        if x and not x.startswith("#")
+    ]
+    assert {x.split("==")[0] for x in lines} >= {"setuptools", "wheel"}
+    for line in lines:
+        assert re.fullmatch(r"[\w-]+==[\d.]+ --hash=sha256:[0-9a-f]{64}", line), line

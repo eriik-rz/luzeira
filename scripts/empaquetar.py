@@ -69,9 +69,11 @@ INNO_SHA256 = {
 #: Plataforma de las wheels: Windows de 64 bits, la única que soporta Visoria v1.
 PLATFORM = "x86_64-pc-windows-msvc"
 #: Paquetes que PyPI solo publica como código fuente (sdist) y se dejan construir.
-#: proxy-tools 0.1.0 (dependencia de pywebview, MIT, un solo .py) no tiene wheel. Su sdist
-#: va verificado por el hash de uv.lock; el backend de build (setuptools) no está fijado.
+#: proxy-tools 0.1.0 (dependencia de pywebview, un solo .py) no tiene wheel. Su sdist va
+#: verificado por el hash de uv.lock y lo que lo compila (setuptools), por BUILD_CONSTRAINTS.
 SDIST_ALLOWED = {"proxy-tools"}
+#: Versiones y hashes de las dependencias de compilación (setuptools…).
+BUILD_CONSTRAINTS = ROOT / "scripts" / "restricciones-build.txt"
 #: Fecha fija para ficheros y zip (2026-01-01 00:00 UTC) si no se pasa SOURCE_DATE_EPOCH.
 DEFAULT_EPOCH = 1767225600
 
@@ -278,7 +280,19 @@ def install_packages(site: Path, tmp: Path, *, run=run) -> None:
         sys.executable,
     ]
     run(
-        [uv, "pip", "install", "--require-hashes", "--no-deps", "-r", str(req), *no_build, *common],
+        [
+            uv,
+            "pip",
+            "install",
+            "--require-hashes",
+            "--no-deps",
+            "-r",
+            str(req),
+            "--build-constraints",
+            str(BUILD_CONSTRAINTS),
+            *no_build,
+            *common,
+        ],
         cwd=ROOT,
     )
     wheels = tmp / "wheel"
