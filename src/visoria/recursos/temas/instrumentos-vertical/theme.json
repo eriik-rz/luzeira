@@ -1,0 +1,35 @@
+{
+  "format": "visoria-theme/1",
+  "name": "Instrumentos Vertical",
+  "author": "Visoria",
+  "orientation": "portrait",
+  "background": {"color": "#1c1e22", "image": "fondo.png"},
+  "widgets": [
+    {"type": "clock", "format": "HH:MM", "box": {"x": 16, "y": 16, "width": 288, "height": 42}, "style": {"size": 34, "bold": true, "color": "#ffb000", "align": "center"}},
+    {"type": "clock", "format": "date-long", "box": {"x": 16, "y": 56, "width": 288, "height": 22}, "style": {"size": 14, "color": "#c9ccd1", "align": "center"}},
+
+    {"type": "bar", "sensor": "cpu.usage", "direction": "vertical", "fill": "#4ade80", "track": "#08090b", "box": {"x": 44, "y": 130, "width": 24, "height": 196}},
+    {"type": "text", "text": "CPU", "box": {"x": 16, "y": 338, "width": 72, "height": 16}, "style": {"size": 12, "bold": true, "color": "#c9ccd1", "align": "center"}},
+    {"type": "sensor", "sensor": "cpu.usage", "box": {"x": 16, "y": 356, "width": 72, "height": 22}, "style": {"size": 15, "bold": true, "color": "#4ade80", "align": "center"}},
+
+    {"type": "bar", "sensor": "gpu.usage", "direction": "vertical", "fill": "#4ade80", "track": "#08090b", "box": {"x": 116, "y": 130, "width": 24, "height": 196}},
+    {"type": "text", "text": "GPU", "box": {"x": 88, "y": 338, "width": 72, "height": 16}, "style": {"size": 12, "bold": true, "color": "#c9ccd1", "align": "center"}},
+    {"type": "sensor", "sensor": "gpu.usage", "box": {"x": 88, "y": 356, "width": 72, "height": 22}, "style": {"size": 15, "bold": true, "color": "#4ade80", "align": "center"}},
+
+    {"type": "bar", "sensor": "memory.usage", "direction": "vertical", "fill": "#4ade80", "track": "#08090b", "box": {"x": 188, "y": 130, "width": 24, "height": 196}},
+    {"type": "text", "text": "RAM", "box": {"x": 160, "y": 338, "width": 72, "height": 16}, "style": {"size": 12, "bold": true, "color": "#c9ccd1", "align": "center"}},
+    {"type": "sensor", "sensor": "memory.usage", "box": {"x": 160, "y": 356, "width": 72, "height": 22}, "style": {"size": 15, "bold": true, "color": "#4ade80", "align": "center"}},
+
+    {"type": "bar", "sensor": "gpu.temperature", "direction": "vertical", "min": 20, "max": 100, "fill": "#ff8c00", "track": "#08090b", "box": {"x": 260, "y": 130, "width": 24, "height": 196}},
+    {"type": "text", "text": "TEMP", "box": {"x": 232, "y": 338, "width": 72, "height": 16}, "style": {"size": 12, "bold": true, "color": "#c9ccd1", "align": "center"}},
+    {"type": "sensor", "sensor": "gpu.temperature", "box": {"x": 232, "y": 356, "width": 72, "height": 22}, "style": {"size": 15, "bold": true, "color": "#ffa640", "align": "center"}},
+
+    {"type": "text", "text": "RED", "box": {"x": 26, "y": 400, "width": 120, "height": 16}, "style": {"size": 12, "bold": true, "color": "#c9ccd1", "align": "left"}},
+    {"type": "sensor", "sensor": "network.download", "decimals": 1, "prefix": "↓ ", "box": {"x": 26, "y": 416, "width": 124, "height": 20}, "style": {"size": 15, "bold": true, "color": "#4ade80", "align": "left"}},
+    {"type": "sensor", "sensor": "network.upload", "decimals": 1, "prefix": "↑ ", "box": {"x": 26, "y": 438, "width": 124, "height": 20}, "style": {"size": 15, "color": "#4ade80", "align": "left"}},
+
+    {"type": "text", "text": "VRAM · GPU", "box": {"x": 174, "y": 400, "width": 120, "height": 16}, "style": {"size": 12, "bold": true, "color": "#c9ccd1", "align": "left"}},
+    {"type": "sensor", "sensor": "gpu.memory_used", "decimals": 1, "box": {"x": 174, "y": 416, "width": 124, "height": 20}, "style": {"size": 15, "bold": true, "color": "#4ade80", "align": "left"}},
+    {"type": "sensor", "sensor": "gpu.power", "box": {"x": 174, "y": 438, "width": 124, "height": 20}, "style": {"size": 15, "color": "#4ade80", "align": "left"}}
+  ]
+}

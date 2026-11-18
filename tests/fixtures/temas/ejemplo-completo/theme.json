@@ -1,0 +1,16 @@
+{
+  "format": "visoria-theme/1",
+  "name": "Ejemplo completo ¡Ñandú!",
+  "author": "Visoria",
+  "orientation": "landscape",
+  "background": {"color": "#101418", "image": "fondo.png"},
+  "widgets": [
+    {"type": "text", "text": "¿Qué tal?", "box": {"x": 0, "y": 0, "width": 480, "height": 40}},
+    {"type": "clock", "format": "HH:MM:SS", "box": {"x": 0, "y": 40, "width": 240, "height": 40}},
+    {"type": "sensor", "sensor": "cpu.load", "suffix": " uso", "decimals": 1,
+     "box": {"x": 240, "y": 40, "width": 240, "height": 40}, "style": {"size": 24, "bold": true}},
+    {"type": "bar", "sensor": "gpu.load", "box": {"x": 0, "y": 100, "width": 480, "height": 20}},
+    {"type": "image", "file": "img/logo.jpg", "box": {"x": 0, "y": 140, "width": 64, "height": 64}},
+    {"type": "image", "file": "img/anim.gif", "box": {"x": 80, "y": 140, "width": 64, "height": 64}}
+  ]
+}

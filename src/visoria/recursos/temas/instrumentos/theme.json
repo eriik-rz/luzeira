@@ -1,0 +1,45 @@
+{
+  "format": "visoria-theme/1",
+  "name": "Instrumentos",
+  "author": "Visoria",
+  "orientation": "landscape",
+  "background": {"color": "#1c1e22", "image": "fondo.png"},
+  "widgets": [
+    {"type": "clock", "format": "HH:MM", "box": {"x": 16, "y": 10, "width": 120, "height": 40}, "style": {"size": 28, "bold": true, "color": "#ffb000", "align": "center"}},
+    {"type": "clock", "format": "weekday", "box": {"x": 144, "y": 12, "width": 160, "height": 18}, "style": {"size": 13, "color": "#c9ccd1", "align": "center"}},
+    {"type": "clock", "format": "date-short", "box": {"x": 144, "y": 30, "width": 160, "height": 18}, "style": {"size": 13, "color": "#c9ccd1", "align": "center"}},
+    {"type": "sensor", "sensor": "network.download", "decimals": 1, "prefix": "↓ ", "box": {"x": 322, "y": 12, "width": 134, "height": 18}, "style": {"size": 14, "bold": true, "color": "#4ade80", "align": "left"}},
+    {"type": "sensor", "sensor": "network.upload", "decimals": 1, "prefix": "↑ ", "box": {"x": 322, "y": 30, "width": 134, "height": 18}, "style": {"size": 14, "color": "#4ade80", "align": "left"}},
+
+    {"type": "bar", "sensor": "cpu.usage", "direction": "vertical", "fill": "#4ade80", "track": "#08090b", "box": {"x": 40, "y": 66, "width": 24, "height": 164}},
+    {"type": "text", "text": "CPU", "box": {"x": 16, "y": 240, "width": 64, "height": 16}, "style": {"size": 12, "bold": true, "color": "#c9ccd1", "align": "center"}},
+    {"type": "sensor", "sensor": "cpu.usage", "box": {"x": 16, "y": 258, "width": 64, "height": 22}, "style": {"size": 15, "bold": true, "color": "#4ade80", "align": "center"}},
+
+    {"type": "bar", "sensor": "gpu.usage", "direction": "vertical", "fill": "#4ade80", "track": "#08090b", "box": {"x": 104, "y": 66, "width": 24, "height": 164}},
+    {"type": "text", "text": "GPU", "box": {"x": 80, "y": 240, "width": 64, "height": 16}, "style": {"size": 12, "bold": true, "color": "#c9ccd1", "align": "center"}},
+    {"type": "sensor", "sensor": "gpu.usage", "box": {"x": 80, "y": 258, "width": 64, "height": 22}, "style": {"size": 15, "bold": true, "color": "#4ade80", "align": "center"}},
+
+    {"type": "bar", "sensor": "memory.usage", "direction": "vertical", "fill": "#4ade80", "track": "#08090b", "box": {"x": 168, "y": 66, "width": 24, "height": 164}},
+    {"type": "text", "text": "RAM", "box": {"x": 144, "y": 240, "width": 64, "height": 16}, "style": {"size": 12, "bold": true, "color": "#c9ccd1", "align": "center"}},
+    {"type": "sensor", "sensor": "memory.usage", "box": {"x": 144, "y": 258, "width": 64, "height": 22}, "style": {"size": 15, "bold": true, "color": "#4ade80", "align": "center"}},
+
+    {"type": "bar", "sensor": "gpu.memory_usage", "direction": "vertical", "fill": "#4ade80", "track": "#08090b", "box": {"x": 232, "y": 66, "width": 24, "height": 164}},
+    {"type": "text", "text": "VRAM", "box": {"x": 208, "y": 240, "width": 64, "height": 16}, "style": {"size": 12, "bold": true, "color": "#c9ccd1", "align": "center"}},
+    {"type": "sensor", "sensor": "gpu.memory_usage", "box": {"x": 208, "y": 258, "width": 64, "height": 22}, "style": {"size": 15, "bold": true, "color": "#4ade80", "align": "center"}},
+
+    {"type": "bar", "sensor": "gpu.temperature", "direction": "vertical", "min": 20, "max": 100, "fill": "#ff8c00", "track": "#08090b", "box": {"x": 296, "y": 66, "width": 24, "height": 164}},
+    {"type": "text", "text": "TEMP", "box": {"x": 272, "y": 240, "width": 64, "height": 16}, "style": {"size": 12, "bold": true, "color": "#c9ccd1", "align": "center"}},
+    {"type": "sensor", "sensor": "gpu.temperature", "box": {"x": 272, "y": 258, "width": 64, "height": 22}, "style": {"size": 15, "bold": true, "color": "#ffa640", "align": "center"}},
+
+    {"type": "bar", "sensor": "gpu.fan", "direction": "vertical", "fill": "#60a5fa", "track": "#08090b", "box": {"x": 360, "y": 66, "width": 24, "height": 164}},
+    {"type": "text", "text": "VENT", "box": {"x": 336, "y": 240, "width": 64, "height": 16}, "style": {"size": 12, "bold": true, "color": "#c9ccd1", "align": "center"}},
+    {"type": "sensor", "sensor": "gpu.fan", "box": {"x": 336, "y": 258, "width": 64, "height": 22}, "style": {"size": 15, "bold": true, "color": "#93c5fd", "align": "center"}},
+
+    {"type": "bar", "sensor": "disk.usage.c", "direction": "vertical", "fill": "#4ade80", "track": "#08090b", "box": {"x": 424, "y": 66, "width": 24, "height": 164}},
+    {"type": "text", "text": "DISCO", "box": {"x": 400, "y": 240, "width": 64, "height": 16}, "style": {"size": 12, "bold": true, "color": "#c9ccd1", "align": "center"}},
+    {"type": "sensor", "sensor": "disk.usage.c", "box": {"x": 400, "y": 258, "width": 64, "height": 22}, "style": {"size": 15, "bold": true, "color": "#4ade80", "align": "center"}},
+
+    {"type": "sensor", "sensor": "cpu.name", "max_chars": 30, "interval": 3600, "box": {"x": 16, "y": 290, "width": 224, "height": 20}, "style": {"size": 12, "color": "#8b9099", "align": "left"}},
+    {"type": "sensor", "sensor": "gpu.name", "max_chars": 34, "interval": 3600, "box": {"x": 240, "y": 290, "width": 224, "height": 20}, "style": {"size": 12, "color": "#8b9099", "align": "right"}}
+  ]
+}

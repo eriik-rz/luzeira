@@ -1,0 +1,22 @@
+{
+  "format": "visoria-theme/1",
+  "name": "Reloj",
+  "author": "Visoria",
+  "orientation": "landscape",
+  "background": { "color": "#0b1020", "image": "fondo.png" },
+  "widgets": [
+    { "type": "clock", "format": "HH:MM", "box": { "x": 20, "y": 34, "width": 440, "height": 128 },
+      "style": { "size": 112, "bold": true, "color": "#ffffff", "align": "center" } },
+    { "type": "clock", "format": "date-long", "box": { "x": 20, "y": 170, "width": 440, "height": 36 },
+      "style": { "size": 24, "color": "#ffc98a", "align": "center" } },
+    { "type": "clock", "format": "date-short", "box": { "x": 20, "y": 206, "width": 440, "height": 26 },
+      "style": { "size": 15, "color": "#8a93a6", "align": "center" } },
+
+    { "type": "sensor", "sensor": "cpu.usage", "prefix": "CPU  ", "box": { "x": 30, "y": 264, "width": 140, "height": 34 },
+      "style": { "size": 20, "color": "#e6e6e6", "align": "center" } },
+    { "type": "sensor", "sensor": "gpu.usage", "prefix": "GPU  ", "box": { "x": 170, "y": 264, "width": 140, "height": 34 },
+      "style": { "size": 20, "color": "#e6e6e6", "align": "center" } },
+    { "type": "sensor", "sensor": "memory.usage", "prefix": "RAM  ", "box": { "x": 310, "y": 264, "width": 140, "height": 34 },
+      "style": { "size": 20, "color": "#e6e6e6", "align": "center" } }
+  ]
+}

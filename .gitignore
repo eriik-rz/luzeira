@@ -1,0 +1,49 @@
+# .claude/ entero fuera del repo, a propósito (decidido el 2026-11-17).
+# Es config local de esta máquina y de este usuario: skills, agentes, permisos
+# y el contexto denso del proyecto. No aporta nada a quien use la app.
+.claude/
+
+# docs/ es un repo git PRIVADO aparte (planificación, investigación, decisiones).
+# Habla del mantenedor, su equipo y sus decisiones: nunca va al repo público (ADR-003).
+docs/
+
+# Secretos. Nunca, bajo ningún concepto. Ver SECURITY.md y la skill seguridad-visoria.
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.pfx
+*.p12
+credenciales*
+secrets*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+build/
+dist/
+
+# Node (editor React)
+node_modules/
+editor/dist/
+
+# Descargas crudas de investigación: lo que importa es el hallazgo con su URL
+# y su fecha, y eso vive en docs/investigacion/.
+data/crudo/
+
+# Volcados de la pantalla y capturas de prueba
+capturas/
+
+# Ruido del sistema
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Editor compilado: se genera con «npm run build» en editor/ (y en la publicación).
+src/visoria/editor/web/
