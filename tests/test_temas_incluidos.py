@@ -107,8 +107,17 @@ _LONG_NAMES = {
         "AMD Ryzen 7 5700X3D 8-Core Processor",
         "Intel(R) Core(TM) i7-8700 CPU @ 3.20GHz",
         "AMD Ryzen Threadripper PRO 5995WX 64-Cores",
+        "AMD Ryzen 9 7950X3D 16-Core Processor",
+        "13th Gen Intel(R) Core(TM) i9-13900KF",
     ],
-    "gpu.name": ["NVIDIA GeForce RTX 4070 Ti SUPER", "NVIDIA RTX A6000"],
+    # Con fuente proporcional el más largo no es el más ancho: «SUPER» ocupa más que «Ti».
+    "gpu.name": [
+        "NVIDIA GeForce RTX 4070 Ti SUPER",
+        "NVIDIA GeForce RTX 4070 SUPER",
+        "NVIDIA GeForce RTX 4080 SUPER",
+        "NVIDIA GeForce GTX 1660 SUPER",
+        "NVIDIA RTX A6000",
+    ],
 }
 
 
@@ -218,3 +227,11 @@ def test_every_background_has_exactly_one_generator():
     assert len(generated) == len(set(generated)), "dos generadores escriben el mismo fichero"
     pngs = {(p.parent.name, p.name) for p in BUILTIN_THEMES.glob("*/*.png")}
     assert set(generated) == pngs
+
+
+@pytest.mark.parametrize("name", BUILTIN)
+def test_builtin_text_is_readable_on_the_panel(name):
+    # 3,5" a 480x320 (~165 ppp): por debajo de 14 px cuesta leer a un brazo de distancia.
+    theme = load_theme(BUILTIN_THEMES / name).theme
+    small = [w.style.size for w in theme.widgets if hasattr(w, "style") and w.style.size < 14]
+    assert small == []

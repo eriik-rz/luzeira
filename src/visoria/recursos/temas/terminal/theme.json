@@ -6,7 +6,7 @@
   "background": {"color": "#020904", "image": "fondo.png"},
   "widgets": [
     {"type": "text", "text": "visoria — monitor", "box": {"x": 12, "y": 4, "width": 200, "height": 22}, "style": {"size": 14, "bold": true, "color": "#3dff6e", "align": "left"}},
-    {"type": "clock", "format": "date-short", "box": {"x": 212, "y": 4, "width": 140, "height": 22}, "style": {"size": 13, "color": "#1fa84a", "align": "right"}},
+    {"type": "clock", "format": "date-short", "box": {"x": 212, "y": 4, "width": 140, "height": 22}, "style": {"size": 14, "color": "#1fa84a", "align": "right"}},
     {"type": "clock", "format": "HH:MM:SS", "box": {"x": 360, "y": 4, "width": 108, "height": 22}, "style": {"size": 14, "bold": true, "color": "#3dff6e", "align": "right"}},
 
     {"type": "text", "text": "> cpu", "box": {"x": 16, "y": 42, "width": 92, "height": 24}, "style": {"size": 16, "color": "#1fa84a", "align": "left"}},
@@ -46,7 +46,7 @@
     {"type": "sensor", "sensor": "disk.write", "decimals": 1, "prefix": "esc ", "box": {"x": 290, "y": 234, "width": 174, "height": 24}, "style": {"size": 16, "color": "#3dff6e", "align": "left"}},
 
     {"type": "text", "text": "$", "box": {"x": 16, "y": 288, "width": 16, "height": 24}, "style": {"size": 15, "bold": true, "color": "#3dff6e", "align": "left"}},
-    {"type": "sensor", "sensor": "cpu.name", "max_chars": 40, "interval": 3600, "box": {"x": 34, "y": 288, "width": 300, "height": 24}, "style": {"size": 13, "color": "#1fa84a", "align": "left"}},
-    {"type": "sensor", "sensor": "system.uptime", "decimals": 1, "prefix": "activo ", "interval": 60, "box": {"x": 340, "y": 288, "width": 124, "height": 24}, "style": {"size": 13, "color": "#1fa84a", "align": "right"}}
+    {"type": "sensor", "sensor": "cpu.name", "max_chars": 37, "interval": 3600, "box": {"x": 34, "y": 288, "width": 300, "height": 24}, "style": {"size": 14, "color": "#1fa84a", "align": "left"}},
+    {"type": "sensor", "sensor": "system.uptime", "decimals": 1, "prefix": "activo ", "interval": 60, "box": {"x": 340, "y": 288, "width": 124, "height": 24}, "style": {"size": 14, "color": "#1fa84a", "align": "right"}}
   ]
 }
