@@ -37,6 +37,10 @@ THEME_JSON = "theme.json"
 MAX_JSON_BYTES = 256 * 1024
 MAX_FILE_BYTES = 10 * 1024 * 1024
 MAX_IMAGE_SIDE = 4096
+# C-15: hoy un GIF se pinta quieto (solo el fotograma 0), pero un GIF con miles de
+# fotogramas diminutos cabe en 10 MB y cada uno se descomprime al contarlos. Se acota
+# ya, para que el día que se animen no haya temas compartidos que lo pasen.
+MAX_GIF_FRAMES = 300
 
 MAX_ZIP_BYTES = 20 * 1024 * 1024
 MAX_UNZIPPED_BYTES = 50 * 1024 * 1024
@@ -120,6 +124,23 @@ def _read_head(path: Path, n: int = 16) -> bytes:
         return fh.read(n)
 
 
+def _check_gif_frames(im: Image.Image, rel: str) -> None:
+    """Cuenta los fotogramas de un GIF sin pasar de ``MAX_GIF_FRAMES`` (no usa
+    ``n_frames``, que los recorrería todos aunque fueran millones)."""
+    frames = 1
+    try:
+        while True:
+            im.seek(frames)
+            frames += 1
+            if frames > MAX_GIF_FRAMES:
+                raise ThemeError(
+                    f"El GIF «{rel}» tiene más de {MAX_GIF_FRAMES} fotogramas; usa uno más corto."
+                )
+    except EOFError:
+        pass
+    im.seek(0)
+
+
 def _check_image(path: Path, rel: str, ext: str) -> None:
     """Abre la imagen con Pillow: tipo real, tamaño en píxeles y datos completos."""
     fmt = PILLOW_FORMATS[ext]
@@ -135,6 +156,8 @@ def _check_image(path: Path, rel: str, ext: str) -> None:
                     f"La imagen «{rel}» mide {width}x{height} píxeles; "
                     f"el máximo es {MAX_IMAGE_SIDE}x{MAX_IMAGE_SIDE}."
                 )
+            if fmt == "GIF":
+                _check_gif_frames(im, rel)
             im.verify()  # sumas de control y estructura (sobre todo en PNG)
         # verify() deja la imagen inservible y no detecta un JPEG cortado: se vuelve
         # a abrir y se decodifica entera (como mucho 4096x4096, acotado).

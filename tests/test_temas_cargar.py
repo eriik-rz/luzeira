@@ -504,3 +504,27 @@ def test_open_validated_image_rejects(
     path.write_bytes(data)
     with pytest.raises(ThemeError, match=expected):
         open_validated_image(path, ext)
+
+
+# --- C-15: GIF con demasiados fotogramas -------------------------------------------------
+
+
+def gif_bytes(frames: int) -> bytes:
+    # Cada fotograma distinto del anterior: Pillow junta los iguales al guardar.
+    images = [Image.new("L", (4, 4), (i * 37) % 256) for i in range(frames)]
+    buf = io.BytesIO()
+    images[0].save(buf, "GIF", save_all=True, append_images=images[1:], duration=10, loop=0)
+    return buf.getvalue()
+
+
+def test_gif_up_to_the_frame_limit_loads(tmp_path: Path) -> None:
+    folder = write_theme(tmp_path / "t", bg("anim.gif"))
+    (folder / "anim.gif").write_bytes(gif_bytes(cargar.MAX_GIF_FRAMES))
+    load_theme(folder)
+
+
+def test_gif_over_the_frame_limit_is_rejected(tmp_path: Path) -> None:
+    folder = write_theme(tmp_path / "t", bg("anim.gif"))
+    (folder / "anim.gif").write_bytes(gif_bytes(cargar.MAX_GIF_FRAMES + 1))
+    with pytest.raises(ThemeError, match="fotogramas"):
+        load_theme(folder)
