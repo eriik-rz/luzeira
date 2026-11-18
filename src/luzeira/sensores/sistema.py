@@ -7,10 +7,15 @@ así que la primera lectura no tiene valor («Midiendo…»).
 Los contadores de red y disco se comparan **por adaptador y por disco**, nunca como
 suma: si aparece un adaptador nuevo (p. ej. una VPN que se conecta con sus contadores
 ya acumulados), restar sumas daría un pico falso de miles de MB/s.
+
+Red con VPN (C-11): en Windows solo se suman las tarjetas de verdad (Ethernet, Wi-Fi),
+no los adaptadores virtuales ni los túneles, por los que pasa el mismo tráfico otra vez
+(ver ``windows_red``).
 """
 
 from __future__ import annotations
 
+import logging
 import sys
 import time
 from collections.abc import Callable
@@ -18,6 +23,8 @@ from collections.abc import Callable
 import psutil
 
 from luzeira.sensores.base import Reading, SensorInfo
+
+log = logging.getLogger(__name__)
 
 # Capacidades (memoria) en GiB: así 32 GiB de RAM se ven como «32 GB», igual que en el
 # Administrador de tareas. Velocidades en MB/s decimales (10^6 bytes), como las de red.
@@ -49,6 +56,39 @@ _MAX_INTERVAL = 10.0
 # Contadores acumulados (enviados/leídos, recibidos/escritos) por adaptador o disco.
 Counters = dict[str, tuple[int, int]]
 
+# Cada cuánto se vuelve a mirar qué tarjetas hay (se puede enchufar un Wi-Fi USB).
+_PHYSICAL_TTL = 30.0
+
+
+def _windows_physical_names() -> frozenset[str]:
+    from luzeira.sensores.windows_red import list_interfaces, physical_names
+
+    return physical_names(list_interfaces())
+
+
+class _PhysicalNics:
+    """Nombres de las tarjetas de red de verdad, con caché. ``None``: no filtrar (fuera
+    de Windows, o si Windows no deja leerlo: mejor contar de más que dejar la red a 0)."""
+
+    def __init__(self, lister: Callable[[], frozenset[str]] | None, clock) -> None:
+        self._lister = lister
+        self._clock = clock
+        self._names: frozenset[str] | None = None
+        self._at: float | None = None
+
+    def names(self) -> frozenset[str] | None:
+        if self._lister is None:
+            return None
+        now = self._clock()
+        if self._at is None or now - self._at >= _PHYSICAL_TTL:
+            self._at = now
+            try:
+                self._names = self._lister() or None
+            except OSError:
+                log.warning("No se pudo leer qué tarjetas de red son físicas; cuento todas.")
+                self._names = None
+        return self._names
+
 
 def _fixed_drives() -> list[tuple[str, str]]:
     """Devuelve (letra en minúscula, punto de montaje) de las unidades fijas.
@@ -71,13 +111,19 @@ def _is_loopback(name: str) -> bool:
     return lowered == _LOOPBACK_EXACT or lowered.startswith(_LOOPBACK_PREFIX)
 
 
-def _nic_counters() -> Counters:
-    """Bytes (enviados, recibidos) de cada interfaz, salvo el bucle local."""
-    return {
+def _nic_counters(physical: frozenset[str] | None = None) -> Counters:
+    """Bytes (enviados, recibidos) de cada interfaz, salvo el bucle local.
+
+    Con ``physical``, solo esas. Si ninguna coincide (nombres que no cuadran), todas: una
+    red a 0 sería peor que una con VPN contada dos veces."""
+    every = {
         name: (c.bytes_sent, c.bytes_recv)
         for name, c in psutil.net_io_counters(pernic=True).items()
         if not _is_loopback(name)
     }
+    if physical is None:
+        return every
+    return {name: c for name, c in every.items() if name in physical} or every
 
 
 class SystemSource:
@@ -89,9 +135,16 @@ class SystemSource:
     un núcleo durante la llamada, pero no es «menos de 1 ms».
     """
 
-    def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(
+        self,
+        clock: Callable[[], float] = time.monotonic,
+        physical_nics: Callable[[], frozenset[str]] | None = (
+            _windows_physical_names if sys.platform == "win32" else None
+        ),
+    ) -> None:
         # El reloj se inyecta para poder probar el cálculo de velocidades sin esperar.
         self._clock = clock
+        self._physical = _PhysicalNics(physical_nics, clock)
         self._drives = _fixed_drives()
         # Estado de la lectura anterior para calcular diferencias: (instante, valores).
         self._prev_time: float | None = None
@@ -209,7 +262,7 @@ class SystemSource:
         out["memory.total"] = Reading(round(vm.total / _GIB, 2), "GB")
 
     def _read_network(self, out: dict[str, Reading], elapsed: float | None) -> None:
-        current = _nic_counters()
+        current = _nic_counters(self._physical.names())
         prev = self._prev_net
         self._prev_net = current
         up, down = _rates(prev, current, elapsed)

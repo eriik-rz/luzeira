@@ -4,6 +4,7 @@ objetos falsos con ``monkeypatch``. Solo el último lee la GPU real si existe.""
 from __future__ import annotations
 
 import logging
+import sys
 from collections import namedtuple
 from types import SimpleNamespace
 
@@ -82,8 +83,9 @@ def fake(monkeypatch):
     return fp
 
 
-def make_source(fp: FakePsutil) -> sistema.SystemSource:
-    return sistema.SystemSource(clock=lambda: fp.now)
+def make_source(fp: FakePsutil, physical_nics=None) -> sistema.SystemSource:
+    # Sin ``physical_nics`` se cuentan todas: los nombres falsos no son de este equipo.
+    return sistema.SystemSource(clock=lambda: fp.now, physical_nics=physical_nics)
 
 
 def test_system_sensor_ids_follow_contract(fake):
@@ -490,3 +492,52 @@ def test_text_sensors_are_declared_as_text_and_read_real_names():
             assert gpu.text and not gpu.text.startswith("NVIDIA ")
     finally:
         hub.close()
+
+
+# --- C-11: la VPN no cuenta dos veces ----------------------------------------------------
+
+
+def test_vpn_traffic_is_not_counted_twice(fake):
+    src = make_source(fake, physical_nics=lambda: frozenset({"Ethernet"}))
+    fake.nics["Tailscale"] = NicIO(0, 0)
+    src.read_all()
+    fake.now += 1
+    # 1 MB sale cifrado por la tarjeta y el mismo 1 MB pasa en claro por la VPN.
+    fake.nics["Ethernet"] = NicIO(1_000_000 + 1_000_000, 5_000_000)
+    fake.nics["Tailscale"] = NicIO(1_000_000, 0)
+    assert src.read_all()["network.upload"] == Reading(1.0, "MB/s")
+
+
+def test_physical_list_that_matches_nothing_counts_everything(fake):
+    src = make_source(fake, physical_nics=lambda: frozenset({"Otra"}))
+    src.read_all()
+    fake.now += 1
+    fake.nics["Ethernet"] = NicIO(1_000_000 + 2_000_000, 5_000_000)
+    assert src.read_all()["network.upload"] == Reading(2.0, "MB/s")
+
+
+def test_physical_list_failing_counts_everything_and_is_retried(fake):
+    calls = []
+
+    def lister():
+        calls.append(fake.now)
+        raise OSError("sin permiso")
+
+    src = make_source(fake, physical_nics=lister)
+    src.read_all()
+    fake.now += 1
+    fake.nics["Ethernet"] = NicIO(1_000_000 + 2_000_000, 5_000_000)
+    assert src.read_all()["network.upload"] == Reading(2.0, "MB/s")
+    fake.now += sistema._PHYSICAL_TTL
+    src.read_all()
+    assert len(calls) == 2  # una vez al empezar y otra pasados 30 s, no en cada lectura
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="GetIfTable2 solo existe en Windows")
+def test_real_windows_interfaces_are_read():
+    from luzeira.sensores import windows_red
+
+    interfaces = windows_red.list_interfaces()
+    assert interfaces and all(isinstance(i.name, str) and i.name for i in interfaces)
+    # El bucle local nunca es una tarjeta de verdad.
+    assert not any(i.physical for i in interfaces if "loopback" in i.name.lower())
