@@ -85,7 +85,9 @@ def fake(monkeypatch):
 
 def make_source(fp: FakePsutil, physical_nics=None) -> sistema.SystemSource:
     # Sin ``physical_nics`` se cuentan todas: los nombres falsos no son de este equipo.
-    return sistema.SystemSource(clock=lambda: fp.now, physical_nics=physical_nics)
+    return sistema.SystemSource(
+        clock=lambda: fp.now, physical_nics=physical_nics, memory=sistema._psutil_memory
+    )
 
 
 def test_system_sensor_ids_follow_contract(fake):
@@ -541,3 +543,26 @@ def test_real_windows_interfaces_are_read():
     assert interfaces and all(isinstance(i.name, str) and i.name for i in interfaces)
     # El bucle local nunca es una tarjeta de verdad.
     assert not any(i.physical for i in interfaces if "loopback" in i.name.lower())
+
+
+# --- C-20: memoria con GlobalMemoryStatusEx ---------------------------------------------
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="GlobalMemoryStatusEx solo existe en Windows")
+def test_windows_memory_matches_psutil():
+    import psutil
+
+    total, available = sistema._windows_memory()
+    vm = psutil.virtual_memory()
+    assert total == vm.total
+    assert abs(available - vm.available) < 256 * 1024**2  # cambia entre las dos lecturas
+
+
+def test_memory_reading_from_total_and_available(fake):
+    src = sistema.SystemSource(
+        clock=lambda: fake.now, physical_nics=None, memory=lambda: (32 * GIB, 8 * GIB)
+    )
+    r = src.read_all()
+    assert r["memory.usage"] == Reading(75.0, "%")
+    assert r["memory.used"] == Reading(24.0, "GB")
+    assert r["memory.total"] == Reading(32.0, "GB")

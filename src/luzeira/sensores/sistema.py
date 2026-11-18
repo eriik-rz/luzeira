@@ -60,6 +60,40 @@ Counters = dict[str, tuple[int, int]]
 _PHYSICAL_TTL = 30.0
 
 
+def _windows_memory() -> tuple[int, int]:
+    """(total, disponible) en bytes con ``GlobalMemoryStatusEx`` (C-20).
+
+    Es la misma cifra que da ``psutil.virtual_memory`` en Windows, pero cuesta ~1 µs en vez
+    de 5-19 ms (medido el 2026-11-18): psutil lee además otros datos que aquí no se usan.
+    https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-globalmemorystatusex
+    """
+    import ctypes
+
+    class MEMORYSTATUSEX(ctypes.Structure):  # los nombres, los de Microsoft
+        _fields_ = [
+            ("dwLength", ctypes.c_ulong),
+            ("dwMemoryLoad", ctypes.c_ulong),
+            ("ullTotalPhys", ctypes.c_ulonglong),
+            ("ullAvailPhys", ctypes.c_ulonglong),
+            ("ullTotalPageFile", ctypes.c_ulonglong),
+            ("ullAvailPageFile", ctypes.c_ulonglong),
+            ("ullTotalVirtual", ctypes.c_ulonglong),
+            ("ullAvailVirtual", ctypes.c_ulonglong),
+            ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+        ]
+
+    status = MEMORYSTATUSEX()
+    status.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+    if not ctypes.WinDLL("kernel32").GlobalMemoryStatusEx(ctypes.byref(status)):
+        raise OSError("GlobalMemoryStatusEx falló")
+    return status.ullTotalPhys, status.ullAvailPhys
+
+
+def _psutil_memory() -> tuple[int, int]:
+    vm = psutil.virtual_memory()
+    return vm.total, vm.available
+
+
 def _windows_physical_names() -> frozenset[str]:
     from luzeira.sensores.windows_red import list_interfaces, physical_names
 
@@ -130,7 +164,8 @@ class SystemSource:
     """Fuente de sensores basada en psutil.
 
     Coste medido el 2026-11-17 en el equipo de pruebas (Windows 10, Ryzen 7 5700X3D):
-    un ``read_all`` tarda 13-29 ms; casi todo es ``virtual_memory`` (8-18 ms) y
+    un ``read_all`` tardaba 13-29 ms; casi todo era ``virtual_memory`` (8-18 ms, desde C-20
+    se lee con ``GlobalMemoryStatusEx``, ~1 µs) y
     ``net_io_counters(pernic=True)`` (~5 ms). Con una lectura por segundo es < 3 % de
     un núcleo durante la llamada, pero no es «menos de 1 ms».
     """
@@ -141,7 +176,11 @@ class SystemSource:
         physical_nics: Callable[[], frozenset[str]] | None = (
             _windows_physical_names if sys.platform == "win32" else None
         ),
+        memory: Callable[[], tuple[int, int]] = (
+            _windows_memory if sys.platform == "win32" else _psutil_memory
+        ),
     ) -> None:
+        self._memory = memory
         # El reloj se inyecta para poder probar el cálculo de velocidades sin esperar.
         self._clock = clock
         self._physical = _PhysicalNics(physical_nics, clock)
@@ -256,10 +295,11 @@ class SystemSource:
         out["cpu.frequency"] = Reading(round(freq.current), "MHz")
 
     def _read_memory(self, out: dict[str, Reading]) -> None:
-        vm = psutil.virtual_memory()
-        out["memory.usage"] = Reading(round(vm.percent, 1), "%")
-        out["memory.used"] = Reading(round((vm.total - vm.available) / _GIB, 2), "GB")
-        out["memory.total"] = Reading(round(vm.total / _GIB, 2), "GB")
+        total, available = self._memory()
+        used = total - available
+        out["memory.usage"] = Reading(round(used / total * 100, 1), "%")
+        out["memory.used"] = Reading(round(used / _GIB, 2), "GB")
+        out["memory.total"] = Reading(round(total / _GIB, 2), "GB")
 
     def _read_network(self, out: dict[str, Reading], elapsed: float | None) -> None:
         current = _nic_counters(self._physical.names())
