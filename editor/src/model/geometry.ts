@@ -107,3 +107,22 @@ const PADDING = 80 // margen alrededor del lienzo (40 px por lado)
 export function fitZoom(screen: { width: number; height: number }, room: { width: number; height: number }): number {
   return FIT_STEPS.find((z) => screen.width * z + PADDING <= room.width && screen.height * z + PADDING <= room.height) ?? 0.5
 }
+
+/**
+ * Alt+clic: qué elemento seleccionar en el punto `p`, bajando una capa cada vez.
+ *
+ * Una imagen encima de todo (las líneas de barrido de Retro Ámbar, los segmentos sobre las
+ * barras de Terminal) capturaría siempre el clic. Con Alt, si el seleccionado está bajo el
+ * puntero se pasa al de debajo; al llegar al fondo se vuelve al de arriba. `boxes` va en el
+ * orden del tema (el último es el que se ve delante).
+ */
+export function pickBelow(boxes: Box[], ids: string[], p: { x: number; y: number }, current: string | null): string | null {
+  const under: string[] = []
+  for (let i = boxes.length - 1; i >= 0; i--) {
+    const b = boxes[i]
+    if (p.x >= b.x && p.x < b.x + b.width && p.y >= b.y && p.y < b.y + b.height) under.push(ids[i])
+  }
+  if (under.length === 0) return null
+  const at = current ? under.indexOf(current) : -1
+  return at < 0 ? under[0] : under[(at + 1) % under.length]
+}

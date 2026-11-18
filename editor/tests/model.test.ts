@@ -4,7 +4,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { clampBox, moveBox, resizeBox, boxInside } from '../src/model/geometry.ts'
+import { clampBox, moveBox, resizeBox, boxInside, pickBelow } from '../src/model/geometry.ts'
 import { reducer, initialState, gapToIndex, HISTORY_LIMIT, MERGE_WINDOW_MS, type EditorState } from '../src/model/editorState.ts'
 import { normalizeTheme, createWidget, placeNewBox } from '../src/model/theme.ts'
 import { validateTheme, widgetIndexOf, fieldOf } from '../src/model/validate.ts'
@@ -375,4 +375,21 @@ test('solo se sueltan imágenes en el lienzo', () => {
   assert.ok(!isDroppableImage('letra.ttf'))
   assert.ok(!isDroppableImage('png'))
   assert.ok(!isDroppableImage('x.png.exe'))
+})
+
+test('Alt+clic baja una capa en el punto y vuelve arriba al llegar al fondo', () => {
+  // Orden del tema: el último se ve delante (como el barrido de Retro Ámbar).
+  const boxes = [
+    { x: 0, y: 0, width: 100, height: 100 }, // fondo-cifra
+    { x: 50, y: 50, width: 10, height: 10 }, // otro sitio
+    { x: 0, y: 0, width: 480, height: 320 }, // barrido encima de todo
+  ]
+  const ids = ['cifra', 'lejos', 'barrido']
+  const p = { x: 10, y: 10 }
+  assert.equal(pickBelow(boxes, ids, p, null), 'barrido') // sin selección: el de arriba
+  assert.equal(pickBelow(boxes, ids, p, 'barrido'), 'cifra') // baja una
+  assert.equal(pickBelow(boxes, ids, p, 'cifra'), 'barrido') // del fondo, vuelve arriba
+  assert.equal(pickBelow(boxes, ids, p, 'lejos'), 'barrido') // el seleccionado no está aquí
+  assert.equal(pickBelow(boxes, ids, { x: 479, y: 319 }, 'barrido'), 'barrido') // solo uno
+  assert.equal(pickBelow(boxes, ids, { x: 480, y: 10 }, null), null) // fuera de todo
 })

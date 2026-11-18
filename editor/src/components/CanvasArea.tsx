@@ -3,7 +3,7 @@
 // redimensionar. Los recuadros no pintan nada: lo que se ve es siempre la imagen real.
 
 import { useEffect, useRef, useState, type Dispatch, type PointerEvent as ReactPointerEvent } from 'react'
-import { HANDLES, HANDLE_CURSOR, GRID, fitZoom, moveBox, resizeBox, type Handle, type ZoomMode } from '../model/geometry.ts'
+import { HANDLES, HANDLE_CURSOR, GRID, fitZoom, moveBox, pickBelow, resizeBox, type Handle, type ZoomMode } from '../model/geometry.ts'
 export type { ZoomMode }
 import type { Action } from '../model/editorState.ts'
 import { screenSize, type Box, type Theme } from '../model/types.ts'
@@ -78,6 +78,15 @@ export function CanvasArea(props: Props) {
     if (e.button !== 0) return
     e.stopPropagation()
     e.preventDefault()
+    if (mode === 'move' && e.altKey) {
+      // Alt+clic: la capa de debajo (ver pickBelow).
+      const p = toScreen(e)
+      const below = p && pickBelow(theme.widgets.map((w) => w.box), ids, p, selectedId)
+      if (below) {
+        id = below
+        start = theme.widgets[ids.indexOf(below)].box
+      }
+    }
     dispatch({ type: 'select', id })
     try {
       ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)

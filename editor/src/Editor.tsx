@@ -621,14 +621,14 @@ export function Editor({ api, info, initialThemes, initialName }: Props) {
           </label>
           <span className="spacer" />
           <span className="help-keys">
-            <kbd>←↑→↓</kbd> mover (<kbd>Mayús</kbd> 10 px) · <kbd>Supr</kbd> borrar · <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicar · <kbd>Ctrl</kbd>+<kbd>Z</kbd>/<kbd>Y</kbd>
+            <kbd>←↑→↓</kbd> mover (<kbd>Mayús</kbd> 10 px) · <kbd>Supr</kbd> borrar · <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicar · <kbd>Ctrl</kbd>+<kbd>Z</kbd>/<kbd>Y</kbd> · <kbd>Alt</kbd>+clic capa de debajo
           </span>
           <span
             className="btn small icon ghost keys-button"
             role="note"
             tabIndex={0}
-            aria-label="Atajos de teclado: flechas para mover (Mayús, 10 píxeles), Supr para borrar, Ctrl+D para duplicar, Ctrl+Z y Ctrl+Y para deshacer y rehacer"
-            title={'Atajos de teclado\n←↑→↓  mover (Mayús: 10 px)\nSupr  borrar\nCtrl+D  duplicar\nCtrl+Z / Ctrl+Y  deshacer / rehacer'}
+            aria-label="Atajos de teclado: flechas para mover (Mayús, 10 píxeles), Supr para borrar, Ctrl+D para duplicar, Ctrl+Z y Ctrl+Y para deshacer y rehacer, Alt+clic para seleccionar la capa de debajo"
+            title={'Atajos de teclado\n←↑→↓  mover (Mayús: 10 px)\nSupr  borrar\nCtrl+D  duplicar\nCtrl+Z / Ctrl+Y  deshacer / rehacer\nAlt+clic  seleccionar la capa de debajo'}
           >
             ?
           </span>

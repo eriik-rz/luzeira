@@ -270,7 +270,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* La barra se adapta al ancho de la columna del lienzo (no al de la ventana: los paneles
    laterales le quitan ~550 px). Los atajos pasan a un botón «?» y los textos se acortan. */
 .center { container-type: inline-size; container-name: lienzo; }
-@container lienzo (max-width: 1080px) {
+@container lienzo (max-width: 1260px) {
   .canvas-bar .help-keys { display: none; }
   .canvas-bar .keys-button { display: inline-flex; }
 }
