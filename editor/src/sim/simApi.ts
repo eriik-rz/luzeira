@@ -17,6 +17,21 @@ interface StoredTheme {
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
+/**
+ * Temas incluidos de verdad, para la demo de la web: `scripts/web.py` copia
+ * `src/luzeira/recursos/temas` junto al editor y escribe `temas/temas.json` (lista de
+ * carpetas). Sin esa lista (con `npm run dev`), la demo se queda con los de `simData`.
+ */
+const BUNDLED_INDEX = 'temas/temas.json'
+
+/** Ficheros (imágenes) que usa un tema: el fondo y los elementos de imagen. */
+function themeFiles(theme: ThemeJson): string[] {
+  const out = new Set<string>()
+  if (theme.background?.image) out.add(theme.background.image)
+  for (const w of theme.widgets ?? []) if (w.type === 'image' && w.file) out.add(w.file)
+  return [...out]
+}
+
 function slugify(title: string): string {
   const base = title
     .normalize('NFD')
@@ -35,6 +50,59 @@ export class SimulatedApi implements EditorApi {
   ])
   private readings: SensorInfo[] = readSimSensors()
   private applied = 'esencial'
+  private ready: Promise<void> = this.loadBundled()
+  /** Ficheros de los temas incluidos que aún no se han descargado. */
+  private pendingFiles = new Map<string, string[]>()
+
+  /** Carga los temas incluidos de verdad si la web los trae (ver `BUNDLED_INDEX`). */
+  private async loadBundled(): Promise<void> {
+    let names: string[]
+    try {
+      const res = await fetch(BUNDLED_INDEX, { cache: 'no-store' })
+      if (!res.ok) return
+      names = (await res.json()) as string[]
+    } catch {
+      return
+    }
+    const loaded = await Promise.all(
+      names.map(async (name) => {
+        try {
+          const res = await fetch(`temas/${encodeURIComponent(name)}/theme.json`)
+          return res.ok ? ([name, (await res.json()) as ThemeJson] as const) : null
+        } catch {
+          return null
+        }
+      }),
+    )
+    const mine = [...this.themes].filter(([, t]) => !t.builtin)
+    const builtins = loaded.filter((x) => x !== null)
+    if (!builtins.length) return
+    this.themes = new Map([
+      ...builtins.map(([name, theme]) => [name, { builtin: true, theme, files: new Map<string, Blob>() }] as const),
+      ...mine,
+    ])
+    for (const [name, theme] of builtins) this.pendingFiles.set(name, themeFiles(theme))
+  }
+
+  /** Descarga (una vez) las imágenes de un tema incluido antes de enseñarlo. */
+  private async ensureFiles(name: string): Promise<void> {
+    await this.ready
+    const pending = this.pendingFiles.get(name)
+    if (!pending) return
+    this.pendingFiles.delete(name)
+    const files = this.get(name).files
+    await Promise.all(
+      pending.map(async (path) => {
+        try {
+          const safe = path.split('/').map(encodeURIComponent).join('/')
+          const res = await fetch(`temas/${encodeURIComponent(name)}/${safe}`)
+          if (res.ok) files.set(path, await res.blob())
+        } catch {
+          // sin la imagen, la vista previa pinta solo el color de fondo
+        }
+      }),
+    )
+  }
 
   private get(name: string): StoredTheme {
     const t = this.themes.get(name)
@@ -55,11 +123,13 @@ export class SimulatedApi implements EditorApi {
   }
 
   async listThemes(): Promise<ThemeSummary[]> {
+    await this.ready
     await wait(50)
     return [...this.themes].map(([name, t]) => ({ name, title: t.theme.name, builtin: t.builtin }))
   }
 
   async getTheme(name: string): Promise<ThemeDocument> {
+    await this.ensureFiles(name)
     await wait(80)
     const t = this.get(name)
     return { name, builtin: t.builtin, theme: structuredClone(t.theme), files: [...t.files.keys()] }
@@ -75,6 +145,7 @@ export class SimulatedApi implements EditorApi {
   }
 
   async copyTheme(name: string, title: string, theme?: Theme): Promise<string> {
+    await this.ensureFiles(name)
     await wait(150)
     const t = this.get(name)
     const clean = title.trim()

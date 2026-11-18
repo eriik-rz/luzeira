@@ -480,3 +480,22 @@ def test_build_constraints_are_pinned_with_hashes():
     assert {x.split("==")[0] for x in lines} >= {"setuptools", "wheel"}
     for line in lines:
         assert re.fullmatch(r"[\w-]+==[\d.]+ --hash=sha256:[0-9a-f]{64}", line), line
+
+
+def test_github_runner_user_is_not_personal_data(tmp_path, monkeypatch):
+    # Primera release (2026-11-18): pydantic_core trae rutas «C:\Users\runneradmin\.cargo»
+    # de la máquina de GitHub que lo compiló, y allí nuestro usuario también es runneradmin.
+    monkeypatch.setattr(emp, "_git_emails", lambda: {"alguien@ejemplo.org"})
+    monkeypatch.setenv("USERNAME", "runneradmin")
+    monkeypatch.setenv("COMPUTERNAME", "EQUIPO-PRUEBA")
+    (tmp_path / "lib.pyd").write_bytes(str(Path.home() / ".cargo").encode() + b"runneradmin")
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    assert emp.personal_needles() == {"alguien@ejemplo.org"}
+    emp.check_no_personal_paths(tmp_path)  # no falla
+    (tmp_path / "otro.dll").write_bytes(b"alguien@ejemplo.org")  # el email sigue vigilado
+    with pytest.raises(SystemExit):
+        emp.check_no_personal_paths(tmp_path)
+    (tmp_path / "otro.dll").unlink()
+    monkeypatch.delenv("GITHUB_ACTIONS")  # en un PC, el usuario sí cuenta
+    with pytest.raises(SystemExit):
+        emp.check_no_personal_paths(tmp_path)

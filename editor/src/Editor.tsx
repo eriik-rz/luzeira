@@ -684,7 +684,6 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
           showOutlines={outlines}
           previewUrl={previewUrl}
           previewStale={clientIssues.length > 0}
-          simulated={api.simulated}
           errorIds={errorIds}
           labels={labels}
           dispatch={dispatch}

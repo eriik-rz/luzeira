@@ -121,7 +121,10 @@ export function TopBar(p: Props) {
         {st.text}
       </span>
       {p.info?.simulated && (
-        <span className="status-pill sim" title={p.info.message}>
+        <span
+          className="status-pill sim"
+          title={`${p.info.message} La vista previa es una aproximación dibujada en el navegador; en la app la pinta Luzeira tal cual sale en la pantalla.`}
+        >
           Modo simulado
         </span>
       )}

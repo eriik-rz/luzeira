@@ -8,7 +8,6 @@ export type { ZoomMode }
 import type { Action } from '../model/editorState.ts'
 import { screenSize, type Box, type Theme } from '../model/types.ts'
 import { WIDGET_TYPE_INFO } from '../model/theme.ts'
-import { IconInfo } from './icons.tsx'
 
 interface Props {
   theme: Theme
@@ -19,7 +18,6 @@ interface Props {
   showOutlines: boolean
   previewUrl: string | null
   previewStale: boolean
-  simulated: boolean
   errorIds: Set<string>
   labels: string[]
   dispatch: Dispatch<Action>
@@ -48,7 +46,7 @@ function hasFiles(dt: DataTransfer): boolean {
 
 
 export function CanvasArea(props: Props) {
-  const { theme, ids, selectedId, zoomMode, snap, showOutlines, previewUrl, previewStale, simulated, errorIds, labels, dispatch, onPointerPos, onDropFile } = props
+  const { theme, ids, selectedId, zoomMode, snap, showOutlines, previewUrl, previewStale, errorIds, labels, dispatch, onPointerPos, onDropFile } = props
   const screen = screenSize(theme)
   const stageRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<Drag | null>(null)
@@ -183,11 +181,6 @@ export function CanvasArea(props: Props) {
           aria-label={`Lienzo de ${screen.width} por ${screen.height} píxeles`}
           role="group"
         >
-          {simulated && (
-            <div className="sim-badge" title="Sin servidor: la imagen es una aproximación dibujada en el navegador, no la de Luzeira.">
-              <IconInfo /> Vista previa simulada (aproximada)
-            </div>
-          )}
           <div className="screen-label">
             {screen.width} × {screen.height} · zoom ×{String(zoom).replace('.', ',')}
           </div>

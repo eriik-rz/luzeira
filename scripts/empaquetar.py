@@ -571,14 +571,29 @@ def _git_emails() -> set[str]:
     }
 
 
+def on_github_runner() -> bool:
+    """¿Se construye en una máquina de GitHub Actions?
+
+    Allí el usuario (``runneradmin``), su carpeta y el nombre del equipo son los de una
+    máquina desechable igual para todo el mundo, no de una persona. Y aparecen dentro de
+    librerías ya compiladas en otras máquinas de GitHub: ``pydantic_core`` lleva rutas
+    ``C:/Users/runneradmin/.cargo/…`` de donde lo compilaron (primera release,
+    2026-11-18). Buscarlos ahí daría un falso positivo sin proteger a nadie."""
+    return os.environ.get("GITHUB_ACTIONS") == "true"
+
+
 def personal_needles() -> set[str]:
     """Lo que identifica a quien construye: no debe aparecer en nada que se publique.
 
     Se lee en el momento (nada de nombres escritos aquí) y se busca en minúsculas.
     Medido en la build de 2026-11-18: cero coincidencias en todos los ficheros, también
-    en los binarios, así que se buscan todos sin lista de extensiones."""
-    home = Path.home()
-    needles = {str(home).lower(), *_git_emails()}
+    en los binarios, así que se buscan todos sin lista de extensiones.
+
+    En GitHub Actions solo el email de git (ver ``on_github_runner``)."""
+    needles = set(_git_emails())
+    if on_github_runner():
+        return needles
+    needles.add(str(Path.home()).lower())
     for var in ("USERNAME", "USER", "COMPUTERNAME"):
         value = os.environ.get(var, "")
         if len(value) >= 3:
@@ -592,15 +607,9 @@ def check_no_personal_paths(base: Path) -> None:
     o datos de quien construye (usuario, equipo, email)."""
     # Rutas de la máquina de build (repo, Pythons, temporales, caché de uv).
     home = Path.home()
-    places = [
-        ROOT,
-        base,
-        Path(sys.base_prefix),
-        Path(tempfile.gettempdir()),
-        home / "AppData",
-        home / ".local",
-        home / ".cache",
-    ]
+    places = [ROOT, base, Path(sys.base_prefix), Path(tempfile.gettempdir())]
+    if not on_github_runner():  # en GitHub, la carpeta del usuario no es de nadie
+        places += [home / "AppData", home / ".local", home / ".cache"]
     needles = {str(p).lower() for p in places} | personal_needles()
     needles |= {n.replace("\\", "/") for n in needles}
     encoded = [(n, n.encode()) for n in needles] + [(n, n.encode("utf-16-le")) for n in needles]

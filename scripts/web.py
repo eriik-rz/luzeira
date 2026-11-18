@@ -6,6 +6,8 @@ Qué hace:
 3. Compila el editor en **modo simulado** dentro de ``_site/demo/``: el mismo editor
    que va en la app, con datos inventados y una vista previa aproximada. No habla con
    ningún servidor ni guarda nada.
+4. Copia los temas incluidos a ``_site/demo/temas/`` con su lista (``temas.json``):
+   la demo los carga para que se puedan ver todos (``sim/simApi.ts``).
 
 Uso: ``uv run python scripts/web.py`` (necesita ``npm ci`` hecho en ``editor/``).
 Para verla: ``uv run python -m http.server -d _site 8000 --bind 127.0.0.1``.
@@ -13,6 +15,7 @@ Para verla: ``uv run python -m http.server -d _site 8000 --bind 127.0.0.1``.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -45,7 +48,12 @@ def main() -> int:
         env=env,
         check=True,
     )
-    print(f"Web montada en {SITE}")
+    themes_src = ROOT / "src" / "luzeira" / "recursos" / "temas"
+    themes_dst = SITE / "demo" / "temas"
+    shutil.copytree(themes_src, themes_dst)
+    names = sorted(p.parent.name for p in themes_src.glob("*/theme.json"))
+    (themes_dst / "temas.json").write_text(json.dumps(names), encoding="utf-8")
+    print(f"Web montada en {SITE} ({len(names)} temas en la demo)")
     return 0
 
 
