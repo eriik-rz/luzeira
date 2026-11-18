@@ -17,6 +17,7 @@ import {
   messageForStatus,
   pickInitialTheme,
   deletedMessage,
+  applyBlock,
 } from '../src/model/contract.ts'
 import { formatClock, formatReading } from '../src/model/format.ts'
 import type { Theme, ThemeJson } from '../src/model/types.ts'
@@ -398,4 +399,13 @@ test('Alt+clic baja una capa en el punto y vuelve arriba al llegar al fondo', ()
 test('al borrar el tema que estaba en pantalla, el aviso dice qué se ha puesto', () => {
   assert.equal(deletedMessage(false), 'Tema movido a la papelera de Visoria.')
   assert.ok(/papelera.*En la pantalla se ha puesto «Esencial»/.test(deletedMessage(true)))
+})
+
+test('«Aplicar» pregunta antes solo si queda algo por guardar', () => {
+  assert.equal(applyBlock({ builtin: false, dirty: false, invalid: false }), null)
+  assert.equal(applyBlock({ builtin: true, dirty: false, invalid: false }), null)
+  assert.equal(applyBlock({ builtin: false, dirty: true, invalid: false }), 'pending')
+  assert.equal(applyBlock({ builtin: false, dirty: true, invalid: true }), 'invalid')
+  assert.equal(applyBlock({ builtin: true, dirty: true, invalid: false }), 'builtin-changed')
+  assert.equal(applyBlock({ builtin: true, dirty: true, invalid: true }), 'builtin-changed')
 })

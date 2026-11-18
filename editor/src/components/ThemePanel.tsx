@@ -29,7 +29,7 @@ export function ThemePanel({ theme, issues, services, dispatch }: Props) {
       <div className="props-title">
         <div>
           <h2>Tema</h2>
-          <p>Nada seleccionado: aquí cambias el tema entero. Haz clic en un elemento del lienzo para editarlo.</p>
+          <p>Haz clic en un elemento del lienzo para editarlo.</p>
         </div>
       </div>
       <div className="panel-body">

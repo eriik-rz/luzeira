@@ -1,5 +1,6 @@
-// Campos del panel de propiedades. Todos llevan etiqueta, texto de ayuda (enlazado con
-// aria-describedby) y, si hay, el error en español junto al campo.
+// Campos del panel de propiedades. Todos llevan etiqueta, texto de ayuda (un «?» junto a
+// la etiqueta que lo enseña al pasar el ratón, y enlazado con aria-describedby) y, si
+// hay, el error en español junto al campo.
 
 import { useId, useState, type ReactNode } from 'react'
 
@@ -19,7 +20,10 @@ export function Field({ label, hint, error, counter, children }: FieldProps) {
   return (
     <div className="field">
       <label htmlFor={inputId}>
-        <span>{label}</span>
+        <span>
+          {label}
+          {hint && <InfoTip text={hint} />}
+        </span>
         {counter && <span className="counter">{counter}</span>}
       </label>
       {children({ inputId, describedBy, invalid: Boolean(error) })}
@@ -28,12 +32,21 @@ export function Field({ label, hint, error, counter, children }: FieldProps) {
           {error}
         </p>
       )}
-      {hint && !error && (
-        <p className="hint" id={hintId}>
+      {hint && (
+        <p className="sr-only" id={hintId}>
           {hint}
         </p>
       )}
     </div>
+  )
+}
+
+/** Un «?» pequeño que enseña una ayuda al pasar el ratón (el panel no se llena de texto). */
+export function InfoTip({ text }: { text: string }) {
+  return (
+    <span className="info-tip" title={text} aria-hidden="true">
+      ?
+    </span>
   )
 }
 

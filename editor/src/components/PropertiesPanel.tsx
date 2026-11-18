@@ -7,7 +7,7 @@ import { formatClock, formatReading } from '../model/format.ts'
 import { CLOCK_FORMAT_INFO, WIDGET_TYPE_INFO } from '../model/theme.ts'
 import { LIMITS, screenSize, type Align, type ClockFormat, type Theme, type Widget } from '../model/types.ts'
 import { fieldOf, type Issue } from '../model/validate.ts'
-import { ColorField, NumberField, Segmented as SegmentedField, SelectField, TextField, Toggle } from './fields.tsx'
+import { ColorField, InfoTip, NumberField, Segmented as SegmentedField, SelectField, TextField, Toggle } from './fields.tsx'
 import { FontPicker, ImagePicker } from './ResourcePicker.tsx'
 import { SensorPicker } from './SensorPicker.tsx'
 import { IconAlignCenter, IconAlignLeft, IconAlignRight, IconCenterH, IconCenterV, IconCopy, IconTrash, WidgetIcon } from './icons.tsx'
@@ -50,8 +50,10 @@ export function PropertiesPanel({ theme, widget, id, issues, services, dispatch,
       <div className="props-title">
         <WidgetIcon type={widget.type} />
         <div>
-          <h2>{info.label}</h2>
-          <p>{info.help}</p>
+          <h2>
+            {info.label}
+            <InfoTip text={info.help} />
+          </h2>
         </div>
       </div>
       <div className="props-actions">
@@ -71,8 +73,10 @@ export function PropertiesPanel({ theme, widget, id, issues, services, dispatch,
         ))}
 
         <section className="section">
-          <h3>Posición y tamaño</h3>
-          <p className="section-desc">En píxeles de la pantalla ({screen.width} × {screen.height}). También puedes arrastrarlo en el lienzo.</p>
+          <h3>
+            Posición y tamaño
+            <InfoTip text={`En píxeles de la pantalla (${screen.width} × ${screen.height}). También puedes arrastrarlo en el lienzo.`} />
+          </h3>
           <div className="row">
             <NumberField label="Desde la izquierda" affix="X" value={b.x} min={0} max={screen.width - b.width} onChange={(x) => setBox({ x }, 'box.x')} error={err('box.x')} />
             <NumberField label="Desde arriba" affix="Y" value={b.y} min={0} max={screen.height - b.height} onChange={(y) => setBox({ y }, 'box.y')} error={err('box.y')} />
@@ -143,10 +147,9 @@ export function PropertiesPanel({ theme, widget, id, issues, services, dispatch,
               <NumberField label="Largo máximo" value={widget.max_chars} min={LIMITS.maxCharsMin} max={LIMITS.maxCharsMax} onChange={(max_chars) => update({ ...widget, max_chars }, 'max_chars')} hint="Si el texto es más largo, se corta con «…»." error={err('max_chars')} />
             )}
             <div className="row">
-              <TextField label="Antes" value={widget.prefix} maxLength={LIMITS.shortTextMax} onChange={(prefix) => update({ ...widget, prefix }, 'prefix')} placeholder="CPU " error={err('prefix')} />
-              <TextField label="Después" value={widget.suffix} maxLength={LIMITS.shortTextMax} onChange={(suffix) => update({ ...widget, suffix }, 'suffix')} placeholder="" error={err('suffix')} />
+              <TextField label="Antes" value={widget.prefix} maxLength={LIMITS.shortTextMax} onChange={(prefix) => update({ ...widget, prefix }, 'prefix')} placeholder="CPU " hint="Texto delante del valor. Deja un espacio al final si quieres separarlo." error={err('prefix')} />
+              <TextField label="Después" value={widget.suffix} maxLength={LIMITS.shortTextMax} onChange={(suffix) => update({ ...widget, suffix }, 'suffix')} placeholder="" hint="Texto detrás del valor (y de la unidad, si se muestra)." error={err('suffix')} />
             </div>
-            <p className="hint" style={{ marginTop: -4, marginBottom: 10 }}>Texto que se añade delante o detrás del valor (deja un espacio si quieres separarlo).</p>
             <NumberField label="Actualizar cada (segundos)" integer={false} step={0.5} value={widget.interval} min={LIMITS.intervalMin} max={LIMITS.intervalMax} onChange={(interval) => update({ ...widget, interval }, 'interval')} hint="Menos segundos = más al día, pero algo más de trabajo para el PC." error={err('interval')} />
           </section>
         )}

@@ -127,3 +127,27 @@ export function deletedMessage(wasOnScreen: boolean): string {
   const moved = 'Tema movido a la papelera de Visoria.'
   return wasOnScreen ? `${moved} En la pantalla se ha puesto «Esencial».` : moved
 }
+
+/** Por qué «Aplicar» pregunta antes (o null si se puede aplicar ya). */
+export type ApplyBlock = 'pending' | 'invalid' | 'builtin-changed'
+
+export function applyBlock(s: { builtin: boolean; dirty: boolean; invalid: boolean }): ApplyBlock | null {
+  if (!s.dirty) return null
+  if (s.builtin) return 'builtin-changed'
+  return s.invalid ? 'invalid' : 'pending'
+}
+
+export const APPLY_BLOCK_TEXT: Record<ApplyBlock, { title: string; body: string }> = {
+  pending: {
+    title: 'Hay cambios sin guardar',
+    body: 'Para ponerlo en la pantalla hay que guardar antes tus últimos cambios.',
+  },
+  invalid: {
+    title: 'Hay errores sin corregir',
+    body: 'Los cambios con errores no se pueden guardar. Corrige los campos marcados en rojo, o pon en la pantalla la última versión guardada.',
+  },
+  'builtin-changed': {
+    title: 'Los temas incluidos no se pueden cambiar',
+    body: 'Tus cambios solo se conservan en una copia tuya. Guárdala con «Guardar como…» y se aplicará, o pon en la pantalla el tema original.',
+  },
+}

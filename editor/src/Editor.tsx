@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { ApiError, errorMessage, type EditorApi, type Info, type SensorInfo, type ThemeSummary } from './api.ts'
 import { initialState, reducer, selectedWidget, indexOfId } from './model/editorState.ts'
-import { appliedMessage, deletedMessage, DEFAULT_THEME, flushOutcome, isDroppableImage, type FlushResult, type SaveOutcome } from './model/contract.ts'
+import { APPLY_BLOCK_TEXT, applyBlock, appliedMessage, deletedMessage, DEFAULT_THEME, type ApplyBlock, flushOutcome, isDroppableImage, type FlushResult, type SaveOutcome } from './model/contract.ts'
 import { formatClock } from './model/format.ts'
 import { baseName, createWidget, normalizeTheme, CLOCK_FORMAT_INFO } from './model/theme.ts'
 import { LIMITS, MAX_WIDGETS, type Theme, type Widget, type WidgetType } from './model/types.ts'
@@ -16,6 +16,7 @@ import { LayersPanel } from './components/LayersPanel.tsx'
 import { PropertiesPanel } from './components/PropertiesPanel.tsx'
 import { ThemePanel } from './components/ThemePanel.tsx'
 import { TopBar, type SaveStatus } from './components/TopBar.tsx'
+import { Tooltips } from './components/Tooltips.tsx'
 import { IconGrid, IconWarn } from './components/icons.tsx'
 import type { ResourceKind, Services } from './components/services.ts'
 
@@ -31,11 +32,16 @@ interface Current {
 }
 
 type DialogState =
-  | { kind: 'saveAs'; reason?: string }
+  | { kind: 'saveAs'; reason?: string; thenApply?: boolean }
+  | { kind: 'restore' }
+  | { kind: 'applyFirst'; why: ApplyBlock }
   | { kind: 'removeWidget'; id: string }
   | { kind: 'deleteTheme'; onScreen: boolean }
   | { kind: 'discard'; next: string }
   | null
+
+/** Cada cuánto se pregunta el estado de la pantalla (ms). */
+const INFO_REFRESH_MS = 3000
 
 interface Props {
   api: EditorApi
@@ -51,7 +57,23 @@ declare global {
   }
 }
 
-export function Editor({ api, info, initialThemes, initialName }: Props) {
+export function Editor({ api, info: initialInfo, initialThemes, initialName }: Props) {
+  // Estado de la pantalla (arriba a la derecha). Se vuelve a preguntar cada pocos segundos:
+  // leído solo al abrir, se quedaba para siempre en «Preparando la imagen…».
+  const [info, setInfo] = useState<Info | null>(initialInfo)
+  useEffect(() => {
+    let alive = true
+    const refresh = () =>
+      void api
+        .info()
+        .then((next) => alive && setInfo(next))
+        .catch(() => undefined) // sin respuesta, se deja lo último conocido
+    const timer = window.setInterval(refresh, INFO_REFRESH_MS)
+    return () => {
+      alive = false
+      window.clearInterval(timer)
+    }
+  }, [api])
   const [state, dispatch] = useReducer(reducer, undefined, () => initialState())
   const [themes, setThemes] = useState(initialThemes)
   const [current, setCurrent] = useState<Current | null>(null)
@@ -97,12 +119,14 @@ export function Editor({ api, info, initialThemes, initialName }: Props) {
 
   // --- Carga de un tema -------------------------------------------------------------
   const savedRef = useRef<Theme | null>(null) // último tema guardado (por referencia)
+  const openedRef = useRef<Theme | null>(null) // cómo estaba al abrirlo (para «Restaurar»)
   const loadTheme = useCallback(
     async (name: string) => {
       try {
         const doc = await api.getTheme(name)
         const t = normalizeTheme(doc.theme)
         savedRef.current = t
+        openedRef.current = t
         setCurrent({ name: doc.name, builtin: doc.builtin, files: doc.files })
         dispatch({ type: 'load', theme: t })
         setServerIssues([])
@@ -398,7 +422,7 @@ export function Editor({ api, info, initialThemes, initialName }: Props) {
     await loadTheme(name)
   }
 
-  const saveAs = async (title: string) => {
+  const saveAs = async (title: string, thenApply = false) => {
     if (!current) return
     // La copia lleva ya lo editado con el nombre nuevo (un solo paso en el servidor).
     const edited: Theme = { ...latest.current.theme, name: title }
@@ -415,12 +439,14 @@ export function Editor({ api, info, initialThemes, initialName }: Props) {
       // Se conserva el historial: el tema pasa a ser el nuevo y ya está guardado tal cual
       // (mismo objeto), así que el guardado automático no tiene nada que hacer.
       savedRef.current = edited
+      openedRef.current = edited
       setServerIssues([])
       setStatus({ kind: 'saved' })
       setCurrent({ name: newName, builtin: false, files: current.files })
       dispatch({ type: 'replaceTheme', theme: edited })
       setDialog(null)
       toast(`Guardado en «Mis temas» como «${title}».`, 'ok')
+      if (thenApply) await applyNow(newName, edited)
     } catch (e) {
       if (e instanceof ApiError && e.details.length) {
         setServerIssues(e.details)
@@ -430,28 +456,49 @@ export function Editor({ api, info, initialThemes, initialName }: Props) {
     }
   }
 
-  const applyTheme = async () => {
+  /** «Aplicar»: si antes hay que guardar algo, pregunta primero (applyBlock). */
+  const requestApply = () => {
     if (!current) return
+    const why = applyBlock({
+      builtin: current.builtin,
+      dirty: theme !== savedRef.current,
+      invalid: clientIssues.length > 0,
+    })
+    if (why) setDialog({ kind: 'applyFirst', why })
+    else void applyNow(current.name, theme)
+  }
+
+  /** Guarda lo pendiente (si se puede) y pone el tema en la pantalla. */
+  const applyNow = async (name: string, shown: Theme) => {
+    setDialog(null)
     setApplying(true)
     try {
       await flush()
-      if (!current.builtin && latest.current.theme !== savedRef.current) {
-        toast('Hay errores sin corregir: se aplica la última versión guardada.', 'error')
-      }
-      await api.apply(current.name)
-      if (current.builtin && theme !== savedRef.current) {
-        toast('Aplicado el tema incluido tal cual (sin tus cambios: usa «Guardar como…» para conservarlos).', 'ok')
-      } else {
-        // El aviso dice lo que pasa de verdad en la pantalla (puede no estar conectada).
-        const now = await api.info().catch(() => null)
-        const m = appliedMessage(theme.name, now)
-        toast(m.message, m.kind)
-      }
+      await api.apply(name)
+      // El aviso dice lo que pasa de verdad en la pantalla (puede no estar conectada).
+      const now = await api.info().catch(() => null)
+      if (now) setInfo(now)
+      const m = appliedMessage(shown.name, now)
+      toast(m.message, m.kind)
     } catch (e) {
       toast(errorMessage(e), 'error')
     } finally {
       setApplying(false)
     }
+  }
+
+  /** «Guardar»: guarda ya, sin esperar al guardado automático. */
+  const saveNow = async () => {
+    const result = await flush()
+    if (result.saved) toast('Guardado.', 'ok')
+    else toast('No se ha podido guardar: corrige los campos marcados en rojo.', 'error')
+  }
+
+  /** «Restaurar»: el tema vuelve a como estaba al abrirlo (se puede deshacer). */
+  const restore = () => {
+    setDialog(null)
+    if (openedRef.current) dispatch({ type: 'replaceTheme', theme: openedRef.current })
+    toast('Restaurado como estaba al abrirlo. Puedes deshacerlo con Ctrl+Z.', 'ok')
   }
 
   const deleteTheme = async (onScreen: boolean) => {
@@ -550,7 +597,10 @@ export function Editor({ api, info, initialThemes, initialName }: Props) {
         onUndo={() => dispatch({ type: 'undo' })}
         onRedo={() => dispatch({ type: 'redo' })}
         onSaveAs={() => setDialog({ kind: 'saveAs' })}
-        onApply={() => void applyTheme()}
+        onApply={requestApply}
+        onSave={() => void saveNow()}
+        onRestore={() => setDialog({ kind: 'restore' })}
+        canRestore={theme !== openedRef.current}
         onDeleteTheme={() =>
           void api
             .info()
@@ -668,8 +718,60 @@ export function Editor({ api, info, initialThemes, initialName }: Props) {
           reason={dialog.reason}
           note={saveAsNote(current.builtin, theme.name, status.kind)}
           onCancel={() => setDialog(null)}
-          onSave={(t) => void saveAs(t)}
+          onSave={(t) => void saveAs(t, dialog.thenApply)}
         />
+      )}
+      {dialog?.kind === 'restore' && (
+        <Dialog
+          title="¿Restaurar el tema?"
+          onClose={() => setDialog(null)}
+          actions={
+            <>
+              <button type="button" className="btn" onClick={() => setDialog(null)}>
+                Cancelar
+              </button>
+              <button type="button" className="btn primary" onClick={restore}>
+                Restaurar
+              </button>
+            </>
+          }
+        >
+          <p>Vuelve a como estaba al abrirlo. Si te arrepientes, Ctrl+Z lo deshace.</p>
+        </Dialog>
+      )}
+      {dialog?.kind === 'applyFirst' && (
+        <Dialog
+          title={APPLY_BLOCK_TEXT[dialog.why].title}
+          onClose={() => setDialog(null)}
+          actions={
+            <>
+              <button type="button" className="btn" onClick={() => setDialog(null)}>
+                Cancelar
+              </button>
+              {dialog.why === 'builtin-changed' && (
+                <button type="button" className="btn" onClick={() => void applyNow(current.name, savedRef.current ?? theme)}>
+                  Aplicar el original
+                </button>
+              )}
+              {dialog.why === 'invalid' && (
+                <button type="button" className="btn" onClick={() => void applyNow(current.name, savedRef.current ?? theme)}>
+                  Aplicar lo último guardado
+                </button>
+              )}
+              {dialog.why === 'builtin-changed' ? (
+                <button type="button" className="btn primary" onClick={() => setDialog({ kind: 'saveAs', thenApply: true })}>
+                  Guardar como… y aplicar
+                </button>
+              ) : dialog.why === 'pending' ? (
+                <button type="button" className="btn primary" onClick={() => void applyNow(current.name, theme)}>
+                  Guardar y aplicar
+                </button>
+              ) : null}
+            </>
+          }
+        >
+          <p>{APPLY_BLOCK_TEXT[dialog.why].body}</p>
+        </Dialog>
       )}
       {dialog?.kind === 'removeWidget' && (
         <Dialog
@@ -744,6 +846,7 @@ export function Editor({ api, info, initialThemes, initialName }: Props) {
         </Dialog>
       )}
       <Toasts items={toasts} onDismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
+      <Tooltips />
     </div>
   )
 }

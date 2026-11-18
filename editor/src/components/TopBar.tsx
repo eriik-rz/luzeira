@@ -27,6 +27,9 @@ interface Props {
   onRedo: () => void
   onSaveAs: () => void
   onApply: () => void
+  onSave: () => void
+  onRestore: () => void
+  canRestore: boolean
   onDeleteTheme: () => void
 }
 
@@ -129,12 +132,38 @@ export function TopBar(p: Props) {
       )}
       <button
         type="button"
-        className={`btn${p.builtin ? ' primary highlight' : ''}`}
-        onClick={p.onSaveAs}
-        title="Guardar una copia con otro nombre en «Mis temas»"
+        className="btn ghost"
+        onClick={p.onRestore}
+        disabled={!p.canRestore}
+        title="Volver a como estaba el tema al abrirlo (se puede deshacer con Ctrl+Z)"
       >
-        <IconSaveAs /> Guardar como…
+        <IconUndo /> Restaurar
       </button>
+      {p.builtin ? (
+        <button
+          type="button"
+          className="btn primary highlight"
+          onClick={p.onSaveAs}
+          title="Los temas incluidos no se cambian: guarda una copia tuya en «Mis temas»"
+        >
+          <IconSaveAs /> Guardar como…
+        </button>
+      ) : (
+        <>
+          <button type="button" className="btn ghost" onClick={p.onSaveAs} title="Guardar una copia con otro nombre en «Mis temas»">
+            Guardar como…
+          </button>
+          <button
+            type="button"
+            className="btn"
+            onClick={p.onSave}
+            disabled={p.status.kind === 'saved'}
+            title={p.status.kind === 'saved' ? 'Todo está guardado (se guarda solo al cambiar algo).' : 'Guardar ahora'}
+          >
+            <IconSaveAs /> Guardar
+          </button>
+        </>
+      )}
       <button
         type="button"
         className={`btn${p.builtin ? '' : ' primary'}`}
