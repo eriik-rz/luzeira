@@ -5,7 +5,8 @@ van por **variables de entorno**, no metidas en el texto del script: así una ca
 comillas o símbolos raros no puede inyectar órdenes. El escritorio lo resuelve Windows
 (``GetFolderPath('Desktop')``), también si está redirigido a OneDrive.
 
-Cuando exista el instalador (fase 6), será él quien cree los accesos directos.
+El instalador crea los del menú Inicio y, si se marca, el del escritorio; este módulo es
+el de la opción de la bandeja (también para la versión portable, que no tiene instalador).
 """
 
 from __future__ import annotations
@@ -56,6 +57,13 @@ def launch_command() -> LaunchCommand:
     return LaunchCommand(str(windowless if windowless.exists() else exe), "-m visoria")
 
 
+def _powershell() -> str:
+    """PowerShell de Windows por su ruta completa: por nombre, Windows lo buscaría antes en
+    la carpeta actual y en la de la app."""
+    system_root = os.environ.get("SYSTEMROOT", r"C:\Windows")
+    return str(Path(system_root) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe")
+
+
 def create_shortcut(
     folder: str = "Desktop", *, run=subprocess.run, mark=set_shortcut_app_id
 ) -> Path:
@@ -80,7 +88,7 @@ def create_shortcut(
     }
     try:
         result = run(
-            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", _PS_SCRIPT],
+            [_powershell(), "-NoProfile", "-NonInteractive", "-Command", _PS_SCRIPT],
             env=env,
             capture_output=True,
             text=True,

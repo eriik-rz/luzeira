@@ -14,8 +14,10 @@ https://learn.microsoft.com/en-us/windows/win32/setupapi/run-and-runonce-registr
 3. Windows **no garantiza cuándo** se lanzan los programas de ``Run``: puede
    retrasarlos. Por eso la app debe tolerar arrancar tarde (y reintentar la pantalla).
 
-Cuando exista instalador, ``default_command()`` devolverá la ruta de su ``.exe``
-(``sys.frozen``); mientras tanto usa el ``pythonw.exe`` del entorno actual.
+La versión instalada y la portable no tienen ``.exe`` propio (fase 6, D-12): son el
+Python embebible, así que ``default_command()`` da ``"<carpeta>\\python\\pythonw.exe" -m
+visoria``, la misma línea que escribe el instalador. ``sys.frozen`` queda por si algún
+día se empaqueta con PyInstaller.
 """
 
 from __future__ import annotations
@@ -119,7 +121,7 @@ def disable(key_path: str = RUN_KEY_PATH, name: str = VALUE_NAME) -> None:
 def default_command(args: Sequence[str] = ()) -> str:
     """Línea para arrancar la app actual **sin ventana de consola**.
 
-    - App empaquetada (``sys.frozen``, el futuro instalador): su propio ``.exe``.
+    - Congelada (``sys.frozen``, PyInstaller; hoy no se usa): su propio ``.exe``.
     - Si no: ``pythonw.exe -m visoria`` del entorno actual (``pythonw`` no abre consola);
       si no hay ``pythonw.exe`` al lado del intérprete, ``sys.executable``.
 

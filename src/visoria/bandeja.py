@@ -45,7 +45,7 @@ from visoria.editor.ventana import EXIT_NO_WEBVIEW2
 from visoria.servicio import DisplayService, Settings, Status
 from visoria.sistema import autoarranque
 from visoria.sistema.energia import PowerListener
-from visoria.sistema.instancia import SingleInstance
+from visoria.sistema.instancia import APP_MUTEX, SingleInstance
 from visoria.sistema.registro import default_log_dir, setup_logging
 from visoria.sistema.sesion import SessionWatcher
 from visoria.temas import ThemeError, load_theme
@@ -505,7 +505,7 @@ def _already_running_message() -> None:
 
 def main(open_editor: bool = False) -> int:
     setup_logging(default_log_dir())
-    with SingleInstance("Visoria") as instance:
+    with SingleInstance(APP_MUTEX) as instance:
         if not instance.acquired:
             # Otra Visoria ya está en la bandeja: no abrir dos sobre el mismo puerto.
             log.info("Visoria ya estaba abierta; esta instancia termina.")

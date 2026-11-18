@@ -71,3 +71,11 @@ def test_command_line_passes_open_editor_to_the_tray(monkeypatch):
     assert cli.main(["--abrir-editor"]) == 0
     assert cli.main([]) == 0
     assert calls == [True, False]
+
+
+def test_powershell_by_full_path():
+    run = FakeRun()
+    accesos.create_shortcut("Desktop", run=run, mark=lambda p: None)
+    exe = run.calls[0][0][0]
+    # Por nombre, Windows lo buscaría antes en la carpeta actual y en la de la app.
+    assert exe.lower().endswith(r"system32\windowspowershell\v1.0\powershell.exe")

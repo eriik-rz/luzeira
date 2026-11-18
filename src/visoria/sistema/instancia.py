@@ -32,6 +32,8 @@ log = logging.getLogger(__name__)
 ERROR_ALREADY_EXISTS = 183
 MAX_PATH = 260
 _PREFIX = "Local\\"
+#: Nombre del mutex de la app. El instalador lo usa como AppMutex (MutexName del .iss).
+APP_MUTEX = "Visoria"
 
 
 def _load_kernel32() -> ctypes.WinDLL | None:
@@ -57,7 +59,7 @@ class SingleInstance:
                 return  # ya hay otra
     """
 
-    def __init__(self, name: str = "Visoria") -> None:
+    def __init__(self, name: str = APP_MUTEX) -> None:
         if not name or "\\" in name:
             raise ValueError("El nombre del mutex no puede estar vacío ni llevar '\\'.")
         self.mutex_name = _PREFIX + name

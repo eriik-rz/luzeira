@@ -441,3 +441,23 @@ def test_uninstall_removes_the_desktop_shortcut_made_by_the_app():
     assert _define("DesktopDir") == "{userdesktop}"
     assert r"{#DesktopDir}\Visoria.lnk" in code and "ShortcutPointsHere(Desktop)" in code
     assert r'Name: "{#DesktopDir}\Visoria"' in _section("Icons")
+
+
+def test_portable_zip_order_does_not_depend_on_the_disk(tmp_path):
+    # NTFS lista sin distinguir mayúsculas y rglob recorre carpeta a carpeta: el zip ordena
+    # por la ruta completa, igual en cualquier sistema de ficheros.
+    src = tmp_path / "src"
+    (src / "a").mkdir(parents=True)
+    for rel in ("a/z.txt", "a.txt", "a-b.txt", "B.txt"):
+        (src / rel).write_text(rel)
+    dest = tmp_path / "p.zip"
+    emp.build_portable(src, dest, emp.DEFAULT_EPOCH)
+    with zipfile.ZipFile(dest) as zf:
+        names = [n.removeprefix("Visoria/") for n in zf.namelist()]
+    assert names == ["B.txt", "a-b.txt", "a.txt", "a/z.txt"]
+
+
+def test_app_and_installer_share_the_mutex_name():
+    assert _define("MutexName") == instancia.APP_MUTEX
+    bandeja_src = (ROOT / "src" / "visoria" / "bandeja.py").read_text(encoding="utf-8")
+    assert "SingleInstance(APP_MUTEX)" in bandeja_src
