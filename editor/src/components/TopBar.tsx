@@ -1,8 +1,8 @@
 // Barra superior: tema actual, deshacer/rehacer, estado del guardado, «Guardar como…»
-// y «Aplicar a la pantalla».
+// «Aplicar a la pantalla» y «Ajustes» (lo del menú del icono, a la vista).
 
 import type { Info, ThemeSummary } from '../api.ts'
-import { BrandMark, IconRedo, IconSaveAs, IconSend, IconTrash, IconUndo } from './icons.tsx'
+import { BrandMark, IconRedo, IconSaveAs, IconSend, IconSettings, IconTrash, IconUndo } from './icons.tsx'
 
 export type SaveStatus =
   | { kind: 'saved' }
@@ -31,6 +31,7 @@ interface Props {
   onRestore: () => void
   canRestore: boolean
   onDeleteTheme: () => void
+  onSettings: () => void
 }
 
 function statusView(s: SaveStatus): { cls: string; text: string; title: string } {
@@ -175,6 +176,15 @@ export function TopBar(p: Props) {
         title="Mostrar este tema en la pantalla USB ahora y dejarlo puesto"
       >
         <IconSend /> {p.applying ? 'Aplicando…' : 'Aplicar a la pantalla'}
+      </button>
+      <button
+        type="button"
+        className="btn ghost"
+        aria-label="Ajustes"
+        onClick={p.onSettings}
+        title="Brillo, girar, elegir pantalla, iniciar con Windows e importar temas"
+      >
+        <IconSettings /> <span className="btn-label">Ajustes</span>
       </button>
     </header>
   )

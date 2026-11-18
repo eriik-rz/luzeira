@@ -409,3 +409,31 @@ test('«Aplicar» pregunta antes solo si queda algo por guardar', () => {
   assert.equal(applyBlock({ builtin: true, dirty: true, invalid: false }), 'builtin-changed')
   assert.equal(applyBlock({ builtin: true, dirty: true, invalid: true }), 'builtin-changed')
 })
+
+// --- Ventana «Ajustes» -----------------------------------------------------------------
+
+import { AUTO, OTHER, displaySelectValue, findOption, needsConfirmation } from '../src/model/settings.ts'
+
+const opt = (id: string | null, current = false, warning: string | null = null) => ({ id, current, warning })
+
+test('ajustes: el selector marca «detectarla sola», la elegida o «otra»', () => {
+  const choices = [opt('lista:COM3:turing-rev-a'), opt('lista:COM8:kipye-rev-d', true, 'aviso')]
+  assert.equal(displaySelectValue({ display_auto: true, choices }), AUTO)
+  assert.equal(displaySelectValue({ display_auto: false, choices }), 'lista:COM8:kipye-rev-d')
+  // elegida en modo avanzado: no está en la lista cerrada
+  assert.equal(displaySelectValue({ display_auto: false, choices: [opt('lista:COM3:x')] }), OTHER)
+  // una que no se puede elegir (id null) nunca sale marcada
+  assert.equal(displaySelectValue({ display_auto: false, choices: [opt(null, true)] }), OTHER)
+})
+
+test('ajustes: beta y modo avanzado piden confirmar; la rev A no', () => {
+  assert.equal(needsConfirmation(opt('a', false, 'Cuidado…')), true)
+  assert.equal(needsConfirmation(opt('a')), false)
+})
+
+test('ajustes: la opción se busca en las dos listas', () => {
+  const closed = [opt('lista:COM3:a')]
+  const advanced = [opt('avanzado:COM4:a', false, 'Cuidado')]
+  assert.equal(findOption('avanzado:COM4:a', [closed, advanced]), advanced[0])
+  assert.equal(findOption('nada', [closed, advanced]), null)
+})

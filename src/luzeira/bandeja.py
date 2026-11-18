@@ -44,6 +44,7 @@ from luzeira.config import (
     theme_path,
     user_themes_dir,
 )
+from luzeira.editor.almacen import EditorError
 from luzeira.editor.conexion import EditorLink
 from luzeira.editor.ventana import EXIT_NO_WEBVIEW2
 from luzeira.marca import STAR, draw_mark
@@ -193,6 +194,142 @@ def is_theme_valid(name: str) -> bool:
     return True
 
 
+class EditorSettings:
+    """Los ajustes de la ventana «Ajustes» del editor (contrato en
+    :mod:`luzeira.editor.ajustes`). Llega desde el hilo del servidor: lo que cambia la
+    pantalla o la configuración se pasa al hilo del icono con ``_post``, como el menú.
+    """
+
+    def __init__(self, app: TrayApp) -> None:
+        self._app = app
+
+    def _options(self) -> tuple[list[dict], list[dict]]:
+        """Lista cerrada y modo avanzado, con un ``id`` por opción (lo que el editor
+        manda de vuelta) y su ``action`` interna (``(modelo, puerto, avanzado)``)."""
+        app = self._app
+        closed: list[dict] = []
+        advanced: list[dict] = []
+        for port in app._ports():
+            for model in compatible_models(port):
+                template = MSG_BETA if model.has_hello else MSG_BETA_UNCHECKED
+                closed.append(
+                    {
+                        "id": f"lista:{port.device}:{model.key}",
+                        "label": f"{port.device}: {model.menu_label}",
+                        "beta": model.beta,
+                        "current": app._is_current(model, port),
+                        "warning": (
+                            template.format(device=port.device, model=model.label)
+                            if model.beta
+                            else None
+                        ),
+                        "action": (model, port, False),
+                    }
+                )
+            found = identify(port)
+            if found is not None and found.model is REV_C:
+                closed.append(
+                    {
+                        "id": None,
+                        "label": f"{port.device}: {REV_C.label} — todavía no compatible",
+                        "beta": True,
+                        "current": False,
+                        "warning": None,
+                        "action": None,
+                    }
+                )
+            for model in SUPPORTED:
+                advanced.append(
+                    {
+                        "id": f"avanzado:{port.device}:{model.key}",
+                        "label": f"{port.label}: {model.menu_label}",
+                        "beta": model.beta,
+                        "current": False,
+                        "warning": MSG_ADVANCED.format(device=port.device, model=model.menu_label),
+                        "action": (model, port, True),
+                    }
+                )
+        return closed, advanced
+
+    def snapshot(self) -> dict:
+        app = self._app
+        closed, advanced = self._options()
+
+        def public(options: list[dict]) -> list[dict]:
+            return [{k: v for k, v in o.items() if k != "action"} for o in options]
+
+        return {
+            "brightness": app.config.brightness,
+            "brightness_levels": list(BRIGHTNESS_LEVELS),
+            "flip": app.config.flip,
+            "autostart": app._autostart_enabled(),
+            "display_text": app._display_text(),
+            "display_auto": app.config.display is None and app._trial is None,
+            "choices": public(closed),
+            "advanced": public(advanced),
+        }
+
+    def update(self, *, brightness: int | None, flip: bool | None, autostart: bool | None) -> None:
+        app = self._app
+        if brightness is not None and brightness not in BRIGHTNESS_LEVELS:
+            raise EditorError(400, "Ese brillo no está entre los que se pueden elegir.")
+        if autostart is not None:
+            try:
+                if autostart:
+                    autoarranque.enable(autoarranque.default_command())
+                else:
+                    autoarranque.disable()
+            except (autoarranque.AutostartError, ValueError, OSError):
+                log.exception("No se pudo cambiar el inicio con Windows")
+                raise EditorError(500, "No he podido cambiar el inicio con Windows.") from None
+        changes: dict[str, object] = {}
+        if brightness is not None:
+            changes["brightness"] = brightness
+        if flip is not None:
+            changes["flip"] = flip
+        if changes:
+            app._post(app._safe(lambda: app._change(**changes)))
+        else:
+            app._post(app.icon.update_menu)  # la marca de «Iniciar con Windows»
+
+    def choose_display(self, choice_id: str | None, *, confirmed: bool) -> None:
+        app = self._app
+        if app._dialog_open:
+            raise EditorError(409, MSG_DIALOG_OPEN)
+        if choice_id is None:
+            app._post(app._safe(app._back_to_auto))
+            return
+        closed, advanced = self._options()
+        option = next((o for o in closed + advanced if o["id"] == choice_id), None)
+        if option is None or option["action"] is None:
+            # El puerto ya no está (o nunca se ofreció): que el editor vuelva a leer.
+            raise EditorError(409, "Esa pantalla ya no está en la lista. Vuelve a elegir.")
+        model, port, is_advanced = option["action"]
+        if option["warning"] is not None and not confirmed:
+            raise EditorError(400, "Falta confirmar el aviso antes de probar esa pantalla.")
+        choice = DisplayChoice.for_port(model, port, advanced=is_advanced)
+        app._post(app._safe(lambda: app._try_choice(choice)))
+
+    def create_shortcut(self) -> str:
+        from luzeira.sistema.accesos import ShortcutError, create_shortcut
+
+        try:
+            create_shortcut("Desktop")
+        except ShortcutError as exc:
+            raise EditorError(500, str(exc)) from None
+        return "Listo: tienes Luzeira en el escritorio."
+
+    def open_themes_folder(self) -> None:
+        self._app._open_themes_folder()
+
+    def import_theme(self, zip_path: Path) -> str:
+        from luzeira.temas import import_theme_zip
+
+        dest = import_theme_zip(zip_path, user_themes_dir())
+        self._app._post(self._app.icon.update_menu)  # que salga en «Tema»
+        return dest.name
+
+
 class TrayApp:
     def __init__(self, config: AppConfig, *, open_editor: bool = False) -> None:
         # open_editor: abrir también el editor al arrancar (la primera vez, desde el
@@ -228,6 +365,7 @@ class TrayApp:
             apply_theme=self._apply_from_editor,
             status=lambda: (self.service.status.value, self.service.message),
             active_theme=self._active_theme,
+            settings=EditorSettings(self),
             on_window_exit=self._on_editor_exit,
         )
         self.icon = pystray.Icon(

@@ -27,6 +27,8 @@ export const IconUp = () => <Svg><path d="m6 15 6-6 6 6" /></Svg>
 export const IconDown = () => <Svg><path d="m6 9 6 6 6-6" /></Svg>
 export const IconSend = () => <Svg><rect x="3" y="5" width="18" height="12" rx="2" /><path d="M8 21h8M12 17v4M9.5 11l2 2 3.5-4" /></Svg>
 export const IconSaveAs = () => <Svg><path d="M5 4h11l3 3v13H5z" /><path d="M8 4v5h7V4M12 13v5M9.5 15.5h5" /></Svg>
+export const IconSettings = () => <Svg><circle cx="12" cy="12" r="3" /><circle cx="12" cy="12" r="7" /><path d="M12 2.5V5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8" /></Svg>
+export const IconFolder = () => <Svg><path d="M3.5 6.5A1.5 1.5 0 0 1 5 5h4l2 2.5h8A1.5 1.5 0 0 1 20.5 9v9a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 18z" /></Svg>
 export const IconWarn = () => <Svg><path d="M12 4 2.8 20h18.4z" /><path d="M12 10v4.5M12 17.5v.01" /></Svg>
 export const IconInfo = () => <Svg><circle cx="12" cy="12" r="8.5" /><path d="M12 11v5M12 8v.01" /></Svg>
 export const IconGrid = () => <Svg><path d="M4 4h16v16H4zM4 9.3h16M4 14.7h16M9.3 4v16M14.7 4v16" /></Svg>

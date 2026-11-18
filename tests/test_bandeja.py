@@ -648,3 +648,104 @@ def test_second_copy_asks_the_open_one_for_the_editor(
     assert bandeja.main(open_editor=open_editor) == 0
     assert bool(asked) == open_editor
     assert bool(shown) == message_shown
+
+
+# --- ventana «Ajustes» del editor ----------------------------------------------------------
+
+
+@pytest.fixture
+def settings(app):
+    return bandeja.EditorSettings(app)
+
+
+def test_settings_snapshot_offers_the_same_closed_list_as_the_menu(app, settings):
+    snap = settings.snapshot()
+    menu = [i.text for i in submenu(app, "Pantalla", "Elegir modelo y puerto")]
+    assert [c["label"] for c in snap["choices"]] == menu
+    assert snap["display_auto"] and snap["display_text"] == "Ninguna pantalla conectada"
+    assert snap["brightness_levels"] == [25, 50, 75, 100] and snap["autostart"] is False
+    rev_a, kipye, rev_c = snap["choices"]
+    assert rev_a["warning"] is None and not rev_a["beta"]
+    assert "rayas" in kipye["warning"]  # el texto de la Kipye, sin saludo
+    assert rev_c["id"] is None  # se ve, pero no se puede elegir
+    assert len(snap["advanced"]) == 4 * 3  # 4 puertos x 3 modelos con driver
+    assert all("Cuidado" in o["warning"] for o in snap["advanced"])
+    assert all("action" not in o for o in snap["choices"] + snap["advanced"])
+
+
+def test_settings_brightness_and_flip_go_through_the_icon_thread(app, settings, monkeypatch):
+    applied = []
+    monkeypatch.setattr(app.service, "apply", lambda s, reload=False: applied.append(s))
+    settings.update(brightness=75, flip=True, autostart=None)
+    assert applied == []  # todavía en la cola del icono
+    app._drain()
+    assert (applied[-1].brightness, applied[-1].flip) == (75, True)
+    assert (app.saved[-1].brightness, app.saved[-1].flip) == (75, True)
+
+
+def test_settings_rejects_a_brightness_outside_the_levels(app, settings):
+    with pytest.raises(bandeja.EditorError) as exc:
+        settings.update(brightness=60, flip=None, autostart=None)
+    assert exc.value.status == 400
+
+
+def test_settings_sets_autostart_to_the_asked_value(settings, monkeypatch):
+    calls = []
+    monkeypatch.setattr(bandeja.autoarranque, "enable", lambda cmd: calls.append("on"))
+    monkeypatch.setattr(bandeja.autoarranque, "disable", lambda: calls.append("off"))
+    settings.update(brightness=None, flip=None, autostart=True)
+    settings.update(brightness=None, flip=None, autostart=False)
+    assert calls == ["on", "off"]
+
+
+def test_settings_beta_choice_needs_confirmation(app, settings, chosen, answers):
+    kipye = settings.snapshot()["choices"][1]
+    with pytest.raises(bandeja.EditorError) as exc:
+        settings.choose_display(kipye["id"], confirmed=False)
+    assert exc.value.status == 400
+    settings.choose_display(kipye["id"], confirmed=True)
+    app._drain()
+    assert [c.model for c in chosen] == ["kipye-rev-d"] and answers.asked == []
+
+
+def test_settings_advanced_choice_is_marked_advanced(app, settings, chosen):
+    bt = next(o for o in settings.snapshot()["advanced"] if o["id"].startswith("avanzado:COM4:"))
+    settings.choose_display(bt["id"], confirmed=True)
+    app._drain()
+    assert chosen == [DisplayChoice("turing-rev-a", "COM4", None, None, "", advanced=True)]
+
+
+@pytest.mark.parametrize("choice_id", ["lista:COM4:turing-rev-a", "lista:COM3:kipye-rev-d", "x"])
+def test_settings_choice_not_offered_is_refused(app, settings, chosen, choice_id):
+    # COM4 (Bluetooth) y la Kipye en COM3 no están en la lista cerrada.
+    with pytest.raises(bandeja.EditorError):
+        settings.choose_display(choice_id, confirmed=True)
+    app._drain()
+    assert chosen == []
+
+
+def test_settings_choice_waits_for_an_open_dialog(app, settings, chosen):
+    app._dialog_open = True
+    with pytest.raises(bandeja.EditorError) as exc:
+        settings.choose_display(None, confirmed=False)
+    assert exc.value.status == 409
+
+
+def test_settings_back_to_auto(app, settings, chosen):
+    settings.choose_display(None, confirmed=False)
+    app._drain()
+    assert chosen == [None]
+
+
+def test_settings_import_goes_to_the_user_themes(settings, monkeypatch, tmp_path):
+    from luzeira import temas
+
+    seen = []
+    monkeypatch.setattr(bandeja, "user_themes_dir", lambda: tmp_path)
+    monkeypatch.setattr(temas, "import_theme_zip", lambda z, d: seen.append(d) or d / "nuevo")
+    assert settings.import_theme(tmp_path / "x.zip") == "nuevo"
+    assert seen == [tmp_path]
+
+
+def test_tray_passes_its_settings_to_the_editor(app):
+    assert isinstance(app.editor._settings, bandeja.EditorSettings)

@@ -401,6 +401,23 @@ textarea.input { height: auto; min-height: 60px; padding: 6px 8px; resize: verti
 .dialog p { margin: 0 0 14px; color: var(--text-2); }
 .dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 
+/* Ventana «Ajustes» */
+.dialog.settings { width: min(560px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; }
+.settings-section { padding: 14px 0; border-top: 1px solid var(--line); }
+.settings-section:first-of-type { border-top: 0; padding-top: 4px; }
+.settings-section h3 { margin: 0 0 10px; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-3); }
+.dialog p.settings-status { margin: 0 0 12px; color: var(--text); }
+.dialog p.settings-error { color: var(--danger); }
+.dialog.settings .field > label.toggle { justify-content: flex-start; color: var(--text); font-size: 13px; }
+.settings-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.settings-section .btn svg { width: 16px; height: 16px; }
+.settings-advanced { margin-top: 6px; }
+.settings-advanced summary { cursor: pointer; color: var(--text-2); padding: 4px 0; }
+.settings-advanced[open] summary { margin-bottom: 6px; }
+.dialog p.settings-warning { display: flex; gap: 6px; align-items: flex-start; color: var(--danger); font-size: 12px; margin: 0 0 8px; }
+.settings-warning svg { width: 16px; height: 16px; flex: none; margin-top: 1px; }
+.dialog p.settings-confirm { white-space: pre-line; }
+
 .toasts { position: fixed; z-index: 120; bottom: 56px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
 .toast {
   pointer-events: auto; display: flex; align-items: center; gap: 12px;

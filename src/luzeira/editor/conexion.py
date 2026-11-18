@@ -12,6 +12,7 @@ import time
 from collections.abc import Callable
 
 from luzeira.config import config_dir, user_themes_dir
+from luzeira.editor.ajustes import SettingsBackend
 from luzeira.editor.servidor import WEB_ROOT, EditorServer
 from luzeira.editor.ventana import EditorWindow
 from luzeira.sensores import default_hub
@@ -64,12 +65,14 @@ class EditorLink:
         status: Callable[[], tuple[str, str]],
         active_theme: Callable[[], str | None],
         dev_origin: str | None = None,
+        settings: SettingsBackend | None = None,
         on_window_exit: Callable[[int], None] | None = None,
     ) -> None:
         self._apply_theme = apply_theme
         self._status = status
         self._active_theme = active_theme
         self._dev_origin = dev_origin
+        self._settings = settings
         self._on_window_exit = on_window_exit
         self._lock = threading.RLock()
         self._server: EditorServer | None = None
@@ -95,6 +98,7 @@ class EditorLink:
                     trash=config_dir() / "papelera",
                     active_theme=self._active_theme,
                     dev_origin=self._dev_origin,
+                    settings=self._settings,
                 )
                 self._server.start()
             return self._server

@@ -7,9 +7,11 @@ interface Props {
   children: ReactNode
   actions: ReactNode
   onClose: () => void
+  /** Clase extra para la caja (p. ej. `settings`, más ancha). */
+  className?: string
 }
 
-export function Dialog({ title, children, actions, onClose }: Props) {
+export function Dialog({ title, children, actions, onClose, className }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const titleId = useId()
 
@@ -26,7 +28,7 @@ export function Dialog({ title, children, actions, onClose }: Props) {
     <div className="overlay" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <div
         ref={ref}
-        className="dialog"
+        className={className ? `dialog ${className}` : 'dialog'}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

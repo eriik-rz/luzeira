@@ -23,6 +23,11 @@ Subir un recurso: ``POST /api/temas/{tema}/recursos`` con los bytes como cuerpo 
 nombre sugerido en la cabecera ``X-Luzeira-Filename``, codificado como en una URL
 (``encodeURIComponent``). En la query no se admite.
 
+Ajustes de la app (``/api/ajustes``, ``/api/pantalla``, ``/api/acceso-escritorio``,
+``/api/carpeta-temas``, ``/api/importar-tema``): los mismos filtros; los implementa la
+bandeja (ver ``ajustes.py``). Importar sube el ``.zip`` como cuerpo, con su nombre en
+``X-Luzeira-Filename``.
+
 Vista previa «superada»: las vistas previas se pintan de una en una. Si cuando a una le
 llega el turno ya ha entrado otra más nueva, no se pinta y responde **409** con
 ``{"error": …, "superseded": true}`` (``PREVIEW_SUPERSEDED``). La interfaz la ignora: ya
@@ -41,6 +46,7 @@ import os
 import re
 import secrets
 import socket
+import tempfile
 import threading
 from collections import OrderedDict
 from collections.abc import Callable
@@ -54,8 +60,10 @@ from luzeira import __version__
 from luzeira.render.motor import Renderer, _box_of, _fit_contain, _fit_cover, _Layer
 from luzeira.sensores.base import Reading, SensorInfo
 from luzeira.temas import ThemeError, load_theme, resolve_font
+from luzeira.temas.cargar import MAX_ZIP_BYTES
 from luzeira.temas.modelo import ORIENTATION_SIZES, ImageWidget
 
+from .ajustes import SettingsBackend, parse_display, parse_update
 from .almacen import EditorError, ThemeStore, friendly_theme_error, parse_json, parse_theme
 
 log = logging.getLogger(__name__)
@@ -258,8 +266,10 @@ class EditorServer:
         active_theme: Callable[[], str | None] | None = None,
         web_root: Path | None = None,
         dev_origin: str | None = None,
+        settings: SettingsBackend | None = None,
     ) -> None:
         self._sensors = sensors
+        self._settings = settings
         self._read_sensor = read_sensor
         self._apply_theme = apply_theme
         self._status = status
@@ -397,6 +407,27 @@ class EditorServer:
         image.save(buf, "PNG", compress_level=1)
         return buf.getvalue()
 
+    def settings(self) -> SettingsBackend:
+        """Los ajustes de la app; sin ellos (tests, ``--desarrollo`` suelto), 404."""
+        if self._settings is None:
+            raise EditorError(404, "No existe.")
+        return self._settings
+
+    def import_theme(self, data: bytes, suggested: str) -> str:
+        """Importa un tema ``.zip`` subido desde el editor (las mismas reglas que desde
+        el menú: ``import_theme_zip`` valida rutas, tamaños e imágenes)."""
+        if not suggested.lower().endswith(".zip"):
+            raise EditorError(400, "El tema tiene que ser un fichero .zip.")
+        backend = self.settings()
+        # Carpeta temporal propia: el zip nunca se escribe con el nombre que manda la página.
+        with tempfile.TemporaryDirectory(prefix="luzeira-importar-") as tmp:
+            path = Path(tmp) / "tema.zip"
+            path.write_bytes(data)
+            try:
+                return backend.import_theme(path)
+            except ThemeError as exc:
+                raise EditorError(400, str(exc)) from None
+
     def apply(self, name: object) -> None:
         entry = self.store.entry(name)
         try:
@@ -428,7 +459,10 @@ def _route_label(path: str) -> str:
     """Ruta para los logs sin nombres de temas ni ficheros: ``/api/temas/*/recursos``."""
     parts = path.split("?", 1)[0].split("/")
     if len(parts) > 2 and parts[1] == "api":
-        known = {"info", "temas", "sensores", "vista-previa", "copiar", "aplicar", "recursos"}
+        known = {
+            "info", "temas", "sensores", "vista-previa", "copiar", "aplicar", "recursos",
+            "ajustes", "pantalla", "acceso-escritorio", "carpeta-temas", "importar-tema",
+        }  # fmt: skip
         return "/" + "/".join(p if p in known or p == "api" else "*" for p in parts[1:6])
     return "/(estático)"
 
@@ -634,6 +668,25 @@ class _Handler(BaseHTTPRequestHandler):
                 store._upload_target(suggested)  # 400 antes de leer 10 MB
                 data = self._body(MAX_UPLOAD_BODY)
                 return self._json(200, {"path": store.upload(name, suggested, data)})
+            case ("GET", "ajustes"):
+                return self._json(200, editor.settings().snapshot())
+            case ("PUT", "ajustes"):
+                editor.settings().update(**parse_update(self._json_body()))
+                return self._json(200, {"ok": True})
+            case ("POST", "pantalla"):
+                choice_id, confirmed = parse_display(self._json_body())
+                editor.settings().choose_display(choice_id, confirmed=confirmed)
+                return self._json(200, {"ok": True})
+            case ("POST", "acceso-escritorio"):
+                return self._json(200, {"message": editor.settings().create_shortcut()})
+            case ("POST", "carpeta-temas"):
+                editor.settings().open_themes_folder()
+                return self._json(200, {"ok": True})
+            case ("POST", "importar-tema"):
+                editor.settings()  # 404 antes de leer 20 MB
+                suggested = self._upload_filename()
+                data = self._body(MAX_ZIP_BYTES)
+                return self._json(200, {"name": editor.import_theme(data, suggested)})
             case ("GET", "temas", name, "recursos", *rest) if rest:
                 data, ctype = store.resource(name, "/".join(rest))
                 return self._send(200, data, ctype)

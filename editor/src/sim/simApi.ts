@@ -2,7 +2,7 @@
 // contrato (incluidos los 400 con `details`) para que el editor se comporte igual.
 // La vista previa se dibuja aproximada en un <canvas>: NO es la de Python.
 
-import { ApiError, type EditorApi, type Info, type SensorInfo, type ThemeDocument, type ThemeSummary } from '../api.ts'
+import { ApiError, type AppSettings, type EditorApi, type Info, type SettingsChange, type SensorInfo, type ThemeDocument, type ThemeSummary } from '../api.ts'
 import { formatClock, formatReading } from '../model/format.ts'
 import { normalizeTheme } from '../model/theme.ts'
 import { screenSize, type Theme, type ThemeJson } from '../model/types.ts'
@@ -127,6 +127,75 @@ export class SimulatedApi implements EditorApi {
     for (let i = 2; t.files.has(path); i++) path = `${isFont ? 'fuentes' : 'img'}/${stem}-${i}.${ext}`
     t.files.set(path, file)
     return path
+  }
+
+  private appSettings: AppSettings = {
+    brightness: 50,
+    brightness_levels: [25, 50, 75, 100],
+    flip: false,
+    autostart: true,
+    display_text: 'Ninguna pantalla conectada',
+    display_auto: true,
+    choices: [
+      { id: 'lista:COM3:turing-rev-a', label: 'COM3: Turing / UsbPCMonitor 3,5"', beta: false, current: false, warning: null },
+      {
+        id: 'lista:COM8:kipye-rev-d',
+        label: 'COM8: Kipye Qiye 3,5" (beta)',
+        beta: true,
+        current: false,
+        warning: 'Vas a probar Luzeira con una Kipye Qiye 3,5" en COM8.\n\nEste modelo está en beta (modo simulado).\n\n¿Quieres probarlo?',
+      },
+    ],
+    advanced: [
+      {
+        id: 'avanzado:COM4:turing-rev-a',
+        label: 'Bluetooth (COM4): Turing / UsbPCMonitor 3,5"',
+        beta: false,
+        current: false,
+        warning: 'Cuidado: vas a mandar datos de pantalla a COM4 (modo simulado).\n\n¿Seguro que quieres probar?',
+      },
+    ],
+  }
+
+  async settings(): Promise<AppSettings> {
+    await wait(50)
+    return structuredClone(this.appSettings)
+  }
+
+  async updateSettings(change: SettingsChange): Promise<void> {
+    await wait(80)
+    if (change.brightness !== undefined && !this.appSettings.brightness_levels.includes(change.brightness)) {
+      throw new ApiError('Ese brillo no está entre los que se pueden elegir.', 400)
+    }
+    this.appSettings = { ...this.appSettings, ...change }
+  }
+
+  async chooseDisplay(id: string | null, confirmed: boolean): Promise<void> {
+    await wait(80)
+    const all = [...this.appSettings.choices, ...this.appSettings.advanced]
+    const option = id === null ? null : all.find((o) => o.id === id)
+    if (id !== null && !option) throw new ApiError('Esa pantalla ya no está en la lista. Vuelve a elegir.', 409)
+    if (option?.warning && !confirmed) throw new ApiError('Falta confirmar el aviso antes de probar esa pantalla.', 400)
+    for (const o of all) o.current = o.id === id
+    this.appSettings.display_auto = id === null
+    this.appSettings.display_text = option ? `Probando ${option.label}` : 'Ninguna pantalla conectada'
+  }
+
+  async createShortcut(): Promise<string> {
+    await wait(100)
+    return 'Listo: tienes Luzeira en el escritorio. (simulado)'
+  }
+
+  async openThemesFolder(): Promise<void> {
+    await wait(50)
+  }
+
+  async importTheme(file: File): Promise<string> {
+    await wait(200)
+    if (!file.name.toLowerCase().endsWith('.zip')) throw new ApiError('El tema tiene que ser un fichero .zip.', 400)
+    const name = slugify(file.name.replace(/\.zip$/i, ''))
+    this.themes.set(name, { builtin: false, theme: { ...MI_TEMA, name: file.name.replace(/\.zip$/i, '') }, files: new Map() })
+    return name
   }
 
   async resource(name: string, path: string): Promise<Blob> {

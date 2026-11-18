@@ -12,6 +12,7 @@ import { LIMITS, MAX_WIDGETS, type Theme, type Widget, type WidgetType } from '.
 import { validateTheme, widgetIndexOf, type Issue } from './model/validate.ts'
 import { CanvasArea, type ZoomMode } from './components/CanvasArea.tsx'
 import { Dialog, Toasts, type ToastItem } from './components/Dialog.tsx'
+import { SettingsDialog } from './components/SettingsDialog.tsx'
 import { LayersPanel } from './components/LayersPanel.tsx'
 import { PropertiesPanel } from './components/PropertiesPanel.tsx'
 import { ThemePanel } from './components/ThemePanel.tsx'
@@ -38,6 +39,7 @@ type DialogState =
   | { kind: 'removeWidget'; id: string }
   | { kind: 'deleteTheme'; onScreen: boolean }
   | { kind: 'discard'; next: string }
+  | { kind: 'settings' }
   | null
 
 /** Cada cuánto se pregunta el estado de la pantalla (ms). */
@@ -607,6 +609,7 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
             .catch(() => null)
             .then((info) => setDialog({ kind: 'deleteTheme', onScreen: info?.active_theme === current?.name }))
         }
+        onSettings={() => setDialog({ kind: 'settings' })}
       />
       <div className="banner-area">
         {current.builtin && (
@@ -719,6 +722,21 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
           note={saveAsNote(current.builtin, theme.name, status.kind)}
           onCancel={() => setDialog(null)}
           onSave={(t) => void saveAs(t, dialog.thenApply)}
+        />
+      )}
+      {dialog?.kind === 'settings' && (
+        <SettingsDialog
+          api={api}
+          toast={toast}
+          onClose={() => setDialog(null)}
+          onImported={(name) => {
+            setDialog(null)
+            void api
+              .listThemes()
+              .then(setThemes)
+              .then(() => selectTheme(name))
+              .catch((e: unknown) => toast(errorMessage(e), 'error'))
+          }}
         />
       )}
       {dialog?.kind === 'restore' && (

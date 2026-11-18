@@ -48,6 +48,32 @@ export interface SensorInfo {
   reason: string | null
 }
 
+/** Una opción de «Modelo y puerto». `id` es lo que se manda de vuelta al elegirla. */
+export interface DisplayOption {
+  /** `null`: se ve pero no se puede elegir (p. ej. la revisión C). */
+  id: string | null
+  label: string
+  beta: boolean
+  current: boolean
+  /** Aviso que hay que aceptar antes de probarla (beta o modo avanzado). */
+  warning: string | null
+}
+
+/** Ajustes de la app (lo mismo que el menú del icono). */
+export interface AppSettings {
+  brightness: number
+  brightness_levels: number[]
+  flip: boolean
+  autostart: boolean
+  display_text: string
+  /** Luzeira busca la pantalla ella sola (no hay ninguna elegida a mano). */
+  display_auto: boolean
+  choices: DisplayOption[]
+  advanced: DisplayOption[]
+}
+
+export type SettingsChange = Partial<Pick<AppSettings, 'brightness' | 'flip' | 'autostart'>>
+
 export interface ErrorDetail {
   path: string
   message: string
@@ -94,6 +120,16 @@ export interface EditorApi {
   /** Sube una imagen o fuente; devuelve la ruta dentro del tema («img/logo.png»). */
   uploadResource(name: string, file: File): Promise<string>
   resource(name: string, path: string, signal?: AbortSignal): Promise<Blob>
+  /** Ajustes de la app. 404 si el editor se abrió sin la bandeja (modo desarrollo). */
+  settings(): Promise<AppSettings>
+  updateSettings(change: SettingsChange): Promise<void>
+  /** `null`: volver a detectarla sola. `confirmed`: el usuario ha aceptado el aviso. */
+  chooseDisplay(id: string | null, confirmed: boolean): Promise<void>
+  /** Devuelve el texto para el usuario. */
+  createShortcut(): Promise<string>
+  openThemesFolder(): Promise<void>
+  /** Importa un tema `.zip`; devuelve el nombre del tema nuevo. */
+  importTheme(file: File): Promise<string>
 }
 
 // --- Token ---------------------------------------------------------------------------
@@ -254,6 +290,29 @@ class HttpApi implements EditorApi {
     const safe = path.split('/').map(encodeURIComponent).join('/')
     const res = await this.request('GET', `/api/temas/${enc(name)}/recursos/${safe}`, undefined, undefined, signal)
     return res.blob()
+  }
+  settings() {
+    return this.json<AppSettings>('GET', '/api/ajustes')
+  }
+  async updateSettings(change: SettingsChange) {
+    await this.json('PUT', '/api/ajustes', change)
+  }
+  async chooseDisplay(id: string | null, confirmed: boolean) {
+    await this.json('POST', '/api/pantalla', id === null ? { auto: true } : { id, confirmed })
+  }
+  async createShortcut() {
+    const r = await this.json<{ message: string }>('POST', '/api/acceso-escritorio', {})
+    return r.message
+  }
+  async openThemesFolder() {
+    await this.json('POST', '/api/carpeta-temas', {})
+  }
+  async importTheme(file: File) {
+    const res = await this.request('POST', '/api/importar-tema', file, 'application/zip', undefined, {
+      [FILENAME_HEADER]: encodeFilenameHeader(file.name),
+    })
+    const data = (await res.json()) as { name: string }
+    return data.name
   }
 }
 

@@ -1302,3 +1302,136 @@ def test_editor_default_theme_matches_the_app():
     source = Path(__file__).resolve().parent.parent / "editor" / "src" / "model" / "contract.ts"
     match = re.search(r"export const DEFAULT_THEME = '([^']+)'", source.read_text(encoding="utf-8"))
     assert match and match.group(1) == DEFAULT_THEME
+
+
+# --- Ajustes de la app (ventana «Ajustes») ------------------------------------------------
+
+
+class FakeSettings:
+    """Lo que haría la bandeja, apuntado. Importa de verdad con ``import_theme_zip``."""
+
+    def __init__(self, user: Path) -> None:
+        self.user = user
+        self.calls: list[tuple] = []
+
+    def snapshot(self) -> dict:
+        return {"brightness": 50, "choices": []}
+
+    def update(self, **kw) -> None:
+        self.calls.append(("update", kw))
+
+    def choose_display(self, choice_id, *, confirmed) -> None:
+        self.calls.append(("display", choice_id, confirmed))
+
+    def create_shortcut(self) -> str:
+        self.calls.append(("shortcut",))
+        return "Listo."
+
+    def open_themes_folder(self) -> None:
+        self.calls.append(("folder",))
+
+    def import_theme(self, zip_path: Path) -> str:
+        return cargar.import_theme_zip(zip_path, self.user).name
+
+
+@pytest.fixture
+def with_settings(env):
+    server, client, user, *_ = env
+    fake = FakeSettings(user)
+    server._settings = fake
+    return client, fake, user
+
+
+def zip_of(folder: Path) -> bytes:
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        for p in folder.rglob("*"):
+            if p.is_file():
+                zf.write(p, f"{folder.name}/{p.relative_to(folder).as_posix()}")
+    return buf.getvalue()
+
+
+def test_settings_routes_are_404_without_a_tray(env):
+    _, client, *_ = env
+    for method, path in [("GET", "/api/ajustes"), ("POST", "/api/carpeta-temas")]:
+        assert client.json(method, path)[0] == 404
+
+
+def test_settings_routes_need_the_token(with_settings):
+    client, fake, _ = with_settings
+    for method, path, body in [
+        ("GET", "/api/ajustes", None),
+        ("PUT", "/api/ajustes", {"flip": True}),
+        ("POST", "/api/pantalla", {"auto": True}),
+        ("POST", "/api/acceso-escritorio", None),
+        ("POST", "/api/carpeta-temas", None),
+    ]:
+        assert client.json(method, path, body, token=None)[0] == 403
+        assert client.json(method, path, body, origin="http://evil.com")[0] == 403
+    assert fake.calls == []
+
+
+def test_settings_read_and_update(with_settings):
+    client, fake, _ = with_settings
+    assert client.json("GET", "/api/ajustes") == (200, {"brightness": 50, "choices": []})
+    status, _ = client.json("PUT", "/api/ajustes", {"brightness": 75, "autostart": True})
+    assert status == 200
+    assert fake.calls == [("update", {"brightness": 75, "flip": None, "autostart": True})]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{}, {"brightness": True}, {"brightness": "75"}, {"flip": 1}, {"otra": 1}, [], b'"x"'],
+)
+def test_settings_update_rejects_bad_values(with_settings, body):
+    client, fake, _ = with_settings
+    assert client.json("PUT", "/api/ajustes", body)[0] == 400
+    assert fake.calls == []
+
+
+def test_display_choice_routes(with_settings):
+    client, fake, _ = with_settings
+    assert client.json("POST", "/api/pantalla", {"auto": True})[0] == 200
+    assert client.json("POST", "/api/pantalla", {"id": "lista:COM3:x", "confirmed": True})[0] == 200
+    for bad in [{"auto": False}, {"id": 3}, {"id": ""}, {"id": "a", "confirmed": "sí"}]:
+        assert client.json("POST", "/api/pantalla", bad)[0] == 400
+    assert fake.calls == [("display", None, False), ("display", "lista:COM3:x", True)]
+
+
+def test_shortcut_and_folder(with_settings):
+    client, fake, _ = with_settings
+    assert client.json("POST", "/api/acceso-escritorio") == (200, {"message": "Listo."})
+    assert client.json("POST", "/api/carpeta-temas") == (200, {"ok": True})
+    assert fake.calls == [("shortcut",), ("folder",)]
+
+
+def test_import_theme_zip_from_the_editor(with_settings):
+    client, _, user = with_settings
+    data = zip_of(FIXTURES / "ejemplo-completo")
+    status, body = client.json(
+        "POST", "/api/importar-tema", data, headers={"X-Luzeira-Filename": "mi%20tema.zip"}
+    )
+    assert status == 200
+    assert (user / body["name"] / "theme.json").is_file()
+
+
+def test_import_rejects_bad_zip_and_wrong_name(with_settings):
+    client, _, user = with_settings
+    before = sorted(p.name for p in user.iterdir())
+    headers = {"X-Luzeira-Filename": "tema.zip"}
+    status, body = client.json("POST", "/api/importar-tema", b"no es un zip", headers=headers)
+    assert status == 400 and body["error"]
+    data = zip_of(FIXTURES / "ejemplo-completo")
+    exe = {"X-Luzeira-Filename": "tema.exe"}
+    assert client.json("POST", "/api/importar-tema", data, headers=exe)[0] == 400
+    assert client.json("POST", "/api/importar-tema", data)[0] == 400  # sin nombre
+    assert sorted(p.name for p in user.iterdir()) == before
+
+
+def test_import_too_big_is_413(with_settings):
+    client, *_ = with_settings
+    big = b"x" * (cargar.MAX_ZIP_BYTES + 1)
+    headers = {"X-Luzeira-Filename": "t.zip"}
+    assert client.json("POST", "/api/importar-tema", big, headers=headers)[0] == 413
