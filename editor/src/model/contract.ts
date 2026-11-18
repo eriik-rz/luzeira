@@ -117,3 +117,13 @@ export function appliedMessage(
 export function isDroppableImage(name: string): boolean {
   return /\.(png|jpe?g|gif)$/i.test(name)
 }
+
+/** El tema por defecto de Visoria (`DEFAULT_THEME` de `src/visoria/config.py`; un test de
+ * Python vigila que coincidan). Es el que se pone si se borra el que estaba en pantalla. */
+export const DEFAULT_THEME = 'esencial'
+
+/** Aviso tras mover un tema a la papelera. */
+export function deletedMessage(wasOnScreen: boolean): string {
+  const moved = 'Tema movido a la papelera de Visoria.'
+  return wasOnScreen ? `${moved} En la pantalla se ha puesto «Esencial».` : moved
+}

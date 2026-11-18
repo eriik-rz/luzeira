@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { ApiError, errorMessage, type EditorApi, type Info, type SensorInfo, type ThemeSummary } from './api.ts'
 import { initialState, reducer, selectedWidget, indexOfId } from './model/editorState.ts'
-import { appliedMessage, flushOutcome, isDroppableImage, type FlushResult, type SaveOutcome } from './model/contract.ts'
+import { appliedMessage, deletedMessage, DEFAULT_THEME, flushOutcome, isDroppableImage, type FlushResult, type SaveOutcome } from './model/contract.ts'
 import { formatClock } from './model/format.ts'
 import { baseName, createWidget, normalizeTheme, CLOCK_FORMAT_INFO } from './model/theme.ts'
 import { LIMITS, MAX_WIDGETS, type Theme, type Widget, type WidgetType } from './model/types.ts'
@@ -33,7 +33,7 @@ interface Current {
 type DialogState =
   | { kind: 'saveAs'; reason?: string }
   | { kind: 'removeWidget'; id: string }
-  | { kind: 'deleteTheme' }
+  | { kind: 'deleteTheme'; onScreen: boolean }
   | { kind: 'discard'; next: string }
   | null
 
@@ -454,18 +454,22 @@ export function Editor({ api, info, initialThemes, initialName }: Props) {
     }
   }
 
-  const deleteTheme = async () => {
+  const deleteTheme = async (onScreen: boolean) => {
     if (!current || current.builtin) return
     try {
       if (saveTimer.current !== null) window.clearTimeout(saveTimer.current)
       saveTimer.current = null
       await saveChain.current
+      // El tema en pantalla no se puede borrar (el servidor da 409): antes se pone el de
+      // siempre, como haría el usuario a mano.
+      if (onScreen) await api.apply(DEFAULT_THEME)
       await api.deleteTheme(current.name)
       const list = await api.listThemes()
       setThemes(list)
       setDialog(null)
-      toast('Tema movido a la papelera de Visoria.', 'ok')
-      if (list.length) await loadTheme(list[0].name)
+      toast(deletedMessage(onScreen), 'ok')
+      const next = list.find((t) => t.name === DEFAULT_THEME) ?? list[0]
+      if (next) await loadTheme(next.name)
     } catch (e) {
       toast(errorMessage(e), 'error')
     }
@@ -547,7 +551,12 @@ export function Editor({ api, info, initialThemes, initialName }: Props) {
         onRedo={() => dispatch({ type: 'redo' })}
         onSaveAs={() => setDialog({ kind: 'saveAs' })}
         onApply={() => void applyTheme()}
-        onDeleteTheme={() => setDialog({ kind: 'deleteTheme' })}
+        onDeleteTheme={() =>
+          void api
+            .info()
+            .catch(() => null)
+            .then((info) => setDialog({ kind: 'deleteTheme', onScreen: info?.active_theme === current?.name }))
+        }
       />
       <div className="banner-area">
         {current.builtin && (
@@ -698,13 +707,14 @@ export function Editor({ api, info, initialThemes, initialName }: Props) {
               <button type="button" className="btn" onClick={() => setDialog(null)}>
                 Cancelar
               </button>
-              <button type="button" className="btn danger solid" onClick={() => void deleteTheme()}>
+              <button type="button" className="btn danger solid" onClick={() => void deleteTheme(dialog.onScreen)}>
                 Mover a la papelera
               </button>
             </>
           }
         >
           <p>Desaparece de la lista, pero no se borra del todo: queda en la carpeta «papelera» de Visoria por si lo quieres recuperar.</p>
+          {dialog.onScreen && <p>Es el tema que está ahora en la pantalla: se pondrá «Esencial» en su lugar.</p>}
         </Dialog>
       )}
       {dialog?.kind === 'discard' && (

@@ -1,9 +1,8 @@
 // Barra superior: tema actual, deshacer/rehacer, estado del guardado, «Guardar como…»
 // y «Aplicar a la pantalla».
 
-import { useState } from 'react'
 import type { Info, ThemeSummary } from '../api.ts'
-import { BrandMark, IconMore, IconRedo, IconSaveAs, IconSend, IconTrash, IconUndo } from './icons.tsx'
+import { BrandMark, IconRedo, IconSaveAs, IconSend, IconTrash, IconUndo } from './icons.tsx'
 
 export type SaveStatus =
   | { kind: 'saved' }
@@ -50,7 +49,6 @@ function statusView(s: SaveStatus): { cls: string; text: string; title: string }
 }
 
 export function TopBar(p: Props) {
-  const [moreOpen, setMoreOpen] = useState(false)
   const st = statusView(p.status)
   const mine = p.themes.filter((t) => !t.builtin)
   const builtins = p.themes.filter((t) => t.builtin)
@@ -92,45 +90,19 @@ export function TopBar(p: Props) {
         </optgroup>
       </select>
 
-      <div
-        className="menu-wrap"
-        onBlur={(e) => {
-          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setMoreOpen(false)
-        }}
+      <button
+        type="button"
+        className="btn ghost danger"
+        disabled={p.builtin}
+        onClick={p.onDeleteTheme}
+        title={
+          p.builtin
+            ? 'Los temas incluidos no se pueden borrar.'
+            : 'Mover este tema a la papelera de Visoria (se puede recuperar).'
+        }
       >
-        <button
-          type="button"
-          className="btn ghost icon"
-          aria-label="Más opciones del tema"
-          title="Más opciones del tema"
-          aria-haspopup="menu"
-          aria-expanded={moreOpen}
-          onClick={() => setMoreOpen((o) => !o)}
-        >
-          <IconMore />
-        </button>
-        {moreOpen && (
-          <div className="menu" role="menu" onKeyDown={(e) => e.key === 'Escape' && setMoreOpen(false)}>
-            <button
-              type="button"
-              role="menuitem"
-              className="menu-item danger"
-              autoFocus
-              disabled={p.builtin}
-              onClick={() => {
-                setMoreOpen(false)
-                p.onDeleteTheme()
-              }}
-            >
-              <IconTrash />
-              <div>
-                <strong>Mover a la papelera</strong>
-                <span>{p.builtin ? 'Los temas incluidos no se pueden borrar.' : 'Se guarda en la papelera de Visoria; no se borra del todo.'}</span>
-              </div>
-            </button>
-          </div>
-        )}
-      </div>
+        <IconTrash /> Borrar
+      </button>
 
       <span className="sep" />
       <button type="button" className="btn ghost icon" disabled={!p.canUndo} onClick={p.onUndo} title="Deshacer (Ctrl+Z)" aria-label="Deshacer">

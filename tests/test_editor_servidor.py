@@ -1290,3 +1290,15 @@ def test_untranslated_pydantic_error_is_generic_spanish():
     bar = {"type": "value_error", "msg": "Value error, …", "loc": ()}
     bar["ctx"] = {"error": ValueError("max tiene que ser mayor que min")}
     assert _item_message(bar) == "el máximo tiene que ser mayor que el mínimo"
+
+
+def test_editor_default_theme_matches_the_app():
+    # Si se borra el tema en pantalla, el editor pone este: tiene que existir y ser el de
+    # la app (editor/src/model/contract.ts).
+    import re
+
+    from visoria.config import DEFAULT_THEME
+
+    source = Path(__file__).resolve().parent.parent / "editor" / "src" / "model" / "contract.ts"
+    match = re.search(r"export const DEFAULT_THEME = '([^']+)'", source.read_text(encoding="utf-8"))
+    assert match and match.group(1) == DEFAULT_THEME

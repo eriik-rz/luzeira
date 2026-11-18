@@ -16,6 +16,7 @@ import {
   isSupersededPreview,
   messageForStatus,
   pickInitialTheme,
+  deletedMessage,
 } from '../src/model/contract.ts'
 import { formatClock, formatReading } from '../src/model/format.ts'
 import type { Theme, ThemeJson } from '../src/model/types.ts'
@@ -392,4 +393,9 @@ test('Alt+clic baja una capa en el punto y vuelve arriba al llegar al fondo', ()
   assert.equal(pickBelow(boxes, ids, p, 'lejos'), 'barrido') // el seleccionado no está aquí
   assert.equal(pickBelow(boxes, ids, { x: 479, y: 319 }, 'barrido'), 'barrido') // solo uno
   assert.equal(pickBelow(boxes, ids, { x: 480, y: 10 }, null), null) // fuera de todo
+})
+
+test('al borrar el tema que estaba en pantalla, el aviso dice qué se ha puesto', () => {
+  assert.equal(deletedMessage(false), 'Tema movido a la papelera de Visoria.')
+  assert.ok(/papelera.*En la pantalla se ha puesto «Esencial»/.test(deletedMessage(true)))
 })
