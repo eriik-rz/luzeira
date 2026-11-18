@@ -1,4 +1,4 @@
-# Publica una versión al subir una etiqueta vX.Y.Z (la crea Erik: git tag v0.1.0 && git push
+# Publica una versión al subir una etiqueta vX.Y.Z (la crea quien mantiene el proyecto: git tag v0.1.0 && git push
 # origin v0.1.0). Construye igual que en local (scripts/empaquetar.py), firma la procedencia
 # con artifact attestations y publica una release inmutable: primero borrador, luego se
 # publica (con releases inmutables, los ficheros ya no cambian una vez publicada).
@@ -8,7 +8,7 @@
 # - Actions fijadas por SHA (resueltos con la API de GitHub el 2026-11-18).
 # - Sin caché en la build de release (una caché envenenada acabaría dentro del instalador).
 # - Python embebible e Inno Setup verificados por SHA-256 antes de usarlos.
-# - El job que publica espera la aprobación de Erik (entorno «release», ver D-4).
+# - El job que publica espera una aprobación manual (entorno «release» con revisor).
 name: release
 
 on:
@@ -86,7 +86,7 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    environment: release # aprobación manual de Erik antes de publicar
+    environment: release # aprobación manual antes de publicar
     permissions:
       contents: write
     steps:
