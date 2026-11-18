@@ -95,7 +95,10 @@ class AppConfig(BaseModel):
     # la app no se conecta a nada.
     updates: bool | None = None
     # La versión más nueva que se ha visto firmada: nunca se ofrece una más vieja.
-    updates_max_seen: str | None = Field(default=None, pattern=r"^\d{1,4}\.\d{1,4}\.\d{1,4}$")
+    updates_max_seen: str | None = Field(
+        default=None,  # el mismo patrón que luzeira.actualizar._VERSION
+        pattern=r"^(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})$",
+    )
     updates_last_check: float | None = None  # hora (time.time()) de la última comprobación
 
     @field_validator("display", mode="wrap")

@@ -262,3 +262,54 @@ def test_the_shipped_keys_are_two_distinct_ed25519_public_keys():
     keys = actualizar.PUBLIC_KEYS
     assert len(keys) == 2 and len(set(keys)) == 2  # la principal y la de reserva
     assert len(actualizar._load_keys(keys)) == 2
+
+
+def test_the_signature_is_checked_before_reading_anything(key):
+    _, public = key
+    stranger, _ = new_key()
+    garbage = b'{"esto": "no es un manifiesto"}'
+    with pytest.raises(UpdateError, match="firma"):  # y no «no es válida»
+        actualizar.verify_manifest(garbage, base64.b64encode(stranger.sign(garbage)), [public])
+
+
+@pytest.mark.parametrize("version", ["00.1.0", "\u0661.2.3", "1.2", "1.2.3.4", " 1.2.3"])
+def test_versions_are_only_plain_ascii_numbers(version):
+    with pytest.raises(ValueError):
+        actualizar.parse_version(version)
+
+
+class FakeResponse:
+    def __init__(self, data: bytes) -> None:
+        self.data = data
+        self.pos = 0
+
+    def read(self, n: int = -1) -> bytes:
+        end = len(self.data) if n < 0 else self.pos + n
+        chunk = self.data[self.pos : end]
+        self.pos += len(chunk)
+        return chunk
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def test_the_real_client_follows_only_github_redirects():
+    http = actualizar.GitHubHttp()
+    assert any(isinstance(h, actualizar._OnlyGitHub) for h in http._opener.handlers)
+
+
+def test_the_real_client_never_reads_past_the_limit(tmp_path, monkeypatch):
+    http = actualizar.GitHubHttp()
+    monkeypatch.setattr(http._opener, "open", lambda url, timeout: FakeResponse(b"x" * 100))
+    assert http.get(actualizar.MANIFEST_URL, 100) == b"x" * 100
+    with pytest.raises(UpdateError):
+        http.get(actualizar.MANIFEST_URL, 99)
+    with pytest.raises(UpdateError):
+        http.save(actualizar.MANIFEST_URL, tmp_path / "a", 99)
+    http.save(actualizar.MANIFEST_URL, tmp_path / "b", 100)
+    assert (tmp_path / "b").read_bytes() == b"x" * 100
+    with pytest.raises(UpdateError, match="GitHub"):
+        http.get("https://evil.example/manifest.json", 100)

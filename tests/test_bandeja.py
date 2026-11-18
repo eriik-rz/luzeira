@@ -907,14 +907,21 @@ def test_check_passes_the_highest_version_seen(app, with_keys, monkeypatch):
     assert seen == [{"max_seen": "0.5.0"}]
 
 
-def test_a_failed_check_says_why_and_changes_nothing(app, with_keys, monkeypatch):
+@pytest.mark.parametrize(
+    "error", [bandeja.actualizar.UpdateError("No he podido conectar con GitHub."), ValueError()]
+)
+def test_a_failed_check_says_why_and_waits_a_day(app, with_keys, monkeypatch, error):
     def fail(**kw):
-        raise bandeja.actualizar.UpdateError("No he podido conectar con GitHub.")
+        raise error
 
     monkeypatch.setattr(bandeja.actualizar, "check", fail)
-    assert app.check_updates(manual=True) == "No he podido conectar con GitHub."
+    text = app.check_updates(manual=True)
+    assert text == (str(error) or bandeja.MSG_UPDATE_FAILED)
     app._drain()
-    assert app.saved == [] and app._update is None and not app._update_busy
+    assert app._update is None and not app._update_busy
+    # Cuenta como la comprobación del día: sin internet no se reintenta cada hora.
+    assert app.saved[-1].updates_last_check and not app._update_due()
+    assert app.saved[-1].updates_max_seen is None
 
 
 def test_only_one_check_or_download_at_a_time(app, with_keys):
@@ -961,3 +968,30 @@ def test_editor_install_without_an_update_is_409(settings, with_keys):
     with pytest.raises(bandeja.EditorError) as exc:
         settings.install_update()
     assert exc.value.status == 409
+
+
+def test_a_failed_download_frees_the_lock(app, with_keys, monkeypatch):
+    app._update = a_manifest()
+
+    def fail(m):
+        raise bandeja.actualizar.UpdateError("La descarga es más grande de lo esperado.")
+
+    monkeypatch.setattr(bandeja.actualizar, "download", fail)
+    with pytest.raises(bandeja.actualizar.UpdateError):
+        app.install_update()
+    assert not app._update_busy
+
+
+def test_after_a_good_download_nothing_else_until_launch(app, with_keys, monkeypatch, tmp_path):
+    app._update = a_manifest()
+    monkeypatch.setattr(bandeja.actualizar, "download", lambda m: tmp_path / "x.exe")
+
+    def bad(path, m, log):
+        raise bandeja.actualizar.UpdateError("No coincide.")
+
+    monkeypatch.setattr(bandeja.actualizar, "launch", bad)
+    app.install_update()
+    assert app._update_busy  # ni otra descarga ni otro «Actualizar» mientras tanto
+    assert app.check_updates(manual=True) == bandeja.MSG_UPDATE_BUSY
+    app._drain()  # al lanzar falla: se suelta
+    assert not app._update_busy

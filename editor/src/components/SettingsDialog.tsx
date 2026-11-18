@@ -251,7 +251,8 @@ export function SettingsDialog({ api, onDisplayChosen, onClose, onImported, toas
                     onClick={() =>
                       void run(async () => {
                         toast(await api.checkUpdates(), 'info')
-                        await reload()
+                        // Lo comprobado lo guarda el hilo del icono un instante después.
+                        window.setTimeout(() => void reload(), AFTER_CHOICE_MS)
                       })
                     }
                   >

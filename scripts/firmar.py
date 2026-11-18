@@ -130,7 +130,11 @@ def make_manifest(version: str, installer: Path, sums: str) -> Manifest:
 
 
 def sign(manifest: Manifest, private: Ed25519PrivateKey) -> tuple[bytes, bytes]:
-    """``(manifest.json, manifest.json.sig)``. Antes comprueba que la app lo aceptaría."""
+    """``(manifest.json, manifest.json.sig)``. Antes comprueba que la app lo aceptaría.
+
+    ⚠ Compara con el ``PUBLIC_KEYS`` de este árbol, no con el de las versiones que tiene
+    la gente instaladas. Si algún día se cambia de clave, la versión que la estrena se
+    firma todavía con una que conozcan las anteriores (la de reserva está para eso)."""
     public = public_key_of(private)
     if public not in actualizar.PUBLIC_KEYS:
         sys.exit(
@@ -141,6 +145,18 @@ def sign(manifest: Manifest, private: Ed25519PrivateKey) -> tuple[bytes, bytes]:
     sig = base64.b64encode(private.sign(data))
     actualizar.verify_manifest(data, sig, actualizar.PUBLIC_KEYS)  # la misma comprobación
     return data, sig
+
+
+def attestation_args(path: Path, tag: str) -> list[str]:
+    """``gh attestation verify`` estricto: solo vale lo que atestiguó NUESTRO workflow de
+    release para ESA etiqueta. Sin esto, cualquier workflow del repo (o alguien con
+    control del repo, justo la amenaza de ADR-006) podría colar un exe atestiguado."""
+    return [
+        "attestation", "verify", str(path), "-R", actualizar.REPO,
+        "--signer-workflow", f"{actualizar.REPO}/.github/workflows/release.yml",
+        "--source-ref", f"refs/tags/{tag}",
+        "--deny-self-hosted-runners",
+    ]  # fmt: skip
 
 
 def gh(*args: str) -> None:
@@ -180,7 +196,10 @@ def cmd_sign(args: argparse.Namespace) -> None:
         name = f"Luzeira-{version}-instalador.exe"
         gh("release", "download", tag, "-R", repo, "-p", name, "-p", "SHA256SUMS", "-D", tmp)
         installer = folder / name
-        gh("attestation", "verify", str(installer), "-R", repo)
+        # Los dos atestiguados por el workflow de release de esta etiqueta: si no,
+        # comprobar el exe contra SHA256SUMS del mismo borrador sería circular.
+        gh(*attestation_args(installer, tag))
+        gh(*attestation_args(folder / "SHA256SUMS", tag))
         sums = (folder / "SHA256SUMS").read_text(encoding="utf-8")
         manifest = make_manifest(version, installer, sums)
         data, sig = sign(manifest, private)

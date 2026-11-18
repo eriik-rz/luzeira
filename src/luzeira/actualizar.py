@@ -72,7 +72,8 @@ MAX_INSTALLER_BYTES = 200 * 1024 * 1024
 TIMEOUT = 20  # s por petición
 _CHUNK = 64 * 1024
 
-_VERSION = re.compile(r"^(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})$")
+# [0-9] y no \d: \d admite cifras de otros alfabetos (árabes, devanagari…). config.py usa la misma.
+_VERSION = re.compile(r"^(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})$")
 
 # Parámetro propio del instalador: espera a que esta Luzeira se cierre, conserva el
 # «Iniciar con Windows» tal como estaba y vuelve a abrir la app al terminar (luzeira.iss).
@@ -152,8 +153,12 @@ def verify_manifest(data: bytes, signature: bytes, keys: Iterable[str]) -> Manif
 
 def is_newer(manifest: Manifest, installed: str, max_seen: str | None) -> bool:
     """¿Merece la pena ofrecerla? Tiene que ser más nueva que la instalada y no más
-    vieja que la mayor que ya se haya visto (así nadie puede «congelar» la app
-    ofreciéndole una versión antigua, aunque esté bien firmada)."""
+    vieja que la mayor que ya se haya visto: así no se puede ofrecer una versión
+    antigua aunque esté bien firmada.
+
+    Límite conocido (ADR-006): quien controle GitHub sí puede seguir sirviendo el
+    manifiesto de la versión instalada (o un error) y la app diría «ya tienes la
+    última». El manifiesto no caduca; TUF lo resolvería (C-55)."""
     version = manifest.parsed_version
     if version <= parse_version(installed):
         return False
@@ -182,8 +187,9 @@ class _OnlyGitHub(urllib.request.HTTPRedirectHandler):
 
 
 class GitHubHttp:
-    """HTTPS con los certificados de Windows, sin cookies ni proxys raros, y solo a
-    :data:`ALLOWED_HOSTS`."""
+    """HTTPS con los certificados de Windows, sin cookies, y solo a
+    :data:`ALLOWED_HOSTS`. Usa el proxy del sistema si lo hay (como el navegador): el
+    TLS se sigue validando contra GitHub."""
 
     def __init__(self) -> None:
         self._opener = urllib.request.build_opener(_OnlyGitHub())

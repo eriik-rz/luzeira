@@ -194,3 +194,10 @@ def test_broken_updates_are_forgotten_without_losing_the_rest(tmp_path, field):
         None,
     )
     assert not (tmp_path / "config.json.danado").exists()
+
+
+@pytest.mark.parametrize("version", ["00.1.0", "\u0661.2.3"])
+def test_max_seen_takes_only_what_the_updater_can_read(tmp_path, version):
+    path = tmp_path / "config.json"
+    path.write_text(f'{{"updates_max_seen": "{version}"}}', encoding="utf-8")
+    assert load_config(path).updates_max_seen is None

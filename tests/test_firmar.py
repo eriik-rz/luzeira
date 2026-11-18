@@ -76,3 +76,12 @@ def test_an_existing_key_is_not_overwritten(firmar, tmp_path):
     with pytest.raises(SystemExit, match="sobrescribo"):
         firmar.write_key(tmp_path / "clave.pem", b"una contrasena larga")
     assert (tmp_path / "clave.pem").read_bytes() == before
+
+
+def test_attestation_must_come_from_our_release_workflow_and_tag(firmar, tmp_path):
+    args = firmar.attestation_args(tmp_path / "x.exe", "v0.2.0")
+    assert args[:3] == ["attestation", "verify", str(tmp_path / "x.exe")]
+    pairs = dict(zip(args[3::2], args[4::2], strict=False))
+    assert pairs["--signer-workflow"] == "eriik-rz/luzeira/.github/workflows/release.yml"
+    assert pairs["--source-ref"] == "refs/tags/v0.2.0"
+    assert "--deny-self-hosted-runners" in args

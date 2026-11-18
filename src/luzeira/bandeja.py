@@ -870,21 +870,29 @@ class TrayApp:
         texto para el usuario. ``manual``: lo ha pedido el usuario ahora mismo."""
         if not self._claim_update():
             return MSG_UPDATE_BUSY
+        checked_at = time.time()
         try:
             manifest = actualizar.check(max_seen=self.config.updates_max_seen)
-        except actualizar.UpdateError as exc:
-            log.warning("No se pudo comprobar si hay versión nueva: %s", exc)
-            return str(exc)
-        except Exception:
-            log.exception("Fallo al comprobar si hay versión nueva")
-            return MSG_UPDATE_FAILED
+        except Exception as exc:
+            if isinstance(exc, actualizar.UpdateError):
+                log.warning("No se pudo comprobar si hay versión nueva: %s", exc)
+                text = str(exc)
+            else:
+                log.exception("Fallo al comprobar si hay versión nueva")
+                text = MSG_UPDATE_FAILED
+            # También cuenta como la comprobación del día: sin internet, o si GitHub da
+            # error, no se reintenta cada hora (revisor, 2026-11-18).
+            self._post(self._safe(lambda: self._save_last_check(checked_at)))
+            return text
         finally:
             self._release_update()
-        checked_at = time.time()
         self._post(self._safe(lambda: self._update_checked(manifest, checked_at, manual)))
         if manifest is None:
             return MSG_UP_TO_DATE.format(version=__version__)
         return MSG_UPDATE_AVAILABLE.format(version=manifest.version)
+
+    def _save_last_check(self, checked_at: float) -> None:
+        self._save(self.config.model_copy(update={"updates_last_check": checked_at}))
 
     def _update_checked(
         self, manifest: actualizar.Manifest | None, checked_at: float, manual: bool
@@ -906,17 +914,19 @@ class TrayApp:
             raise actualizar.UpdateError(MSG_UPDATE_NONE)
         if not self._claim_update():
             raise actualizar.UpdateError(MSG_UPDATE_BUSY)
+        # El candado sigue puesto si va bien: hasta que se lanza el instalador (o falla al
+        # lanzarlo) no se puede pedir otra descarga ni otro «Actualizar».
         try:
             installer = actualizar.download(manifest)
         except actualizar.UpdateError:
+            self._release_update()
             raise
         except Exception:
+            self._release_update()
             log.exception("Fallo al descargar la versión nueva")
             raise actualizar.UpdateError(
                 "No he podido descargar la versión nueva. Los detalles están en el registro."
             ) from None
-        finally:
-            self._release_update()
 
         def launch() -> None:
             self._post(self._safe(lambda: self._launch_update(installer, manifest)))
@@ -932,10 +942,12 @@ class TrayApp:
             actualizar.launch(installer, manifest, default_log_dir() / "actualizacion.log")
         except actualizar.UpdateError as exc:
             log.warning("No se abre el instalador de la versión nueva: %s", exc)
+            self._release_update()
             self._notify(str(exc))
             return
         except OSError:
             log.exception("No se pudo abrir el instalador de la versión nueva")
+            self._release_update()
             self._notify("No he podido abrir el instalador de la versión nueva.")
             return
         log.info("Instalando la versión %s: Luzeira se cierra.", manifest.version)
