@@ -1,0 +1,45 @@
+# Comprobaciones de cada push a main y de cada pull request: los mismos «verdes» que en
+# local (.claude/CLAUDE.md). Solo lee el repo: sin secretos ni permisos de escritura.
+# Actions fijadas por SHA (skill seguridad-visoria; precedente: tj-actions, CVE-2025-30066).
+# Versiones y SHA resueltos con la API de GitHub el 2026-11-18.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verdes:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.10.9"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: editor/.nvmrc
+      - name: Python
+        run: |
+          uv run --frozen pytest
+          uv run --frozen ruff check
+          uv run --frozen ruff format --check
+      - name: Editor
+        working-directory: editor
+        run: |
+          npm ci
+          npx tsc -b
+          npm run lint
+          npm test
+          npm run build
