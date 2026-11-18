@@ -437,3 +437,20 @@ test('ajustes: la opción se busca en las dos listas', () => {
   assert.equal(findOption('avanzado:COM4:a', [closed, advanced]), advanced[0])
   assert.equal(findOption('nada', [closed, advanced]), null)
 })
+
+// --- C-17: letras que faltan -------------------------------------------------------------
+
+import { missingGlyphsMessage, parseMissingGlyphs } from '../src/model/contract.ts'
+
+test('letras que faltan: la cabecera se lee sin romper nunca', () => {
+  assert.deepEqual(parseMissingGlyphs('[{"index":1,"chars":"\u2603"}]'), [{ index: 1, chars: '☃' }])
+  assert.deepEqual(parseMissingGlyphs(null), [])
+  assert.deepEqual(parseMissingGlyphs('no es json'), [])
+  assert.deepEqual(parseMissingGlyphs('{"index":1}'), [])
+  assert.deepEqual(parseMissingGlyphs('[{"index":"1","chars":"x"},{"index":2,"chars":""}]'), [])
+})
+
+test('letras que faltan: el aviso nombra la letra y el elemento', () => {
+  const msg = missingGlyphsMessage([{ index: 0, chars: '★☃' }, { index: 5, chars: '€' }], ['Texto: "Hola"'])
+  assert.equal(msg, '«★» «☃» en «Texto: "Hola"»; «€» en «un elemento»')
+})

@@ -50,6 +50,7 @@ import tempfile
 import threading
 from collections import OrderedDict
 from collections.abc import Callable
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -57,11 +58,24 @@ from urllib.parse import unquote, urlsplit
 from PIL import Image
 
 from luzeira import __version__
-from luzeira.render.motor import Renderer, _box_of, _fit_contain, _fit_cover, _Layer
+from luzeira.render.motor import (
+    Renderer,
+    _box_of,
+    _fit_contain,
+    _fit_cover,
+    _Layer,
+    format_clock,
+)
 from luzeira.sensores.base import Reading, SensorInfo
-from luzeira.temas import ThemeError, load_theme, resolve_font
+from luzeira.temas import ThemeError, load_theme, missing_glyphs, resolve_font
 from luzeira.temas.cargar import MAX_ZIP_BYTES
-from luzeira.temas.modelo import ORIENTATION_SIZES, ImageWidget
+from luzeira.temas.modelo import (
+    ORIENTATION_SIZES,
+    ClockWidget,
+    ImageWidget,
+    SensorWidget,
+    TextWidget,
+)
 
 from .ajustes import SettingsBackend, parse_answer, parse_display, parse_update
 from .almacen import EditorError, ThemeStore, friendly_theme_error, parse_json, parse_theme
@@ -73,6 +87,9 @@ MAX_UPLOAD_BODY = 10 * 1024 * 1024
 MAX_DRAIN = 32 * 1024 * 1024  # cuerpo demasiado grande que aún se lee para poder responder 413
 TOKEN_HEADER = "X-Luzeira-Token"  # noqa: S105 (nombre de cabecera, no un secreto)
 FILENAME_HEADER = "X-Luzeira-Filename"
+# Vista previa: letras que la fuente de algún texto no tiene (RQ-16, C-17). JSON en ASCII
+# (``\uXXXX``): una cabecera HTTP no admite otra cosa.
+MISSING_GLYPHS_HEADER = "X-Luzeira-Missing-Glyphs"
 WEB_ROOT = Path(__file__).parent / "web"
 
 DENIED = {"error": "Acceso denegado."}
@@ -225,6 +242,33 @@ class _PreviewRenderer(Renderer):
         return layer
 
 
+def find_missing_glyphs(theme, files, moment: datetime | None = None) -> list[dict]:
+    """Elementos con texto cuya fuente no tiene alguna letra: ``[{index, chars}]``.
+
+    Se miran los textos fijos (texto, prefijo y sufijo de un sensor, el reloj tal y como
+    sale ahora). Los valores de los sensores son números y unidades: los tiene cualquier
+    fuente que tenga el resto. Los espacios no cuentan (no tienen dibujo que comparar).
+    """
+    moment = moment or datetime.now()
+    found = []
+    for index, widget in enumerate(theme.widgets):
+        if isinstance(widget, TextWidget):
+            text = widget.text
+        elif isinstance(widget, SensorWidget):
+            text = widget.prefix + widget.suffix
+        elif isinstance(widget, ClockWidget):
+            text = format_clock(widget.format, moment)
+        else:
+            continue
+        text = "".join(ch for ch in text if not ch.isspace())
+        if not text:
+            continue
+        missing = missing_glyphs(resolve_font(widget.style, files), text)
+        if missing:
+            found.append({"index": index, "chars": "".join(dict.fromkeys(missing))})
+    return found
+
+
 def _sensor_row(info: SensorInfo, reading: Reading) -> dict:
     return {
         "id": info.id,
@@ -371,7 +415,7 @@ class EditorServer:
     def sensor_rows(self) -> list[dict]:
         return [_sensor_row(info, self._read_sensor(info.id)) for info in self._sensors()]
 
-    def preview(self, body: object) -> bytes:
+    def preview(self, body: object) -> tuple[bytes, list[dict]]:
         """PNG del tema ``body["theme"]`` (sin guardar) con los ficheros de ``body["name"]``.
 
         Lanza ``PreviewSuperseded`` (409) si entra otra vista previa antes de terminar.
@@ -405,10 +449,11 @@ class EditorServer:
                 raise PreviewSuperseded from None
             except ThemeError as exc:  # un fichero cambió en disco entre medias
                 raise EditorError(400, friendly_theme_error(exc)) from None
+            missing = find_missing_glyphs(theme, files)
         buf = io.BytesIO()
         # compress_level=1: el PNG viaja por localhost; comprimir más solo gasta CPU.
         image.save(buf, "PNG", compress_level=1)
-        return buf.getvalue()
+        return buf.getvalue(), missing
 
     def settings(self) -> SettingsBackend:
         """Los ajustes de la app; sin ellos (tests, ``--desarrollo`` suelto), 404."""
@@ -523,6 +568,7 @@ class _Handler(BaseHTTPRequestHandler):
         editor = self.server.editor
         if editor.dev_origin is not None and origin == editor.dev_origin:
             self.send_header("Access-Control-Allow-Origin", editor.dev_origin)
+            self.send_header("Access-Control-Expose-Headers", MISSING_GLYPHS_HEADER)
             self.send_header("Vary", "Origin")
         for key, value in (extra or {}).items():
             self.send_header(key, value)
@@ -642,8 +688,9 @@ class _Handler(BaseHTTPRequestHandler):
             case ("GET", "temas"):
                 return self._json(200, store.list())
             case ("POST", "vista-previa"):
-                png = editor.preview(self._json_body())
-                return self._send(200, png, "image/png")
+                png, missing = editor.preview(self._json_body())
+                header = json.dumps(missing, ensure_ascii=True, separators=(",", ":"))
+                return self._send(200, png, "image/png", {MISSING_GLYPHS_HEADER: header})
             case ("GET", "temas", name):
                 return self._json(200, store.get(name))
             case ("PUT", "temas", name):

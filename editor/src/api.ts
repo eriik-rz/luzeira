@@ -10,7 +10,14 @@
 // Modo simulado (`?simulado` en la dirección o VITE_SIMULADO=1): datos falsos en memoria
 // para desarrollar y hacer capturas sin el servidor (src/sim/).
 
-import { encodeFilenameHeader, FILENAME_HEADER, isSupersededPreview, messageForStatus } from './model/contract.ts'
+import {
+  encodeFilenameHeader,
+  FILENAME_HEADER,
+  isSupersededPreview,
+  messageForStatus,
+  MISSING_GLYPHS_HEADER,
+  parseMissingGlyphs,
+} from './model/contract.ts'
 import type { Theme, ThemeJson } from './model/types.ts'
 
 // --- Tipos de las respuestas ---------------------------------------------------------
@@ -76,6 +83,18 @@ export interface AppSettings {
 
 export type SettingsChange = Partial<Pick<AppSettings, 'brightness' | 'flip' | 'autostart'>>
 
+/** Un elemento con letras que su fuente no tiene (se verían como cuadros). */
+export interface MissingGlyphs {
+  index: number
+  chars: string
+}
+
+/** Vista previa: la imagen y las letras que faltan en las fuentes. */
+export interface Preview {
+  image: Blob
+  missingGlyphs: MissingGlyphs[]
+}
+
 export interface ErrorDetail {
   path: string
   message: string
@@ -116,7 +135,7 @@ export interface EditorApi {
    * PNG del tamaño real de la pantalla con el tema aún sin guardar. `null` si el
    * servidor la descarta porque ya llegó una petición más nueva (no es un error).
    */
-  preview(name: string, theme: Theme, signal?: AbortSignal): Promise<Blob | null>
+  preview(name: string, theme: Theme, signal?: AbortSignal): Promise<Preview | null>
   sensors(): Promise<SensorInfo[]>
   apply(name: string): Promise<void>
   /** Sube una imagen o fuente; devuelve la ruta dentro del tema («img/logo.png»). */
@@ -264,7 +283,7 @@ class HttpApi implements EditorApi {
         signal,
       )
       if (isSupersededPreview(res.status)) return null
-      return await res.blob()
+      return { image: await res.blob(), missingGlyphs: parseMissingGlyphs(res.headers.get(MISSING_GLYPHS_HEADER)) }
     } catch (e) {
       if (e instanceof ApiError && e.superseded) return null
       throw e

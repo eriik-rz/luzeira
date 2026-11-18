@@ -1461,3 +1461,34 @@ def test_question_is_in_info_and_is_answered(with_settings):
 def test_info_without_tray_has_no_question(env):
     _, client, *_ = env
     assert client.json("GET", "/api/info")[1]["question"] is None
+
+
+# --- C-17: letras que faltan en la fuente ------------------------------------------------
+
+
+def _box():
+    return {"x": 0, "y": 0, "width": 200, "height": 40}
+
+
+def test_preview_reports_letters_the_font_does_not_have(env):
+    _, client, *_ = env
+    widgets = [
+        {"type": "text", "text": "Hola ñ €", "box": _box()},  # la fuente incluida las tiene
+        {"type": "text", "text": "CPU \U0001f525 ☃", "box": _box()},  # emoji y muñeco
+        {"type": "sensor", "sensor": "cpu.usage", "suffix": "☃", "box": _box()},
+        {"type": "clock", "format": "date-long", "box": _box()},
+    ]
+    status, headers, _ = _preview(client, "mio", theme_dict(widgets=widgets))
+    assert status == 200
+    header = headers["x-luzeira-missing-glyphs"]
+    assert header.isascii()
+    assert json.loads(header) == [
+        {"index": 1, "chars": "\U0001f525☃"},
+        {"index": 2, "chars": "☃"},
+    ]
+
+
+def test_preview_without_missing_letters_sends_an_empty_list(env):
+    _, client, *_ = env
+    _, headers, _ = _preview(client, "mio", theme_dict())
+    assert json.loads(headers["x-luzeira-missing-glyphs"]) == []

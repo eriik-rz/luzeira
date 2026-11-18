@@ -3,9 +3,9 @@
 // anterior), lectura de sensores y atajos de teclado.
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { ApiError, errorMessage, type EditorApi, type Info, type SensorInfo, type ThemeSummary } from './api.ts'
+import { ApiError, errorMessage, type EditorApi, type Info, type MissingGlyphs, type SensorInfo, type ThemeSummary } from './api.ts'
 import { initialState, reducer, selectedWidget, indexOfId } from './model/editorState.ts'
-import { APPLY_BLOCK_TEXT, applyBlock, appliedMessage, deletedMessage, DEFAULT_THEME, type ApplyBlock, flushOutcome, isDroppableImage, type FlushResult, type SaveOutcome } from './model/contract.ts'
+import { APPLY_BLOCK_TEXT, applyBlock, appliedMessage, deletedMessage, DEFAULT_THEME, type ApplyBlock, flushOutcome, isDroppableImage, missingGlyphsMessage, type FlushResult, type SaveOutcome } from './model/contract.ts'
 import { formatClock } from './model/format.ts'
 import { baseName, createWidget, normalizeTheme, CLOCK_FORMAT_INFO } from './model/theme.ts'
 import { LIMITS, MAX_WIDGETS, type Theme, type Widget, type WidgetType } from './model/types.ts'
@@ -90,6 +90,7 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
   const [previewIssues, setPreviewIssues] = useState<Issue[]>([])
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [previewError, setPreviewError] = useState<string | null>(null)
+  const [missingGlyphs, setMissingGlyphs] = useState<MissingGlyphs[]>([])
   const [sensors, setSensors] = useState<SensorInfo[]>([])
   const [zoom, setZoom] = useState<ZoomMode>('fit')
   const [snap, setSnap] = useState(true)
@@ -273,10 +274,11 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
       const controller = new AbortController()
       previewAbort.current = controller
       try {
-        const blob = await api.preview(name, theme, controller.signal)
+        const preview = await api.preview(name, theme, controller.signal)
         // null = el servidor la dio por superada (ya pinta otra más nueva): nada que hacer.
-        if (controller.signal.aborted || blob === null) return
-        const url = URL.createObjectURL(blob)
+        if (controller.signal.aborted || preview === null) return
+        setMissingGlyphs(preview.missingGlyphs)
+        const url = URL.createObjectURL(preview.image)
         if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current)
         previewUrlRef.current = url
         setPreviewUrl(url)
@@ -642,6 +644,14 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
             <button type="button" className="btn primary small" onClick={() => setDialog({ kind: 'saveAs' })}>
               Guardar como…
             </button>
+          </div>
+        )}
+        {missingGlyphs.length > 0 && (
+          <div className="banner" role="note">
+            <IconWarn />
+            <p>
+              <strong>Faltan letras en la fuente:</strong> {missingGlyphsMessage(missingGlyphs, labels)}. En la pantalla se verán como cuadros: cambia el texto o elige otra fuente.
+            </p>
           </div>
         )}
         {previewError && clientIssues.length === 0 && (

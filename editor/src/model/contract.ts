@@ -20,6 +20,31 @@ export function encodeFilenameHeader(name: string): string {
  * - 409 es «no se puede cambiar» (tema incluido de solo lectura, tema en pantalla…):
  *   manda el mensaje del servidor.
  */
+/** Cabecera de la vista previa con las letras que faltan (ver servidor.py). */
+export const MISSING_GLYPHS_HEADER = 'X-Luzeira-Missing-Glyphs'
+
+/** Lee esa cabecera; si falta o no es válida, ninguna (nunca rompe la vista previa). */
+export function parseMissingGlyphs(header: string | null): { index: number; chars: string }[] {
+  if (!header) return []
+  try {
+    const data: unknown = JSON.parse(header)
+    if (!Array.isArray(data)) return []
+    return data.filter(
+      (x): x is { index: number; chars: string } =>
+        typeof x === 'object' && x !== null && Number.isInteger(x.index) && typeof x.chars === 'string' && x.chars.length > 0,
+    )
+  } catch {
+    return []
+  }
+}
+
+/** Texto del aviso: «★» en «Texto: Hola» y «€» en «Sensor: …». */
+export function missingGlyphsMessage(items: { index: number; chars: string }[], labels: string[]): string {
+  return items
+    .map((m) => `${[...m.chars].map((c) => `«${c}»`).join(' ')} en «${labels[m.index] ?? 'un elemento'}»`)
+    .join('; ')
+}
+
 export function messageForStatus(status: number, serverMessage?: string | null): string {
   if (status === 403) return 'Luzeira ha rechazado la petición. Cierra el editor y vuelve a abrirlo.'
   if (serverMessage) return serverMessage

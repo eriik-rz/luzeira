@@ -2,7 +2,7 @@
 // contrato (incluidos los 400 con `details`) para que el editor se comporte igual.
 // La vista previa se dibuja aproximada en un <canvas>: NO es la de Python.
 
-import { ApiError, type AppSettings, type EditorApi, type Info, type SettingsChange, type SensorInfo, type ThemeDocument, type ThemeSummary } from '../api.ts'
+import { ApiError, type AppSettings, type EditorApi, type Info, type MissingGlyphs, type Preview, type SettingsChange, type SensorInfo, type ThemeDocument, type ThemeSummary } from '../api.ts'
 import { formatClock, formatReading } from '../model/format.ts'
 import { normalizeTheme } from '../model/theme.ts'
 import { screenSize, type Theme, type ThemeJson } from '../model/types.ts'
@@ -230,12 +230,13 @@ export class SimulatedApi implements EditorApi {
     return blob
   }
 
-  async preview(name: string, theme: Theme, signal?: AbortSignal): Promise<Blob> {
+  async preview(name: string, theme: Theme, signal?: AbortSignal): Promise<Preview> {
     await wait(120)
     if (signal?.aborted) throw new DOMException('Cancelada', 'AbortError')
     const issues = validateTheme(theme)
     if (issues.length) throw new ApiError('El tema tiene errores; revisa los campos marcados.', 400, issues)
-    return renderSimulated(normalizeTheme(theme), this.get(name).files, this.readings)
+    const image = await renderSimulated(normalizeTheme(theme), this.get(name).files, this.readings)
+    return { image, missingGlyphs: simMissingGlyphs(theme) }
   }
 
   /** Solo para depurar en la consola. */
@@ -254,6 +255,20 @@ async function bitmap(files: Map<string, Blob>, path: string | null): Promise<Im
   } catch {
     return null
   }
+}
+
+/**
+ * Imitación de las letras que faltan: aquí no hay fuentes de verdad, así que se da por
+ * hecho que la fuente tiene el latín (con tildes, ñ y €) y nada más (★, emojis…).
+ */
+function simMissingGlyphs(theme: Theme): MissingGlyphs[] {
+  const out: MissingGlyphs[] = []
+  theme.widgets.forEach((w, index) => {
+    const text = w.type === 'text' ? w.text : w.type === 'sensor' ? `${w.prefix ?? ''}${w.suffix ?? ''}` : ''
+    const missing = [...new Set([...text].filter((c) => !/[\s\u0020-\u024F€]/u.test(c)))]
+    if (missing.length) out.push({ index, chars: missing.join('') })
+  })
+  return out
 }
 
 async function renderSimulated(theme: Theme, files: Map<string, Blob>, readings: SensorInfo[]): Promise<Blob> {
