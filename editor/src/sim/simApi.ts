@@ -258,14 +258,18 @@ async function bitmap(files: Map<string, Blob>, path: string | null): Promise<Im
 }
 
 /**
- * Imitación de las letras que faltan: aquí no hay fuentes de verdad, así que se da por
- * hecho que la fuente tiene el latín (con tildes, ñ y €) y nada más (★, emojis…).
+ * Imitación de las letras que faltan: aquí no hay fuentes de verdad. Se imita a Inter
+ * (la fuente incluida), medida con `missing_glyphs`: tiene el latín, flechas, ★ y ✓,
+ * pero no los símbolos varios (☃, ⚡) ni los emojis.
  */
+const SIM_FONT_EXTRAS = new Set(['★', '✓'])
+const simFontHas = (c: string) => (c.codePointAt(0) ?? 0) < 0x2600 || SIM_FONT_EXTRAS.has(c)
+
 function simMissingGlyphs(theme: Theme): MissingGlyphs[] {
   const out: MissingGlyphs[] = []
   theme.widgets.forEach((w, index) => {
     const text = w.type === 'text' ? w.text : w.type === 'sensor' ? `${w.prefix ?? ''}${w.suffix ?? ''}` : ''
-    const missing = [...new Set([...text].filter((c) => !/[\s\u0020-\u024F€]/u.test(c)))]
+    const missing = [...new Set([...text].filter((c) => !/\s/u.test(c) && !simFontHas(c)))]
     if (missing.length) out.push({ index, chars: missing.join('') })
   })
   return out
