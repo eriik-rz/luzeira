@@ -1,11 +1,11 @@
-"""Los temas que vienen con Visoria tienen que cargar y pintarse siempre (RQ-11)."""
+"""Los temas que vienen con Luzeira tienen que cargar y pintarse siempre (RQ-11)."""
 
 import pytest
 
-from visoria.config import BUILTIN_THEMES
-from visoria.render import Renderer
-from visoria.sensores.base import Reading
-from visoria.temas import load_theme, resolve_font
+from luzeira.config import BUILTIN_THEMES
+from luzeira.render import Renderer
+from luzeira.sensores.base import Reading
+from luzeira.temas import load_theme, resolve_font
 
 BUILTIN = sorted(p.name for p in BUILTIN_THEMES.iterdir() if (p / "theme.json").is_file())
 
@@ -76,7 +76,7 @@ def test_builtin_theme_loads_and_renders(name):
 @pytest.mark.parametrize("name", BUILTIN)
 def test_builtin_theme_only_uses_known_sensors(name):
     # Un id con errata se vería «—» para siempre sin que nadie se entere.
-    from visoria.sensores import default_hub
+    from luzeira.sensores import default_hub
 
     hub = default_hub()
     try:
@@ -122,7 +122,7 @@ _LONG_NAMES = {
 
 
 def _sensor_units() -> dict[str, str]:
-    from visoria.sensores import default_hub
+    from luzeira.sensores import default_hub
 
     hub = default_hub()
     try:
@@ -134,7 +134,7 @@ def _sensor_units() -> dict[str, str]:
 def _worst_texts(widget, units: dict[str, str], font) -> list[str]:
     from itertools import product
 
-    from visoria.render.motor import _MONTHS, _WEEKDAYS, NO_VALUE, format_reading
+    from luzeira.render.motor import _MONTHS, _WEEKDAYS, NO_VALUE, format_reading
 
     if widget.type == "text":
         return [widget.text]

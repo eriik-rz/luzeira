@@ -12,19 +12,19 @@ Solo la última versión publicada recibe arreglos de seguridad.
 
 ## Cómo verificar que tu descarga es oficial
 
-La única fuente oficial de Visoria son las **Releases de este repositorio** (y, cuando existan, los canales que se anuncien aquí). Cada versión publica la suma `SHA256SUMS` y una atestación de procedencia de GitHub:
+La única fuente oficial de Luzeira son las **Releases de este repositorio** (y, cuando existan, los canales que se anuncien aquí). Cada versión publica la suma `SHA256SUMS` y una atestación de procedencia de GitHub:
 
 ```bash
-gh attestation verify <fichero-descargado> --repo eriik-rz/visoria
+gh attestation verify <fichero-descargado> --repo eriik-rz/luzeira
 ```
 
 Sin `gh`, basta con comparar la huella del fichero con la que pone `SHA256SUMS` en la misma release. En PowerShell:
 
 ```powershell
-Get-FileHash .\Visoria-<versión>-instalador.exe -Algorithm SHA256
+Get-FileHash .\Luzeira-<versión>-instalador.exe -Algorithm SHA256
 ```
 
-Si alguien distribuye Visoria desde otro sitio, no podemos garantizar que no esté modificada.
+Si alguien distribuye Luzeira desde otro sitio, no podemos garantizar que no esté modificada.
 
 ## Principios de diseño
 

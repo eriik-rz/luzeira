@@ -19,9 +19,9 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from visoria.temas import LoadedTheme, ThemeError, cargar, load_theme
-from visoria.temas.cargar import open_validated_image
-from visoria.temas.rutas import is_reserved_windows_name
+from luzeira.temas import LoadedTheme, ThemeError, cargar, load_theme
+from luzeira.temas.cargar import open_validated_image
+from luzeira.temas.rutas import is_reserved_windows_name
 
 FIXTURES = Path(__file__).parent / "fixtures" / "temas"
 SEGOE = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / "segoeui.ttf"
@@ -31,7 +31,7 @@ SEGOE = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / "segoeui.ttf"
 
 
 def base_theme(**extra: object) -> dict:
-    theme: dict = {"format": "visoria-theme/1", "name": "Prueba", "orientation": "portrait"}
+    theme: dict = {"format": "luzeira-theme/1", "name": "Prueba", "orientation": "portrait"}
     theme.update(extra)
     return theme
 
@@ -193,9 +193,9 @@ MALICIOUS_JSON: list[tuple[str, dict | str, Setup, str]] = [
     # El JSON enorme es una forma barata de agotar memoria: se corta a 256 KB.
     ("json-gigante", json.dumps(base_theme()) + " " * 300_000, nothing, "demasiado grande"),
     # Un JSON mal escrito tiene que dar un error legible, no una traza.
-    ("json-roto", '{"format": "visoria-theme/1", ', nothing, "JSON está mal escrito"),
+    ("json-roto", '{"format": "luzeira-theme/1", ', nothing, "JSON está mal escrito"),
     # Otra versión del formato puede traer campos con otro significado.
-    ("version-futura", base_theme(format="visoria-theme/2"), nothing, "valor no permitido"),
+    ("version-futura", base_theme(format="luzeira-theme/2"), nothing, "valor no permitido"),
     # Un campo desconocido (p. ej. «script») nunca se ignora en silencio.
     ("campo-extra", base_theme(script="rm -rf /"), nothing, "campo desconocido"),
     # Un tipo de widget inventado no puede colarse.

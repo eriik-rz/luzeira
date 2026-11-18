@@ -1,12 +1,12 @@
 [project]
-name = "visoria"
+name = "luzeira"
 version = "0.1.0"
 description = "App libre para pantallas USB de monitorización del PC, en español y fácil de usar."
 readme = "README.md"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
 # Sin email ni datos personales: este fichero va al repo público.
-authors = [{ name = "Visoria contributors" }]
+authors = [{ name = "Luzeira contributors" }]
 requires-python = ">=3.12"
 dependencies = [
     "nvidia-ml-py>=13.615.71",
@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.scripts]
-visoria = "visoria.__main__:main"
+luzeira = "luzeira.__main__:main"
 
 [build-system]
 requires = ["uv_build>=0.10.9,<0.11.0"]

@@ -1,8 +1,8 @@
-"""Empaqueta Visoria para Windows: instalador (Inno Setup), zip portable y SHA256SUMS.
+"""Empaqueta Luzeira para Windows: instalador (Inno Setup), zip portable y SHA256SUMS.
 
 Decisión D-12 (fase 6): **Python 3.12 embebible oficial** (python.org, ejecutables firmados
 por la PSF) + un ``site-packages`` propio + **Inno Setup por usuario** (sin admin).
-La app arranca con ``python\\pythonw.exe -m visoria``: no hay ``.exe`` propio que firmar.
+La app arranca con ``python\\pythonw.exe -m luzeira``: no hay ``.exe`` propio que firmar.
 
 Uso (desde la raíz del repo, con el Python del proyecto; solo usa la biblioteca estándar)::
 
@@ -11,14 +11,14 @@ Uso (desde la raíz del repo, con el Python del proyecto; solo usa la biblioteca
 Pasos (cada uno se explica en su función):
 
 1. (opcional, ``--editor``) compila el editor web con ``npm ci`` + ``npm run build``.
-2. Descomprime el embebible en ``build/Visoria/python`` y ajusta ``python312._pth``.
+2. Descomprime el embebible en ``build/Luzeira/python`` y ajusta ``python312._pth``.
 3. Instala en ``python/Lib/site-packages`` las dependencias **de ejecución** fijadas en
-   ``uv.lock`` (con sus hashes) y la wheel de Visoria construida con ``uv build``.
+   ``uv.lock`` (con sus hashes) y la wheel de Luzeira construida con ``uv build``.
 4. Quita lo que no hace falta (y lo que llevaría rutas de esta máquina).
 5. Precompila a ``.pyc`` reproducibles y fija las fechas de todos los ficheros.
 6. Copia ``LICENSE``, ``README.md`` y genera ``TERCEROS.txt`` con las licencias.
 7. Compila el instalador con ISCC (versión sacada de ``pyproject.toml``).
-8. Genera ``dist/Visoria-<versión>-portable.zip`` y ``dist/SHA256SUMS``, y dice tamaños.
+8. Genera ``dist/Luzeira-<versión>-portable.zip`` y ``dist/SHA256SUMS``, y dice tamaños.
 
 Red: solo la que use ``uv`` para bajar de PyPI las wheels ya fijadas en ``uv.lock``.
 """
@@ -41,9 +41,9 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-ISS = ROOT / "instalador" / "visoria.iss"
-ICON = ROOT / "src" / "visoria" / "recursos" / "visoria.ico"
-EDITOR_INDEX = ROOT / "src" / "visoria" / "editor" / "web" / "index.html"
+ISS = ROOT / "instalador" / "luzeira.iss"
+ICON = ROOT / "src" / "luzeira" / "recursos" / "luzeira.ico"
+EDITOR_INDEX = ROOT / "src" / "luzeira" / "editor" / "web" / "index.html"
 DEFAULT_ISCC = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Inno Setup 6" / "ISCC.exe"
 
 #: Versión del Python embebible que se espera (la de ``.python-version`` y el desarrollo).
@@ -66,7 +66,7 @@ INNO_SHA256 = {
     "Setup.e32": "0c94d43e2c0f4d8371a2e1813b5446f3bc85ece3211dc4a6676159b534bbc483",
     "SetupLdr.e32": "998c58046b0808e75a030859962e1fe1ea600e8a5cf4646b09aadce77342c1a9",
 }
-#: Plataforma de las wheels: Windows de 64 bits, la única que soporta Visoria v1.
+#: Plataforma de las wheels: Windows de 64 bits, la única que soporta Luzeira v1.
 PLATFORM = "x86_64-pc-windows-msvc"
 #: Paquetes que PyPI solo publica como código fuente (sdist) y se dejan construir.
 #: proxy-tools 0.1.0 (dependencia de pywebview, un solo .py) no tiene wheel. Su sdist va
@@ -79,7 +79,7 @@ DEFAULT_EPOCH = 1767225600
 
 # Lo que se quita del paquete, con su porqué (medido en la build de la fase 6).
 PRUNE_FILES = {
-    # Pillow: AVIF (~7,5 MB) y el puente con Tk. Visoria solo abre PNG/JPEG/GIF, y Pillow
+    # Pillow: AVIF (~7,5 MB) y el puente con Tk. Luzeira solo abre PNG/JPEG/GIF, y Pillow
     # importa cada plugin dentro de un try: sin estos .pyd sigue funcionando.
     "PIL/_avif.cp312-win_amd64.pyd",
     "PIL/_imagingtk.cp312-win_amd64.pyd",
@@ -109,9 +109,9 @@ PRUNE_DIR_NAMES = {"tests", "test", "__pycache__"}
 PRUNE_EMBED = ("sqlite3.dll", "_sqlite3.pyd")
 
 PORTABLE_LAUNCHER = """@echo off
-rem Visoria portable: abre la app (icono junto al reloj) sin ventana de consola.
-rem Los temas y la configuracion se guardan en %APPDATA%\\Visoria, como en la instalada.
-start "" "%~dp0python\\pythonw.exe" -m visoria %*
+rem Luzeira portable: abre la app (icono junto al reloj) sin ventana de consola.
+rem Los temas y la configuracion se guardan en %APPDATA%\\Luzeira, como en la instalada.
+start "" "%~dp0python\\pythonw.exe" -m luzeira %*
 """
 
 
@@ -186,13 +186,13 @@ def build_editor() -> None:
 #: app no puede cargar por accidente módulos de otro Python del equipo.
 #: - ``python312.zip``: la biblioteca estándar precompilada que trae el embebible.
 #: - ``.``: la carpeta de python.exe (los .pyd de la stdlib).
-#: - ``Lib\\site-packages``: nuestras dependencias y el paquete visoria.
+#: - ``Lib\\site-packages``: nuestras dependencias y el paquete luzeira.
 #: - **Sin** ``import site`` (en el original viene comentado y así se queda). Activarlo
 #:   solo serviría para procesar ficheros ``.pth`` y ninguna dependencia trae uno
 #:   (``check_no_pth`` lo vigila). Y tiene un coste medido en la build: con ``import site``
 #:   Python **añade el site-packages del usuario** (``%APPDATA%\\Python\\Python312\\
 #:   site-packages``, ``site.ENABLE_USER_SITE`` = True), así que cualquier ``pip install
-#:   --user`` o un ``.pth`` que deje otro programa ahí se ejecutaría al arrancar Visoria.
+#:   --user`` o un ``.pth`` que deje otro programa ahí se ejecutaría al arrancar Luzeira.
 PTH = "python312.zip\n.\nLib\\site-packages\n\n# Sin import site: ver scripts/empaquetar.py\n"
 
 
@@ -297,7 +297,7 @@ def install_packages(site: Path, tmp: Path, *, run=run) -> None:
     )
     wheels = tmp / "wheel"
     run([uv, "build", "--wheel", "--no-create-gitignore", "-o", str(wheels)], cwd=ROOT)
-    (wheel,) = wheels.glob("visoria-*.whl")
+    (wheel,) = wheels.glob("luzeira-*.whl")
     run([uv, "pip", "install", "--no-deps", str(wheel), *common], cwd=ROOT)
 
 
@@ -326,7 +326,7 @@ def prune(site: Path) -> list[str]:
             rm(path)
     for path in sorted(site.rglob("*"), reverse=True):
         if path.is_dir() and path.name in PRUNE_DIR_NAMES and path.exists():
-            # Solo dentro de paquetes de terceros; visoria no trae tests en la wheel.
+            # Solo dentro de paquetes de terceros; luzeira no trae tests en la wheel.
             rm(path)
         elif path.is_file() and path.suffix in {".h", ".c", ".pyx", ".pxd"}:
             rm(path)
@@ -335,7 +335,7 @@ def prune(site: Path) -> list[str]:
 
 def clean_records(site: Path) -> None:
     """Quita de cada ``RECORD`` las líneas de ficheros ya podados (si no, el RECORD de
-    visoria cambiaría en cada build por el hash de ``uv_cache.json``)."""
+    luzeira cambiaría en cada build por el hash de ``uv_cache.json``)."""
     for record in site.glob("*.dist-info/RECORD"):
         lines = record.read_text(encoding="utf-8").splitlines()
         kept = [x for x in lines if x and (site / x.split(",")[0]).exists()]
@@ -380,7 +380,7 @@ def compile_bytecode(py_dir: Path) -> None:
 #: con el motor de Edge (pythonnet + DLL de WebView2). Si la poda se lleva algo que hace
 #: falta, se ve aquí y no en el equipo del usuario.
 SMOKE_IMPORTS = (
-    "import visoria.bandeja, visoria.editor.conexion, visoria.editor.ventana; "
+    "import luzeira.bandeja, luzeira.editor.conexion, luzeira.editor.ventana; "
     "import webview.platforms.winforms, webview.platforms.edgechromium"
 )
 
@@ -422,16 +422,16 @@ def normalize_name(name: str) -> str:
 
 def third_party_notices(site: Path) -> str:
     out = [
-        "Visoria — avisos de terceros",
+        "Luzeira — avisos de terceros",
         "=" * 30,
         "",
-        "Visoria es software libre (GPL-3.0-or-later, ver LICENSE.txt). Este paquete incluye",
+        "Luzeira es software libre (GPL-3.0-or-later, ver LICENSE.txt). Este paquete incluye",
         "software de terceros, cada uno con su licencia:",
         "",
         "* Python 3.12 (Python Software Foundation License y las de sus componentes:",
         "  OpenSSL, libffi, expat, zlib, bzip2, xz...): python\\LICENSE.txt",
         "* Fuente Inter (SIL Open Font License 1.1):",
-        "  python\\Lib\\site-packages\\visoria\\recursos\\fuentes\\OFL.txt",
+        "  python\\Lib\\site-packages\\luzeira\\recursos\\fuentes\\OFL.txt",
         "* Microsoft Edge WebView2 SDK (Microsoft.Web.WebView2.*.dll, dentro de pywebview):",
         "  licencia de tipo BSD de Microsoft, texto más abajo.",
         "",
@@ -445,7 +445,7 @@ def third_party_notices(site: Path) -> str:
     for info in sorted(site.glob("*.dist-info"), key=lambda p: p.name.lower()):
         meta = parser.parsestr((info / "METADATA").read_text(encoding="utf-8", errors="replace"))
         name, version = meta.get("Name", info.name), meta.get("Version", "?")
-        if name.lower() == "visoria":
+        if name.lower() == "luzeira":
             continue
         lic = meta.get("License-Expression") or ""
         if not lic:
@@ -510,7 +510,7 @@ def build_installer(iscc: Path, src: Path, out: Path, version: str, defines: lis
     ]
     cmd += [f"/D{d}" for d in defines]
     run([*cmd, str(ISS)])
-    return out / f"Visoria-{version}-instalador.exe"
+    return out / f"Luzeira-{version}-instalador.exe"
 
 
 def build_portable(src: Path, dest: Path, epoch: int) -> None:
@@ -520,7 +520,7 @@ def build_portable(src: Path, dest: Path, epoch: int) -> None:
         for path in sorted(src.rglob("*"), key=lambda p: p.relative_to(src).as_posix()):
             if path.is_dir():
                 continue
-            info = zipfile.ZipInfo("Visoria/" + path.relative_to(src).as_posix(), stamp)
+            info = zipfile.ZipInfo("Luzeira/" + path.relative_to(src).as_posix(), stamp)
             info.compress_type = zipfile.ZIP_DEFLATED
             info.external_attr = 0o644 << 16
             zf.writestr(info, path.read_bytes(), compresslevel=9)
@@ -660,14 +660,14 @@ def main(argv: list[str] | None = None) -> int:
             "que sus fuentes. Usa --editor (o «npm run build» en editor/)."
         )
 
-    app_dir = args.build.resolve() / "Visoria"
+    app_dir = args.build.resolve() / "Luzeira"
     py_dir = app_dir / "python"
     site = py_dir / "Lib" / "site-packages"
     if app_dir.exists():
         shutil.rmtree(app_dir)
     site.mkdir(parents=True)
 
-    log(f"Visoria {version}: Python embebible → {py_dir}")
+    log(f"Luzeira {version}: Python embebible → {py_dir}")
     unpack_python(args.python_embebible, py_dir)
 
     with tempfile.TemporaryDirectory(dir=args.temporal, prefix="empaquetar-") as tmp:
@@ -682,7 +682,7 @@ def main(argv: list[str] | None = None) -> int:
     shutil.copyfile(ROOT / "LICENSE", app_dir / "LICENSE.txt")
     shutil.copyfile(ROOT / "README.md", app_dir / "README.md")
     (app_dir / "TERCEROS.txt").write_text(third_party_notices(site), encoding="utf-8")
-    (app_dir / "Visoria.cmd").write_text(PORTABLE_LAUNCHER, encoding="ascii", newline="\r\n")
+    (app_dir / "Luzeira.cmd").write_text(PORTABLE_LAUNCHER, encoding="ascii", newline="\r\n")
     check_no_personal_paths(app_dir)
     fix_mtimes(app_dir, epoch)
 
@@ -691,7 +691,7 @@ def main(argv: list[str] | None = None) -> int:
     artifacts: list[Path] = []
     if not args.sin_instalador:
         artifacts.append(build_installer(args.iscc, app_dir, out, version, args.define))
-    portable = out / f"Visoria-{version}-portable.zip"
+    portable = out / f"Luzeira-{version}-portable.zip"
     build_portable(app_dir, portable, epoch)
     artifacts.append(portable)
     # Formato de «sha256sum» (dos espacios, LF): se comprueba con «sha256sum -c» o a mano

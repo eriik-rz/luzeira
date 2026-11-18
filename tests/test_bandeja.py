@@ -3,10 +3,10 @@
 import pystray
 import pytest
 
-from visoria import bandeja
-from visoria.bandeja import WM_QUERYENDSESSION, allow_shutdown, clip, make_icon
-from visoria.config import DEFAULT_THEME, AppConfig
-from visoria.servicio import Status
+from luzeira import bandeja
+from luzeira.bandeja import WM_QUERYENDSESSION, allow_shutdown, clip, make_icon
+from luzeira.config import DEFAULT_THEME, AppConfig
+from luzeira.servicio import Status
 
 
 @pytest.fixture(autouse=True)
@@ -36,7 +36,7 @@ def app(monkeypatch):
     monkeypatch.setattr(bandeja.autoarranque, "is_enabled", lambda: False)
     tray = bandeja.TrayApp(AppConfig())
     notes = []
-    monkeypatch.setattr(tray, "_notify", lambda text, title="Visoria": notes.append(text))
+    monkeypatch.setattr(tray, "_notify", lambda text, title="Luzeira": notes.append(text))
     tray.notes = notes
     return tray
 
@@ -52,12 +52,12 @@ def walk(menu):
 def test_pystray_private_handlers_still_exist():
     # Si pystray cambia y desaparece ``_message_handlers``, su ventana oculta volvería a
     # bloquear el apagado de Windows. Este test avisa antes de que pase en casa de alguien.
-    icon = pystray.Icon("visoria-test", make_icon())
+    icon = pystray.Icon("luzeira-test", make_icon())
     assert isinstance(getattr(icon, "_message_handlers", None), dict)
 
 
 def test_allow_shutdown_answers_true_to_query_end_session():
-    icon = pystray.Icon("visoria-test", make_icon())
+    icon = pystray.Icon("luzeira-test", make_icon())
     allow_shutdown(icon)
     assert icon._message_handlers[WM_QUERYENDSESSION](0, 0) == 1
 
@@ -235,7 +235,7 @@ def test_rejected_editor_theme_stops_counting_as_active(app, monkeypatch):
 
 
 def test_missing_webview2_is_explained_to_the_user(app):
-    from visoria.editor.ventana import EXIT_NO_WEBVIEW2
+    from luzeira.editor.ventana import EXIT_NO_WEBVIEW2
 
     app._on_editor_exit(0)
     app._on_editor_exit(EXIT_NO_WEBVIEW2)

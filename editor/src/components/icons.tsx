@@ -40,10 +40,11 @@ export const IconCenterV = () => <Svg><path d="M3 12h18M8 7h8v10H8z" /></Svg>
 
 export function BrandMark() {
   return (
+    // El lucero de Luzeira: el mismo dibujo que src/luzeira/marca.py (icono y bandeja).
     <svg className="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="2" y="4" width="20" height="14" rx="3" fill="#ff8c00" />
-      <path d="M6 13.5 9 9l3 3 2.5-4L18 13.5" fill="none" stroke="#1a1000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M9 21h6" stroke="#ff8c00" strokeWidth="2" strokeLinecap="round" />
+      <rect x="0.75" y="0.75" width="22.5" height="22.5" rx="5" fill="#12182c" />
+      <path d="M12 3.4C12.6 9.2 14.8 11.4 20.6 12C14.8 12.6 12.6 14.8 12 20.6C11.4 14.8 9.2 12.6 3.4 12C9.2 11.4 11.4 9.2 12 3.4Z" fill="#ffb02e" />
+      <path d="M18 4.2C18.15 5.4 18.6 5.85 19.8 6C18.6 6.15 18.15 6.6 18 7.8C17.85 6.6 17.4 6.15 16.2 6C17.4 5.85 17.85 5.4 18 4.2Z" fill="#ffb02e" opacity="0.9" />
     </svg>
   )
 }

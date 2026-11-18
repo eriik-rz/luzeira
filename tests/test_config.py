@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from visoria.config import (
+from luzeira.config import (
     BUILTIN_THEMES,
     DEFAULT_THEME,
     AppConfig,
@@ -15,7 +15,7 @@ from visoria.config import (
     theme_path,
 )
 
-MINIMAL = {"format": "visoria-theme/1", "name": "x", "orientation": "landscape"}
+MINIMAL = {"format": "luzeira-theme/1", "name": "x", "orientation": "landscape"}
 
 
 def make_theme(base, name):
@@ -102,3 +102,30 @@ def test_clean_import_leftovers(tmp_path):
     make_theme(tmp_path, "mio")
     assert clean_import_leftovers(tmp_path) == 1
     assert [p.name for p in tmp_path.iterdir()] == ["mio"]
+
+
+def test_old_name_data_is_copied_once_and_themes_upgraded(tmp_path):
+    from luzeira.config import migrate_old_name
+
+    old, new = tmp_path / "Visoria", tmp_path / "Luzeira"
+    (old / "temas" / "mio").mkdir(parents=True)
+    (old / "config.json").write_text('{"theme": "mio"}', encoding="utf-8")
+    (old / "temas" / "mio" / "theme.json").write_text(
+        '{"format": "visoria-theme/1", "name": "Mío"}', encoding="utf-8"
+    )
+    assert migrate_old_name(new, old) is True
+    assert json.loads((new / "config.json").read_text(encoding="utf-8")) == {"theme": "mio"}
+    theme = json.loads((new / "temas" / "mio" / "theme.json").read_text(encoding="utf-8"))
+    assert theme["format"] == "luzeira-theme/1" and theme["name"] == "Mío"
+    # La vieja se queda intacta, y la segunda vez no se toca nada.
+    assert '"visoria-theme/1"' in (old / "temas" / "mio" / "theme.json").read_text(encoding="utf-8")
+    (new / "config.json").write_text('{"theme": "otro"}', encoding="utf-8")
+    assert migrate_old_name(new, old) is False
+    assert "otro" in (new / "config.json").read_text(encoding="utf-8")
+
+
+def test_no_old_data_no_migration(tmp_path):
+    from luzeira.config import migrate_old_name
+
+    assert migrate_old_name(tmp_path / "Luzeira", tmp_path / "Visoria") is False
+    assert not (tmp_path / "Luzeira").exists()

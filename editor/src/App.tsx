@@ -1,4 +1,4 @@
-// Arranque: conecta con Visoria (o con la API simulada), pide la lista de temas y abre
+// Arranque: conecta con Luzeira (o con la API simulada), pide la lista de temas y abre
 // el editor con el tema que está en la pantalla (o, si no se sabe, el primero de «Mis
 // temas», o el primero incluido si no hay ninguno).
 
@@ -38,7 +38,7 @@ export default function App() {
       <div className="fullscreen-msg">
         <div className="card">
           <div className="spinner" />
-          <p style={{ marginTop: 12 }}>Conectando con Visoria…</p>
+          <p style={{ marginTop: 12 }}>Conectando con Luzeira…</p>
         </div>
       </div>
     )
@@ -70,7 +70,7 @@ export default function App() {
       <div className="fullscreen-msg">
         <div className="card">
           <h1>No hay temas</h1>
-          <p>Visoria no ha encontrado ningún tema. Reinstalar Visoria debería arreglarlo.</p>
+          <p>Luzeira no ha encontrado ningún tema. Reinstalar Luzeira debería arreglarlo.</p>
         </div>
       </div>
     )

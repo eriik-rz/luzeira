@@ -4,11 +4,11 @@ import subprocess
 
 import pytest
 
-from visoria.sistema import accesos
+from luzeira.sistema import accesos
 
 
 class FakeRun:
-    def __init__(self, returncode=0, stdout="C:\\Users\\x\\Desktop\\Visoria.lnk\n"):
+    def __init__(self, returncode=0, stdout="C:\\Users\\x\\Desktop\\Luzeira.lnk\n"):
         self.calls = []
         self.returncode, self.stdout = returncode, stdout
 
@@ -24,15 +24,15 @@ def test_paths_go_through_environment_not_the_script():
     script = args[-1]
     env = kwargs["env"]
     # Nada del usuario dentro del texto del script: todo por variables de entorno.
-    assert env["VISORIA_TARGET"] not in script
-    assert env["VISORIA_ICON"].endswith("visoria.ico") and env["VISORIA_ICON"] not in script
-    assert env["VISORIA_FOLDER"] == "Desktop" and env["VISORIA_NAME"] == "Visoria.lnk"
-    assert path.name == "Visoria.lnk"
+    assert env["LUZEIRA_TARGET"] not in script
+    assert env["LUZEIRA_ICON"].endswith("luzeira.ico") and env["LUZEIRA_ICON"] not in script
+    assert env["LUZEIRA_FOLDER"] == "Desktop" and env["LUZEIRA_NAME"] == "Luzeira.lnk"
+    assert path.name == "Luzeira.lnk"
 
 
 def test_launch_command_is_windowless_module():
     cmd = accesos.launch_command()
-    assert cmd.arguments == "-m visoria"
+    assert cmd.arguments == "-m luzeira"
     assert cmd.target.lower().endswith(("pythonw.exe", "python.exe"))
 
 
@@ -59,12 +59,12 @@ def test_shortcut_gets_the_app_id():
 
 def test_relaunch_command_quotes_the_executable():
     cmd = accesos.launch_command()
-    assert accesos.relaunch_command() == f'"{cmd.target}" -m visoria'
+    assert accesos.relaunch_command() == f'"{cmd.target}" -m luzeira'
 
 
 def test_command_line_passes_open_editor_to_the_tray(monkeypatch):
-    from visoria import __main__ as cli
-    from visoria import bandeja
+    from luzeira import __main__ as cli
+    from luzeira import bandeja
 
     calls = []
     monkeypatch.setattr(bandeja, "main", lambda open_editor=False: calls.append(open_editor) or 0)

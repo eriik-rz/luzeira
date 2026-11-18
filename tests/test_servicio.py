@@ -9,12 +9,12 @@ from pathlib import Path
 
 import pytest
 
-import visoria
-from visoria.pantallas import ConfirmationNeeded, DisplayBusy, DisplayError, Orientation
-from visoria.sensores.base import Reading
-from visoria.servicio import DisplayService, Settings, Status, Timings
+import luzeira
+from luzeira.pantallas import ConfirmationNeeded, DisplayBusy, DisplayError, Orientation
+from luzeira.sensores.base import Reading
+from luzeira.servicio import DisplayService, Settings, Status, Timings
 
-THEME = Path(visoria.__file__).parent / "recursos" / "temas" / "esencial"
+THEME = Path(luzeira.__file__).parent / "recursos" / "temas" / "esencial"
 FULL_SIZE = (480, 320)  # el tema Esencial es horizontal
 FAST = Timings(tick=0.02, warmup=0.02, backoff_start=0.02, backoff_max=0.05)
 
@@ -307,7 +307,7 @@ def test_resume_before_suspend_was_handled_still_reconnects_from_scratch(caplog)
         h.wait_for(lambda: opener.displays)
         first = opener.displays[0]
         assert first.sending.wait(1)
-        with caplog.at_level("WARNING", logger="visoria.servicio"):
+        with caplog.at_level("WARNING", logger="luzeira.servicio"):
             assert h.service.suspend(timeout=0.05) is False
         assert "no se apagó a tiempo" in caplog.text
         h.service.resume()

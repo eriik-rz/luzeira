@@ -9,8 +9,8 @@ import threading
 
 import pytest
 
-from visoria.sistema import registro
-from visoria.sistema.registro import PrivacyFilter, setup_logging
+from luzeira.sistema import registro
+from luzeira.sistema.registro import PrivacyFilter, setup_logging
 
 USER = "Juanito"
 HOST = "PC-SALON"
@@ -38,7 +38,7 @@ def clean_root():
 
 
 def _record(msg: str, *args: object, exc_info=None) -> logging.LogRecord:
-    return logging.LogRecord("visoria.test", logging.INFO, __file__, 1, msg, args, exc_info)
+    return logging.LogRecord("luzeira.test", logging.INFO, __file__, 1, msg, args, exc_info)
 
 
 @pytest.mark.parametrize(
@@ -85,10 +85,10 @@ def test_default_filter_hides_real_username():
 
 def test_setup_logging_writes_scrubbed_lines(tmp_path, pf, clean_root):
     handler = setup_logging(tmp_path / "logs", privacy_filter=pf, capture_uncaught=False)
-    logging.getLogger("visoria.algo").info("perfil %s", PROFILE + r"\x")
+    logging.getLogger("luzeira.algo").info("perfil %s", PROFILE + r"\x")
     handler.flush()
-    text = (tmp_path / "logs" / "visoria.log").read_text(encoding="utf-8")
-    assert "INFO visoria.algo: perfil <usuario>\\x" in text
+    text = (tmp_path / "logs" / "luzeira.log").read_text(encoding="utf-8")
+    assert "INFO luzeira.algo: perfil <usuario>\\x" in text
     assert "Juanito" not in text
     assert text[:4].isdigit()  # empieza por la fecha
 
@@ -96,9 +96,9 @@ def test_setup_logging_writes_scrubbed_lines(tmp_path, pf, clean_root):
 def test_setup_logging_twice_does_not_duplicate(tmp_path, pf, clean_root):
     setup_logging(tmp_path, privacy_filter=pf, capture_uncaught=False)
     handler = setup_logging(tmp_path, privacy_filter=pf, capture_uncaught=False)
-    logging.getLogger("visoria.x").warning("una vez")
+    logging.getLogger("luzeira.x").warning("una vez")
     handler.flush()
-    assert (tmp_path / "visoria.log").read_text(encoding="utf-8").count("una vez") == 1
+    assert (tmp_path / "luzeira.log").read_text(encoding="utf-8").count("una vez") == 1
 
 
 def test_rotation(tmp_path, pf, clean_root):
@@ -106,10 +106,10 @@ def test_rotation(tmp_path, pf, clean_root):
     assert handler.maxBytes == 1024 * 1024 and handler.backupCount == 3
     line = "x" * 1000
     for _ in range(5 * 1100):
-        logging.getLogger("visoria.x").info(line)
+        logging.getLogger("luzeira.x").info(line)
     handler.flush()
     files = sorted(p.name for p in tmp_path.iterdir())
-    assert files == ["visoria.log", "visoria.log.1", "visoria.log.2", "visoria.log.3"]
+    assert files == ["luzeira.log", "luzeira.log.1", "luzeira.log.2", "luzeira.log.3"]
     assert all(p.stat().st_size <= 1024 * 1024 for p in tmp_path.iterdir())
 
 
@@ -127,11 +127,11 @@ def test_uncaught_exceptions_reach_the_log(tmp_path, pf, clean_root):
     t.start()
     t.join()
     handler.flush()
-    text = (tmp_path / "visoria.log").read_text(encoding="utf-8")
+    text = (tmp_path / "luzeira.log").read_text(encoding="utf-8")
     assert "CRITICAL" in text and "ValueError: roto en <equipo>" in text
     assert "trabajador" in text and "RuntimeError: roto en hilo" in text
 
 
 def test_default_log_dir(monkeypatch, tmp_path):
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    assert registro.default_log_dir() == tmp_path / "Visoria" / "logs"
+    assert registro.default_log_dir() == tmp_path / "Luzeira" / "logs"

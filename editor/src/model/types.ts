@@ -1,12 +1,12 @@
-// Tipos del formato de temas «visoria-theme/1».
+// Tipos del formato de temas «luzeira-theme/1».
 //
-// Reflejan exactamente src/visoria/temas/modelo.py (la autoridad). Hay dos niveles:
+// Reflejan exactamente src/luzeira/temas/modelo.py (la autoridad). Hay dos niveles:
 //  - `*Json`: lo que puede venir en un theme.json (los campos con valor por defecto
 //    en Python son opcionales aquí).
 //  - Sin sufijo: la versión «normalizada» con la que trabaja el editor, con todos los
 //    campos rellenos. Guardar la versión normalizada es válido para el servidor.
 
-export const FORMAT = 'visoria-theme/1'
+export const FORMAT = 'luzeira-theme/1'
 export const MAX_WIDGETS = 64
 
 export type Orientation = 'portrait' | 'reverse-portrait' | 'landscape' | 'reverse-landscape'

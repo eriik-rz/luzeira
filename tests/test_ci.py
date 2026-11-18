@@ -1,4 +1,4 @@
-"""Guardián de los workflows de GitHub Actions (skill seguridad-visoria).
+"""Guardián de los workflows de GitHub Actions (skill seguridad-luzeira).
 
 Se leen como texto: sin dependencias nuevas y fallando con un mensaje claro.
 """

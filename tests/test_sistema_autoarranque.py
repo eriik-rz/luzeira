@@ -1,5 +1,5 @@
 """Tests del autoarranque. Nunca tocan la clave Run real: cada test usa una subclave de
-prueba ``HKCU\\Software\\VisoriaTests\\<uuid>\\Run`` que se borra al terminar."""
+prueba ``HKCU\\Software\\LuzeiraTests\\<uuid>\\Run`` que se borra al terminar."""
 
 from __future__ import annotations
 
@@ -11,18 +11,18 @@ from pathlib import Path
 
 import pytest
 
-from visoria.sistema import autoarranque
+from luzeira.sistema import autoarranque
 
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="solo Windows")
 
 if sys.platform == "win32":
     import winreg
 
-TEST_ROOT = r"Software\VisoriaTests"
+TEST_ROOT = r"Software\LuzeiraTests"
 
 
 def _real_run_value() -> str | None:
-    """Lee (solo lee) el valor real de Visoria para comprobar que no cambia."""
+    """Lee (solo lee) el valor real de Luzeira para comprobar que no cambia."""
     return autoarranque.registered_command()
 
 
@@ -42,7 +42,7 @@ def test_key():
     for sub in (path, base):
         with contextlib.suppress(FileNotFoundError):
             winreg.DeleteKey(winreg.HKEY_CURRENT_USER, sub)
-    # VisoriaTests solo se borra si se ha quedado vacía (si no, DeleteKey falla).
+    # LuzeiraTests solo se borra si se ha quedado vacía (si no, DeleteKey falla).
     with contextlib.suppress(OSError):
         winreg.DeleteKey(winreg.HKEY_CURRENT_USER, TEST_ROOT)
 
@@ -53,12 +53,12 @@ def test_disabled_when_key_does_not_exist(test_key):
 
 
 def test_enable_then_disable(test_key):
-    cmd = r'"C:\Program Files\Visoria\Visoria.exe"'
+    cmd = r'"C:\Program Files\Luzeira\Luzeira.exe"'
     autoarranque.enable(cmd, test_key)
     assert autoarranque.is_enabled(test_key) is True
     assert autoarranque.registered_command(test_key) == cmd
     with winreg.OpenKey(winreg.HKEY_CURRENT_USER, test_key) as key:
-        value, kind = winreg.QueryValueEx(key, "Visoria")
+        value, kind = winreg.QueryValueEx(key, "Luzeira")
     assert (value, kind) == (cmd, winreg.REG_SZ)
 
     autoarranque.disable(test_key)
@@ -122,13 +122,13 @@ def fake_env(tmp_path, monkeypatch):
 def test_default_command_prefers_pythonw(fake_env):
     (fake_env / "pythonw.exe").write_bytes(b"")
     cmd = autoarranque.default_command()
-    assert _argv(cmd) == [str(fake_env / "pythonw.exe"), "-m", "visoria"]
+    assert _argv(cmd) == [str(fake_env / "pythonw.exe"), "-m", "luzeira"]
     assert cmd.startswith('"')
 
 
 def test_default_command_falls_back_to_sys_executable(fake_env):
     cmd = autoarranque.default_command()
-    assert _argv(cmd) == [str(fake_env / "python.exe"), "-m", "visoria"]
+    assert _argv(cmd) == [str(fake_env / "python.exe"), "-m", "luzeira"]
 
 
 def test_default_command_quotes_extra_args(fake_env):

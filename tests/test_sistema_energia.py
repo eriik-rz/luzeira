@@ -9,8 +9,8 @@ import sys
 
 import pytest
 
-from visoria.sistema import energia
-from visoria.sistema.energia import (
+from luzeira.sistema import energia
+from luzeira.sistema.energia import (
     PBT_APMRESUMEAUTOMATIC,
     PBT_APMRESUMESUSPEND,
     PBT_APMSUSPEND,
@@ -78,7 +78,7 @@ def test_user_callback_errors_do_not_escape(caplog):
         raise RuntimeError("fallo del usuario")
 
     listener = PowerListener(boom, boom)
-    with caplog.at_level(logging.ERROR, logger="visoria.sistema.energia"):
+    with caplog.at_level(logging.ERROR, logger="luzeira.sistema.energia"):
         assert _fire(listener, PBT_APMSUSPEND) == 0
         assert _fire(listener, PBT_APMRESUMEAUTOMATIC) == 0
     errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
@@ -98,7 +98,7 @@ def test_native_callback_never_raises(monkeypatch, caplog, rec):
         raise SystemExit("ni esto")
 
     monkeypatch.setattr(listener, "_dispatch", broken)
-    with caplog.at_level(logging.ERROR, logger="visoria.sistema.energia"):
+    with caplog.at_level(logging.ERROR, logger="luzeira.sistema.energia"):
         assert _fire(listener, PBT_APMSUSPEND) == 0
     assert any("aviso de energía 4" in r.getMessage() for r in caplog.records)
 
@@ -141,7 +141,7 @@ def test_context_manager(rec):
 def test_start_without_api_warns_and_returns_false(monkeypatch, caplog, rec):
     monkeypatch.setattr(energia, "_load_api", lambda: None)
     listener = PowerListener(rec.suspend, rec.resume)
-    with caplog.at_level(logging.WARNING, logger="visoria.sistema.energia"):
+    with caplog.at_level(logging.WARNING, logger="luzeira.sistema.energia"):
         assert listener.start() is False
     assert not listener.active
     assert any(r.levelno == logging.WARNING for r in caplog.records)
@@ -155,6 +155,6 @@ def test_start_logs_error_when_windows_refuses(monkeypatch, caplog, rec):
 
     monkeypatch.setattr(energia, "_load_api", lambda: (refuse, lambda h: 0))
     listener = PowerListener(rec.suspend, rec.resume)
-    with caplog.at_level(logging.ERROR, logger="visoria.sistema.energia"):
+    with caplog.at_level(logging.ERROR, logger="luzeira.sistema.energia"):
         assert listener.start() is False
     assert any("código 5" in r.getMessage() for r in caplog.records)

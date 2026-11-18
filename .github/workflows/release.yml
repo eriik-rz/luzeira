@@ -3,7 +3,7 @@
 # con artifact attestations y publica una release inmutable: primero borrador, luego se
 # publica (con releases inmutables, los ficheros ya no cambian una vez publicada).
 #
-# Seguridad (skill seguridad-visoria):
+# Seguridad (skill seguridad-luzeira):
 # - Permisos mínimos por job; ninguno por defecto.
 # - Actions fijadas por SHA (resueltos con la API de GitHub el 2026-11-18).
 # - Sin caché en la build de release (una caché envenenada acabaría dentro del instalador).
@@ -99,6 +99,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$TAG" --draft --verify-tag --generate-notes --title "Visoria ${TAG#v}" -R "$GITHUB_REPOSITORY"
+          gh release create "$TAG" --draft --verify-tag --generate-notes --title "Luzeira ${TAG#v}" -R "$GITHUB_REPOSITORY"
           gh release upload "$TAG" dist/*.exe dist/*.zip dist/SHA256SUMS -R "$GITHUB_REPOSITORY"
           gh release edit "$TAG" --draft=false -R "$GITHUB_REPOSITORY"

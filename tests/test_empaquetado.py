@@ -20,10 +20,10 @@ from pathlib import Path
 import pytest
 from packaging.markers import Marker
 
-from visoria.sistema import autoarranque, instancia
+from luzeira.sistema import autoarranque, instancia
 
 ROOT = Path(__file__).resolve().parent.parent
-ISS_PATH = ROOT / "instalador" / "visoria.iss"
+ISS_PATH = ROOT / "instalador" / "luzeira.iss"
 ISS = ISS_PATH.read_text(encoding="utf-8")
 
 
@@ -63,13 +63,13 @@ def test_installs_per_user_without_admin():
     assert _setup("PrivilegesRequired") == "lowest"
     # Nada de ofrecer «instalar para todos» (pediría UAC).
     assert "PrivilegesRequiredOverridesAllowed" not in ISS
-    assert _setup("DefaultDirName") == r"{localappdata}\Programs\Visoria"
+    assert _setup("DefaultDirName") == r"{localappdata}\Programs\Luzeira"
 
 
 def test_app_id_is_a_fixed_guid():
     assert _setup("AppId") == "{{{#AppGuid}}"
     # El de verdad, fijo para siempre: cambiarlo = Windows vería otra app al actualizar.
-    assert _define("AppGuid") == "75B00440-8495-4923-A848-A5B3982D17C3"
+    assert _define("AppGuid") == "5E01DD71-2E73-46B3-9498-C53B2D1E1AB7"
 
 
 def test_spanish_and_64_bit():
@@ -89,11 +89,11 @@ def test_run_value_matches_the_app(monkeypatch, tmp_path):
     assert _define("RunValue") == autoarranque.VALUE_NAME
     line = next(x for x in _section("Registry").splitlines() if x.startswith("Root: HKCU"))
     assert "Tasks: autoarranque" in line
-    # Sin uninsdeletevalue: Inno lo borraría aunque apuntase a otra Visoria (portable).
+    # Sin uninsdeletevalue: Inno lo borraría aunque apuntase a otra Luzeira (portable).
     assert "uninsdeletevalue" not in line
     data = re.search(r'ValueData: "((?:[^"]|"")*)"', line).group(1).replace('""', '"')
     # Lo que escribiría la app desde la carpeta instalada.
-    app = tmp_path / "Visoria"
+    app = tmp_path / "Luzeira"
     (app / "python").mkdir(parents=True)
     (app / "python" / "pythonw.exe").touch()
     monkeypatch.setattr(sys, "executable", str(app / "python" / "python.exe"))
@@ -112,8 +112,8 @@ def test_uninstall_removes_run_value_created_by_the_app():
 def test_uninstall_asks_before_deleting_user_data():
     code = _section("Code")
     # Valores exactos: un «Sí» borra estas carpetas enteras con DelTree.
-    assert _define("UserDataDir") == r"{userappdata}\Visoria"
-    assert _define("UserLogsDir") == r"{localappdata}\Visoria"
+    assert _define("UserDataDir") == r"{userappdata}\Luzeira"
+    assert _define("UserLogsDir") == r"{localappdata}\Luzeira"
     assert _define("ProgramsDir") == "{userprograms}"
     # La pregunta tiene «No» por defecto y, en silencio, contesta «No».
     assert re.search(r"SuppressibleMsgBox\([^;]*MB_DEFBUTTON2, IDNO\) = IDYES", code)
@@ -136,13 +136,13 @@ def test_launch_after_install_is_optional_and_not_in_silent_mode():
 def test_shortcuts_launch_pythonw_with_the_package_icon():
     assert _define("PythonW") == r"{app}\python\pythonw.exe"
     icons = _section("Icons")
-    assert icons.count('Parameters: "-m visoria"') == 2
+    assert icons.count('Parameters: "-m luzeira"') == 2
     icon = _define("AppIcon").replace("{app}\\python\\Lib\\site-packages\\", "")
     assert (ROOT / "src" / Path(icon)).is_file()
 
 
 def test_shortcuts_carry_the_app_id_of_the_process():
-    from visoria.sistema.identidad import APP_ID
+    from luzeira.sistema.identidad import APP_ID
 
     # Mismo AUMID que fija la app: si no, al anclar la ventana saldría «pythonw».
     assert _section("Icons").count(f'AppUserModelID: "{APP_ID}"') == 2
@@ -228,7 +228,7 @@ def test_install_packages_requires_hashes_and_binaries(tmp_path):
         if "build" in cmd:
             out = Path(cmd[cmd.index("-o") + 1])
             out.mkdir(parents=True)
-            (out / "visoria-0.1.0-py3-none-any.whl").touch()
+            (out / "luzeira-0.1.0-py3-none-any.whl").touch()
 
     emp.install_packages(tmp_path / "site", tmp_path, run=fake_run)
     export, deps, _build, own = calls
@@ -284,7 +284,7 @@ def test_portable_zip_is_reproducible(tmp_path):
     emp.build_portable(src, second, emp.DEFAULT_EPOCH)
     assert first.read_bytes() == second.read_bytes()
     with zipfile.ZipFile(first) as zf:
-        assert zf.namelist() == ["Visoria/a.txt", "Visoria/python/b.txt"]
+        assert zf.namelist() == ["Luzeira/a.txt", "Luzeira/python/b.txt"]
 
 
 def test_third_party_notices_include_license_text(tmp_path):
@@ -294,13 +294,13 @@ def test_third_party_notices_include_license_text(tmp_path):
         "Metadata-Version: 2.4\nName: demo\nVersion: 1.0\nLicense-Expression: MIT\n"
     )
     (info / "licenses" / "LICENSE").write_text("Texto MIT de prueba")
-    own = tmp_path / "visoria-0.1.0.dist-info"
+    own = tmp_path / "luzeira-0.1.0.dist-info"
     own.mkdir()
-    (own / "METADATA").write_text("Metadata-Version: 2.4\nName: visoria\nVersion: 0.1.0\n")
+    (own / "METADATA").write_text("Metadata-Version: 2.4\nName: luzeira\nVersion: 0.1.0\n")
     text = emp.third_party_notices(tmp_path)
     assert "- demo 1.0: MIT" in text
     assert "Texto MIT de prueba" in text
-    assert "- visoria" not in text  # la propia licencia va aparte, en LICENSE.txt
+    assert "- luzeira" not in text  # la propia licencia va aparte, en LICENSE.txt
 
 
 def _runtime_packages() -> set[str]:
@@ -360,13 +360,13 @@ def test_build_runs_the_smoke_test_with_the_editor_engine():
     emp.smoke_test(Path("py"), run=lambda cmd, **k: calls.append((cmd, k)))
     ((cmd, kwargs),) = calls
     assert cmd[1:3] == ["-B", "-c"]  # -B: no escribe .pyc en la carpeta ensamblada
-    assert "webview.platforms.edgechromium" in cmd[3] and "visoria.editor.ventana" in cmd[3]
+    assert "webview.platforms.edgechromium" in cmd[3] and "luzeira.editor.ventana" in cmd[3]
     assert "System32" in kwargs["env"]["PATH"]
 
 
 def test_only_the_end_of_install_opens_the_editor():
     run_line = next(x for x in _section("Run").splitlines() if x.startswith("Filename"))
-    assert 'Parameters: "-m visoria --abrir-editor"' in run_line
+    assert 'Parameters: "-m luzeira --abrir-editor"' in run_line
     assert "postinstall" in run_line and "skipifsilent" in run_line
     # Los accesos directos y el autoarranque abren solo la bandeja.
     assert "--abrir-editor" not in _section("Icons") + _section("Registry")
@@ -380,7 +380,7 @@ def test_personal_data_check_looks_inside_binaries(tmp_path, monkeypatch):
 
 
 def test_defines_only_known_names_and_safe_values():
-    emp.check_defines(["MutexName=VisoriaPrueba", "RunValue=VisoriaPrueba"])
+    emp.check_defines(["MutexName=LuzeiraPrueba", "RunValue=LuzeiraPrueba"])
     for bad in ("Nada=1", "MutexName", "AppVersion=9.9.9", "RunKey=a'b", "MutexName={app}"):
         with pytest.raises(SystemExit):
             emp.check_defines([bad])
@@ -441,8 +441,8 @@ def test_update_without_autostart_task_removes_only_our_value():
 def test_uninstall_removes_the_desktop_shortcut_made_by_the_app():
     code = _section("Code")
     assert _define("DesktopDir") == "{userdesktop}"
-    assert r"{#DesktopDir}\Visoria.lnk" in code and "ShortcutPointsHere(Desktop)" in code
-    assert r'Name: "{#DesktopDir}\Visoria"' in _section("Icons")
+    assert r"{#DesktopDir}\Luzeira.lnk" in code and "ShortcutPointsHere(Desktop)" in code
+    assert r'Name: "{#DesktopDir}\Luzeira"' in _section("Icons")
 
 
 def test_portable_zip_order_does_not_depend_on_the_disk(tmp_path):
@@ -455,13 +455,13 @@ def test_portable_zip_order_does_not_depend_on_the_disk(tmp_path):
     dest = tmp_path / "p.zip"
     emp.build_portable(src, dest, emp.DEFAULT_EPOCH)
     with zipfile.ZipFile(dest) as zf:
-        names = [n.removeprefix("Visoria/") for n in zf.namelist()]
+        names = [n.removeprefix("Luzeira/") for n in zf.namelist()]
     assert names == ["B.txt", "a-b.txt", "a.txt", "a/z.txt"]
 
 
 def test_app_and_installer_share_the_mutex_name():
     assert _define("MutexName") == instancia.APP_MUTEX
-    bandeja_src = (ROOT / "src" / "visoria" / "bandeja.py").read_text(encoding="utf-8")
+    bandeja_src = (ROOT / "src" / "luzeira" / "bandeja.py").read_text(encoding="utf-8")
     assert "SingleInstance(APP_MUTEX)" in bandeja_src
 
 

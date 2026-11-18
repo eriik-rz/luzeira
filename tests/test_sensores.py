@@ -9,9 +9,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from visoria.sensores import nvidia, sistema
-from visoria.sensores.base import SENSOR_ID, Reading, SensorInfo
-from visoria.sensores.hub import SensorHub
+from luzeira.sensores import nvidia, sistema
+from luzeira.sensores.base import SENSOR_ID, Reading, SensorInfo
+from luzeira.sensores.hub import SensorHub
 
 CpuTimes = namedtuple("CpuTimes", "user system idle")
 NicIO = namedtuple("NicIO", "bytes_sent bytes_recv")
@@ -476,7 +476,7 @@ def test_real_nvidia_values_are_plausible():
 def test_text_sensors_are_declared_as_text_and_read_real_names():
     # C-12: nombre del procesador y de la GPU, como texto (nunca nombre de usuario ni de
     # equipo). En el equipo de pruebas: «AMD Ryzen 7 5700X3D…» y «GeForce RTX 4070 SUPER».
-    from visoria.sensores import default_hub
+    from luzeira.sensores import default_hub
 
     hub = default_hub()
     try:

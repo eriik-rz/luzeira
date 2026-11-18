@@ -12,11 +12,11 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from visoria.config import BUILTIN_THEMES
-from visoria.render import Renderer
-from visoria.sensores.base import Reading
-from visoria.temas import load_theme, resolve_font
-from visoria.temas.modelo import Style
+from luzeira.config import BUILTIN_THEMES
+from luzeira.render import Renderer
+from luzeira.sensores.base import Reading
+from luzeira.temas import load_theme, resolve_font
+from luzeira.temas.modelo import Style
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "guia" / "temas.png"

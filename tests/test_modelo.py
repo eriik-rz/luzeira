@@ -1,11 +1,11 @@
 """Reglas del formato de temas que viven en el modelo (no en el cargador)."""
 
-from visoria.temas.modelo import Theme
+from luzeira.temas.modelo import Theme
 
 
 def theme(*widgets):
     return {
-        "format": "visoria-theme/1",
+        "format": "luzeira-theme/1",
         "name": "x",
         "orientation": "landscape",
         "widgets": list(widgets),
@@ -22,7 +22,7 @@ def test_nan_and_infinity_are_rejected():
 
     for bad in ("NaN", "Infinity", "-Infinity"):
         raw = (
-            '{"format": "visoria-theme/1", "name": "x", "orientation": "landscape", "widgets": '
+            '{"format": "luzeira-theme/1", "name": "x", "orientation": "landscape", "widgets": '
             '[{"type": "bar", "sensor": "a.b", "max": ' + bad + ", "
             '"box": {"x": 0, "y": 0, "width": 10, "height": 10}}]}'
         )

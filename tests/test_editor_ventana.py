@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from visoria.editor import ventana
+from luzeira.editor import ventana
 
 
 class FakeProcess:
@@ -49,7 +49,7 @@ class FakeProcess:
 
     def wait(self, timeout=None):
         if not self._done.wait(timeout):
-            raise ventana.subprocess.TimeoutExpired("visoria", timeout)
+            raise ventana.subprocess.TimeoutExpired("luzeira", timeout)
         return self.code
 
     def terminate(self):
@@ -250,7 +250,7 @@ def test_closing_when_the_page_does_not_answer_asks_too():
 def test_flush_script_always_yields_a_promise():
     # pywebview 6.2.1 solo llama a la callback si el resultado es una promesa.
     assert ventana.FLUSH_JS.startswith("Promise.resolve(")
-    assert "window.visoriaEditor.flush()" in ventana.FLUSH_JS
+    assert "window.luzeiraEditor.flush()" in ventana.FLUSH_JS
 
 
 def test_orders_from_the_tray_show_and_close_through_the_normal_path():
@@ -302,11 +302,11 @@ def test_window_process_gets_token_through_the_bridge_not_the_url(monkeypatch):
     assert created["args"][1] == "http://127.0.0.1:5000/"
     assert created["kwargs"]["js_api"].token() == "secreto"
     start = dict(created["start"])
-    # El icono de Visoria en la barra de tareas, no el de pythonw.exe.
-    assert Path(start.pop("icon")).name == "visoria.ico"
+    # El icono de Luzeira en la barra de tareas, no el de pythonw.exe.
+    assert Path(start.pop("icon")).name == "luzeira.ico"
     assert start == {"gui": "edgechromium", "private_mode": True}
     assert len(created["window"].events.closing.handlers) == 1
-    # Al mostrarse, la ventana dice a Windows cómo anclarla como «Visoria».
+    # Al mostrarse, la ventana dice a Windows cómo anclarla como «Luzeira».
     assert len(created["window"].events.shown.handlers) == 1
 
 

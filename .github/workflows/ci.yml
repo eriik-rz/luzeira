@@ -1,6 +1,6 @@
 # Comprobaciones de cada push a main y de cada pull request: los mismos «verdes» que en
 # local (.claude/CLAUDE.md). Solo lee el repo: sin secretos ni permisos de escritura.
-# Actions fijadas por SHA (skill seguridad-visoria; precedente: tj-actions, CVE-2025-30066).
+# Actions fijadas por SHA (skill seguridad-luzeira; precedente: tj-actions, CVE-2025-30066).
 # Versiones y SHA resueltos con la API de GitHub el 2026-11-18.
 name: ci
 

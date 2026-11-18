@@ -53,7 +53,7 @@ export type Action =
   | { type: 'redo' }
 
 const emptyTheme: Theme = {
-  format: 'visoria-theme/1',
+  format: 'luzeira-theme/1',
   name: '',
   author: null,
   orientation: 'landscape',

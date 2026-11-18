@@ -11,8 +11,8 @@ import pytest
 from PIL import ImageFont
 from pydantic import ValidationError
 
-from visoria.temas import fuentes, load_theme, missing_glyphs, resolve_font
-from visoria.temas.modelo import Style
+from luzeira.temas import fuentes, load_theme, missing_glyphs, resolve_font
+from luzeira.temas.modelo import Style
 
 FONTS_DIR = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts"
 SEGOE = FONTS_DIR / "segoeui.ttf"
@@ -80,7 +80,7 @@ def theme_with_font(folder: Path, rel: str = "fuentes/mia.ttf", size: int = 18) 
         "box": {"x": 0, "y": 0, "width": 100, "height": 30},
         "style": {"font": rel, "size": size},
     }
-    theme = {"format": "visoria-theme/1", "name": "F", "orientation": "portrait"}
+    theme = {"format": "luzeira-theme/1", "name": "F", "orientation": "portrait"}
     theme["widgets"] = [widget]
     (folder / "theme.json").write_text(json.dumps(theme), encoding="utf-8")
     (folder / rel).parent.mkdir(parents=True, exist_ok=True)

@@ -1,10 +1,10 @@
-# Visoria
+# Luzeira
 
 Tu pantalla USB de monitorización del PC, en español y como tú quieras.
 
-### [⬇ Descargar Visoria para Windows](https://github.com/eriik-rz/visoria/releases/latest)
+### [⬇ Descargar Luzeira para Windows](https://github.com/eriik-rz/luzeira/releases/latest)
 
-Visoria es una app libre para las pequeñas pantallas USB que se ponen dentro o encima del PC (tipo *Turing Smart Screen* / *UsbPCMonitor*). Muestra la hora, el uso de CPU, GPU y RAM, la red, el disco y la temperatura de la gráfica, con 32 temas incluidos y un editor visual para hacer los tuyos, sin tocar ficheros.
+Luzeira es una app libre para las pequeñas pantallas USB que se ponen dentro o encima del PC (tipo *Turing Smart Screen* / *UsbPCMonitor*). Muestra la hora, el uso de CPU, GPU y RAM, la red, el disco y la temperatura de la gráfica, con 32 temas incluidos y un editor visual para hacer los tuyos, sin tocar ficheros.
 
 ![Algunos de los temas incluidos](guia/temas.png)
 
@@ -20,13 +20,13 @@ Visoria es una app libre para las pequeñas pantallas USB que se ponen dentro o 
 
 ## Instalar
 
-1. Descarga `Visoria-<versión>-instalador.exe` desde [Releases](https://github.com/eriik-rz/visoria/releases/latest).
-2. Ábrelo. Como Visoria todavía no va firmada digitalmente, Windows puede mostrar **«Windows protegió su PC»**: pulsa **Más información → Ejecutar de todas formas**. Si quieres comprobar que la descarga es la oficial, mira [cómo verificarla](SECURITY.md#cómo-verificar-que-tu-descarga-es-oficial).
-3. Sigue el asistente. Al terminar, Visoria aparece junto al reloj y abre el editor para que veas lo que puedes hacer.
+1. Descarga `Luzeira-<versión>-instalador.exe` desde [Releases](https://github.com/eriik-rz/luzeira/releases/latest).
+2. Ábrelo. Como Luzeira todavía no va firmada digitalmente, Windows puede mostrar **«Windows protegió su PC»**: pulsa **Más información → Ejecutar de todas formas**. Si quieres comprobar que la descarga es la oficial, mira [cómo verificarla](SECURITY.md#cómo-verificar-que-tu-descarga-es-oficial).
+3. Sigue el asistente. Al terminar, Luzeira aparece junto al reloj y abre el editor para que veas lo que puedes hacer.
 
-¿Prefieres no instalar nada? Descarga el `.zip` **portable**, descomprímelo donde quieras y abre `Visoria.cmd`.
+¿Prefieres no instalar nada? Descarga el `.zip` **portable**, descomprímelo donde quieras y abre `Luzeira.cmd`.
 
-Para desinstalar: *Configuración → Aplicaciones → Visoria*. Te preguntará si quieres conservar tus temas (por defecto, sí).
+Para desinstalar: *Configuración → Aplicaciones → Luzeira*. Te preguntará si quieres conservar tus temas (por defecto, sí).
 
 ## Requisitos
 
@@ -45,11 +45,11 @@ Para desinstalar: *Configuración → Aplicaciones → Visoria*. Te preguntará 
 
 [GPL-3.0-or-later](LICENSE). Puedes usarla, estudiarla, modificarla y compartirla; las versiones modificadas que distribuyas deben seguir siendo libres.
 
-El nombre «Visoria» identifica la versión oficial: las copias modificadas deben usar otro nombre.
+El nombre «Luzeira» identifica la versión oficial: las copias modificadas deben usar otro nombre.
 
 ## Créditos
 
-- Fuente [Inter](https://github.com/rsms/inter) 4.1, de The Inter Project Authors, con licencia [SIL Open Font License 1.1](src/visoria/recursos/fuentes/OFL.txt).
+- Fuente [Inter](https://github.com/rsms/inter) 4.1, de The Inter Project Authors, con licencia [SIL Open Font License 1.1](src/luzeira/recursos/fuentes/OFL.txt).
 - Las licencias de todo lo que va dentro del instalador están en `TERCEROS.txt`, junto a la app.
 
 ## Seguridad

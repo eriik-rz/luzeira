@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from visoria.temas import ThemeError, cargar, import_theme_zip, load_theme
+from luzeira.temas import ThemeError, cargar, import_theme_zip, load_theme
 
 FIXTURES = Path(__file__).parent / "fixtures" / "temas"
 
@@ -28,7 +28,7 @@ def png_bytes() -> bytes:
 
 
 def theme_json(name: str = "Mi tema", image: str | None = "fondo.png") -> bytes:
-    theme: dict = {"format": "visoria-theme/1", "name": name, "orientation": "portrait"}
+    theme: dict = {"format": "luzeira-theme/1", "name": name, "orientation": "portrait"}
     if image:
         theme["background"] = {"image": image}
     return json.dumps(theme, ensure_ascii=False).encode()
@@ -317,7 +317,7 @@ def test_existing_theme_untouched_after_failure(tmp_path: Path) -> None:
 def test_imported_theme_never_takes_a_builtin_name(tmp_path):
     # Revisor fase 4: un zip con name «Esencial» creaba temas/esencial, tapado por el
     # incluido; no aparecía en el menú aunque el aviso dijera «importado».
-    from visoria.temas.cargar import _free_name
+    from luzeira.temas.cargar import _free_name
 
     assert _free_name(tmp_path, "esencial").name == "esencial-2"
     assert _free_name(tmp_path, "mi-tema").name == "mi-tema"

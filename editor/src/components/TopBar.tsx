@@ -60,7 +60,7 @@ export function TopBar(p: Props) {
       <div className="brand">
         <BrandMark />
         <span>
-          Visoria <small>· Editor de temas</small>
+          Luzeira <small>· Editor de temas</small>
         </span>
       </div>
 
@@ -84,7 +84,7 @@ export function TopBar(p: Props) {
             ))}
           </optgroup>
         )}
-        <optgroup label="Incluidos con Visoria">
+        <optgroup label="Incluidos con Luzeira">
           {builtins.map((t) => (
             <option key={t.name} value={t.name}>
               {t.title}
@@ -101,7 +101,7 @@ export function TopBar(p: Props) {
         title={
           p.builtin
             ? 'Los temas incluidos no se pueden borrar.'
-            : 'Mover este tema a la papelera de Visoria (se puede recuperar).'
+            : 'Mover este tema a la papelera de Luzeira (se puede recuperar).'
         }
       >
         <IconTrash /> Borrar

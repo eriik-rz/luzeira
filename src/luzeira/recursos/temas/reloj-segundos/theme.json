@@ -1,0 +1,27 @@
+{
+  "format": "luzeira-theme/1",
+  "name": "Reloj Cronógrafo",
+  "author": "Luzeira",
+  "orientation": "landscape",
+  "background": {"color": "#0e0e11", "image": "fondo.png"},
+  "widgets": [
+    {"type": "clock", "format": "HH:MM:SS", "box": {"x": 40, "y": 50, "width": 432, "height": 100}, "style": {"size": 84, "bold": true, "color": "#ffffff", "align": "left"}},
+    {"type": "clock", "format": "date-long", "box": {"x": 42, "y": 152, "width": 414, "height": 28}, "style": {"size": 20, "color": "#ffb347", "align": "left"}},
+
+    {"type": "text", "text": "CPU", "box": {"x": 24, "y": 236, "width": 60, "height": 20}, "style": {"size": 14, "bold": true, "color": "#8b8f98", "align": "left"}},
+    {"type": "sensor", "sensor": "cpu.usage", "box": {"x": 76, "y": 236, "width": 76, "height": 20}, "style": {"size": 16, "bold": true, "color": "#ffffff", "align": "right"}},
+    {"type": "bar", "sensor": "cpu.usage", "fill": "#ffb347", "track": "#2c2c33", "box": {"x": 24, "y": 262, "width": 128, "height": 6}},
+
+    {"type": "text", "text": "GPU", "box": {"x": 176, "y": 236, "width": 60, "height": 20}, "style": {"size": 14, "bold": true, "color": "#8b8f98", "align": "left"}},
+    {"type": "sensor", "sensor": "gpu.usage", "box": {"x": 228, "y": 236, "width": 76, "height": 20}, "style": {"size": 16, "bold": true, "color": "#ffffff", "align": "right"}},
+    {"type": "bar", "sensor": "gpu.usage", "fill": "#ffb347", "track": "#2c2c33", "box": {"x": 176, "y": 262, "width": 128, "height": 6}},
+
+    {"type": "text", "text": "RAM", "box": {"x": 328, "y": 236, "width": 60, "height": 20}, "style": {"size": 14, "bold": true, "color": "#8b8f98", "align": "left"}},
+    {"type": "sensor", "sensor": "memory.usage", "box": {"x": 380, "y": 236, "width": 76, "height": 20}, "style": {"size": 16, "bold": true, "color": "#ffffff", "align": "right"}},
+    {"type": "bar", "sensor": "memory.usage", "fill": "#ffb347", "track": "#2c2c33", "box": {"x": 328, "y": 262, "width": 128, "height": 6}},
+
+    {"type": "sensor", "sensor": "gpu.temperature", "prefix": "GPU ", "box": {"x": 24, "y": 284, "width": 128, "height": 22}, "style": {"size": 14, "color": "#8b8f98", "align": "left"}},
+    {"type": "sensor", "sensor": "memory.used", "decimals": 1, "prefix": "usada ", "box": {"x": 328, "y": 284, "width": 128, "height": 22}, "style": {"size": 14, "color": "#8b8f98", "align": "right"}},
+    {"type": "sensor", "sensor": "system.uptime", "decimals": 1, "prefix": "encendido ", "interval": 60, "box": {"x": 156, "y": 284, "width": 168, "height": 22}, "style": {"size": 14, "color": "#8b8f98", "align": "center"}}
+  ]
+}

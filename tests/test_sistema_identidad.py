@@ -1,4 +1,4 @@
-"""Identificador de la app en Windows (AUMID): que al anclar salga «Visoria»."""
+"""Identificador de la app en Windows (AUMID): que al anclar salga «Luzeira»."""
 
 import os
 import subprocess
@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-from visoria.sistema import identidad
+from luzeira.sistema import identidad
 
 
 class FakeShell32:
@@ -18,10 +18,10 @@ class FakeShell32:
         return self.result
 
 
-def test_process_gets_the_visoria_id():
+def test_process_gets_the_luzeira_id():
     shell32 = FakeShell32()
     assert identidad.set_process_app_id(shell32) is True
-    assert shell32.calls == ["Visoria.Visoria"]
+    assert shell32.calls == ["Luzeira.Luzeira"]
 
 
 def test_process_id_failure_is_not_fatal():
@@ -52,7 +52,7 @@ def test_shortcut_is_marked_and_read_back(tmp_path):
     )
     assert identidad.read_shortcut_app_id(link) is None
     assert identidad.set_shortcut_app_id(link) is True
-    assert identidad.read_shortcut_app_id(link) == "Visoria.Visoria"
+    assert identidad.read_shortcut_app_id(link) == "Luzeira.Luzeira"
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="accesos directos de Windows")

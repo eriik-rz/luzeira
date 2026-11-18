@@ -6,7 +6,7 @@ from typing import ClassVar
 
 from test_editor_ventana import FakeProcess
 
-from visoria.editor import conexion, ventana
+from luzeira.editor import conexion, ventana
 
 _tokens = itertools.count(1)
 
@@ -108,7 +108,7 @@ def test_reopening_before_the_exit_notice_still_gets_a_fresh_server(monkeypatch,
 def test_dev_mode_uses_127_0_0_1_for_vite_and_prints_it(monkeypatch, capsys):
     # El contrato fija dev_origin = http://127.0.0.1:5173; con «localhost» el navegador
     # manda otro Origin y el servidor lo rechaza con 403.
-    import visoria.__main__ as cli
+    import luzeira.__main__ as cli
 
     created = {}
 

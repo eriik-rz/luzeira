@@ -21,10 +21,10 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from visoria import config as visoria_config
-from visoria.editor import EditorServer
-from visoria.sensores.base import Reading, SensorInfo
-from visoria.temas import cargar
+from luzeira import config as luzeira_config
+from luzeira.editor import EditorServer
+from luzeira.sensores.base import Reading, SensorInfo
+from luzeira.temas import cargar
 
 FIXTURES = Path(__file__).parent / "fixtures" / "temas"
 
@@ -46,7 +46,7 @@ def png_bytes(size=(16, 16), color=(200, 30, 30)) -> bytes:
 
 def theme_dict(name="Mío", orientation="landscape", widgets=None, **extra) -> dict:
     out = {
-        "format": "visoria-theme/1",
+        "format": "luzeira-theme/1",
         "name": name,
         "orientation": orientation,
         "background": {"color": "#000000"},
@@ -77,9 +77,9 @@ class Client:
         conn.putrequest(method, path, skip_host=True, skip_accept_encoding=True)
         conn.putheader("Host", host if host is not None else f"127.0.0.1:{self.server.port}")
         if token is True:
-            conn.putheader("X-Visoria-Token", self.server.token)
+            conn.putheader("X-Luzeira-Token", self.server.token)
         elif isinstance(token, str):
-            conn.putheader("X-Visoria-Token", token)
+            conn.putheader("X-Luzeira-Token", token)
         if origin is not None:
             conn.putheader("Origin", origin)
         if isinstance(body, dict | list):
@@ -105,17 +105,17 @@ class Client:
 
 
 def upload(client: Client, theme: str, encoded_name: str | None, data: bytes, query: str = ""):
-    """Sube ``data`` con el nombre (ya codificado en URL) en ``X-Visoria-Filename``."""
-    headers = {} if encoded_name is None else {"X-Visoria-Filename": encoded_name}
+    """Sube ``data`` con el nombre (ya codificado en URL) en ``X-Luzeira-Filename``."""
+    headers = {} if encoded_name is None else {"X-Luzeira-Filename": encoded_name}
     return client.json("POST", f"/api/temas/{theme}/recursos{query}", data, headers=headers)
 
 
-REAL_BUILTIN = Path(visoria_config.BUILTIN_THEMES)
+REAL_BUILTIN = Path(luzeira_config.BUILTIN_THEMES)
 
 
 def builtin_theme() -> dict:
     """theme.json del tema incluido de mentira (el fixture ``builtin`` ya lo ha puesto)."""
-    path = visoria_config.BUILTIN_THEMES / "esencial" / "theme.json"
+    path = luzeira_config.BUILTIN_THEMES / "esencial" / "theme.json"
     return json.loads(path.read_text("utf-8"))
 
 
@@ -131,7 +131,7 @@ def builtin(tmp_path, monkeypatch):
     """Temas incluidos **de mentira** en ``tmp_path``, y alarma si se toca la carpeta real.
 
     Un test que rompe la protección de solo lectura (al validar al revés) escribiría en
-    ``src/visoria/recursos/temas``; pasó una vez con la carpeta real. Ahora no puede.
+    ``src/luzeira/recursos/temas``; pasó una vez con la carpeta real. Ahora no puede.
     """
     before = _tree_state(REAL_BUILTIN)
     fake = tmp_path / "incluidos"
@@ -139,7 +139,7 @@ def builtin(tmp_path, monkeypatch):
     data = json.loads((fake / "esencial" / "theme.json").read_text("utf-8"))
     data["name"] = "Esencial"
     (fake / "esencial" / "theme.json").write_text(json.dumps(data), encoding="utf-8")
-    monkeypatch.setattr(visoria_config, "BUILTIN_THEMES", fake)
+    monkeypatch.setattr(luzeira_config, "BUILTIN_THEMES", fake)
     monkeypatch.setattr(cargar, "_BUILTIN_THEMES", fake)
     yield fake
     assert _tree_state(REAL_BUILTIN) == before, "un test ha tocado los temas incluidos reales"
@@ -249,8 +249,8 @@ def test_dev_origin_only_in_dev_mode(tmp_path):
         )
         assert status == 204
         assert headers["access-control-allow-origin"] == "http://127.0.0.1:5173"
-        assert "X-Visoria-Token" in headers["access-control-allow-headers"]
-        assert "X-Visoria-Filename" in headers["access-control-allow-headers"]
+        assert "X-Luzeira-Token" in headers["access-control-allow-headers"]
+        assert "X-Luzeira-Filename" in headers["access-control-allow-headers"]
         # «localhost» no es el mismo origen que 127.0.0.1
         assert client.request("GET", "/api/temas", origin="http://localhost:5173")[0] == 403
         status, headers, _ = client.request("GET", "/api/temas", origin="http://127.0.0.1:5173")
@@ -280,7 +280,7 @@ def test_upload_over_10mb_is_413(env):
         "POST",
         "/api/temas/mio/recursos",
         b"x" * (10 * 1024 * 1024 + 1),
-        headers={"X-Visoria-Filename": "a.png"},
+        headers={"X-Luzeira-Filename": "a.png"},
     )
     assert status == 413
 
@@ -391,7 +391,7 @@ def test_get_theme_lists_files(env):
     assert status == 200
     assert body["builtin"] is False
     assert set(body["files"]) == {"fondo.png", "img/anim.gif", "img/logo.jpg"}
-    assert body["theme"]["format"] == "visoria-theme/1"
+    assert body["theme"]["format"] == "luzeira-theme/1"
 
 
 def test_get_unknown_theme_is_404(env):
@@ -704,7 +704,7 @@ def test_preview_cost_is_bounded(env, capsys):
 
 
 def test_preview_validation_is_cached_until_file_changes(env, monkeypatch):
-    from visoria.editor import almacen
+    from luzeira.editor import almacen
 
     calls: list[str] = []
     real = almacen._check_file
@@ -783,7 +783,7 @@ def test_widget_off_screen_error_points_to_its_box(env):
 def test_upload_name_in_query_is_rejected(env):
     _, client, user, *_ = env
     status, body = upload(client, "mio", None, png_bytes(), query="?nombre=a.png")
-    assert status == 400 and "X-Visoria-Filename" in body["error"]
+    assert status == 400 and "X-Luzeira-Filename" in body["error"]
     # Ni siquiera con la cabecera buena al lado
     status, _ = upload(client, "mio", "a.png", png_bytes(), query="?nombre=a.png")
     assert status == 400
@@ -820,7 +820,7 @@ def test_upload_filename_header_is_url_decoded(env):
         "POST",
         "/api/temas/mio/recursos",
         png_bytes(),
-        headers={"X-Visoria-Filename": "cañón.png"},
+        headers={"X-Luzeira-Filename": "cañón.png"},
     )
     assert status == 400
 
@@ -831,9 +831,9 @@ def test_upload_repeated_filename_header_is_400(env):
     data = png_bytes()
     conn.putrequest("POST", "/api/temas/mio/recursos", skip_host=True)
     conn.putheader("Host", f"127.0.0.1:{client.server.port}")
-    conn.putheader("X-Visoria-Token", client.server.token)
-    conn.putheader("X-Visoria-Filename", "a.png")
-    conn.putheader("X-Visoria-Filename", "b.png")
+    conn.putheader("X-Luzeira-Token", client.server.token)
+    conn.putheader("X-Luzeira-Filename", "a.png")
+    conn.putheader("X-Luzeira-Filename", "b.png")
     conn.putheader("Content-Length", str(len(data)))
     conn.endheaders(data)
     assert conn.getresponse().status == 400
@@ -908,7 +908,7 @@ def test_copy_validates_files_in_the_new_folder_not_the_original(env, monkeypatc
     """Si un recurso no llega a la copia, el tema editado que lo usa no vale aunque el
     original sí lo tenga."""
     _, client, user, *_ = env
-    from visoria.editor import almacen
+    from luzeira.editor import almacen
 
     real_copy = almacen.ThemeStore._copy_files
 
@@ -952,7 +952,7 @@ def _raw_get(server: EditorServer, headers: list[tuple[str, str]], path="/api/te
 def test_repeated_host_header_is_403(env):
     server, *_ = env
     good = f"127.0.0.1:{server.port}"
-    token = ("X-Visoria-Token", server.token)
+    token = ("X-Luzeira-Token", server.token)
     assert _raw_get(server, [("Host", good), token]) == 200  # control: así sí
     for hosts in ([good, "evil.com"], ["evil.com", good], [good, good]):
         assert _raw_get(server, [*(("Host", h) for h in hosts), token]) == 403, hosts
@@ -963,9 +963,9 @@ def test_repeated_token_header_is_403(env):
     server, *_ = env
     host = ("Host", f"127.0.0.1:{server.port}")
     good = server.token
-    assert _raw_get(server, [host, ("X-Visoria-Token", good)]) == 200  # control
+    assert _raw_get(server, [host, ("X-Luzeira-Token", good)]) == 200  # control
     for tokens in ([good, "malo"], ["malo", good], [good, good]):
-        headers = [host, *(("X-Visoria-Token", t) for t in tokens)]
+        headers = [host, *(("X-Luzeira-Token", t) for t in tokens)]
         assert _raw_get(server, headers) == 403, tokens
 
 
@@ -1076,7 +1076,7 @@ def test_preview_waiting_behind_a_newer_one_is_superseded(tmp_path):
 
 def test_preview_stops_mid_render_when_a_newer_one_arrives(env, monkeypatch):
     """Si entra otra vista previa a mitad de pintar, se deja en la siguiente imagen."""
-    from visoria.editor import servidor
+    from luzeira.editor import servidor
 
     server, _, user, *_ = env
     (user / "mio" / "a.png").write_bytes(png_bytes((64, 64)))
@@ -1102,9 +1102,9 @@ def test_preview_stops_mid_render_when_a_newer_one_arrives(env, monkeypatch):
 def test_cached_preview_matches_plain_renderer(env):
     """La vista previa con caché es idéntica píxel a píxel a la del motor de la pantalla
     (fondo «cover», imágenes «contain» con otra proporción, texto encima)."""
-    from visoria.editor.almacen import parse_theme
-    from visoria.render.motor import Renderer
-    from visoria.temas import resolve_font
+    from luzeira.editor.almacen import parse_theme
+    from luzeira.render.motor import Renderer
+    from luzeira.temas import resolve_font
 
     server, client, user, *_ = env
     Image.radial_gradient("L").resize((300, 120)).convert("RGB").save(user / "mio" / "f.png")
@@ -1151,7 +1151,7 @@ def test_scaled_cache_notices_changed_file(env):
 
 
 def test_scaled_cache_memory_limit_and_lru():
-    from visoria.editor.servidor import ScaledImageCache
+    from luzeira.editor.servidor import ScaledImageCache
 
     cache = ScaledImageCache(limit_bytes=3 * 100 * 100 * 4)  # caben 3 de 100x100 RGBA
     imgs = {k: Image.new("RGBA", (100, 100)) for k in "abcd"}
@@ -1208,7 +1208,7 @@ class _DeleteBeforeLock:
 
 @pytest.mark.parametrize("op", ["save", "copy", "upload", "delete"])
 def test_write_after_concurrent_delete_is_404_not_500(env, op):
-    from visoria.editor.almacen import GONE
+    from luzeira.editor.almacen import GONE
 
     server, client, user, tmp_path, _ = env
     folder = user / "mio"
@@ -1231,7 +1231,7 @@ def test_write_after_concurrent_delete_is_404_not_500(env, op):
 
 def test_folder_removed_mid_save_is_404_with_clear_message(env, monkeypatch):
     """La carpeta desaparece **después** de buscar el tema (borrada a mano): 404 claro."""
-    from visoria.editor.almacen import GONE
+    from luzeira.editor.almacen import GONE
 
     server, client, user, *_ = env
     real = server.store.check_files
@@ -1265,7 +1265,7 @@ def test_messages_have_no_jargon(env):
     assert body["details"][0]["message"].startswith("La imagen del elemento 1 ")
     # Tema roto en disco
     damaged = "Este tema está dañado y no se puede abrir."
-    (user / "mio" / "theme.json").write_text('{"format": "visoria-theme/1", "name": 5}', "utf-8")
+    (user / "mio" / "theme.json").write_text('{"format": "luzeira-theme/1", "name": 5}', "utf-8")
     status, body = client.json("GET", "/api/temas/mio")
     assert status == 400 and body["error"] == damaged
     (user / "mio" / "theme.json").write_text("{esto no es json", "utf-8")
@@ -1281,7 +1281,7 @@ def test_messages_have_no_jargon(env):
 
 
 def test_untranslated_pydantic_error_is_generic_spanish():
-    from visoria.editor.almacen import GENERIC_INVALID, _item_message
+    from luzeira.editor.almacen import GENERIC_INVALID, _item_message
 
     item = {"type": "tipo_nuevo_de_pydantic", "msg": "Input should be blah", "loc": ("x",)}
     assert _item_message(item) == GENERIC_INVALID
@@ -1297,7 +1297,7 @@ def test_editor_default_theme_matches_the_app():
     # la app (editor/src/model/contract.ts).
     import re
 
-    from visoria.config import DEFAULT_THEME
+    from luzeira.config import DEFAULT_THEME
 
     source = Path(__file__).resolve().parent.parent / "editor" / "src" / "model" / "contract.ts"
     match = re.search(r"export const DEFAULT_THEME = '([^']+)'", source.read_text(encoding="utf-8"))

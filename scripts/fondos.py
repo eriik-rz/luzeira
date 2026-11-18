@@ -16,7 +16,7 @@ from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
-TEMAS = Path(__file__).resolve().parent.parent / "src" / "visoria" / "recursos" / "temas"
+TEMAS = Path(__file__).resolve().parent.parent / "src" / "luzeira" / "recursos" / "temas"
 W, H = 480, 320  # horizontal
 VW, VH = 320, 480  # vertical
 

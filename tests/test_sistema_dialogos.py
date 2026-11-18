@@ -2,7 +2,7 @@
 
 import ctypes
 
-from visoria.sistema import dialogos
+from luzeira.sistema import dialogos
 
 
 def test_structure_has_the_size_windows_expects():

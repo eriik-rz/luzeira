@@ -3,10 +3,10 @@
 // al contrato (2026-11-17)».
 
 /** Cabecera con el nombre sugerido de una subida (el servidor lo sanea siempre). */
-export const FILENAME_HEADER = 'X-Visoria-Filename'
+export const FILENAME_HEADER = 'X-Luzeira-Filename'
 
 /**
- * Valor de la cabecera `X-Visoria-Filename`: codificado en URL, porque una cabecera
+ * Valor de la cabecera `X-Luzeira-Filename`: codificado en URL, porque una cabecera
  * HTTP solo admite ASCII y el nombre puede traer tildes, eñes o espacios.
  */
 export function encodeFilenameHeader(name: string): string {
@@ -21,7 +21,7 @@ export function encodeFilenameHeader(name: string): string {
  *   manda el mensaje del servidor.
  */
 export function messageForStatus(status: number, serverMessage?: string | null): string {
-  if (status === 403) return 'Visoria ha rechazado la petición. Cierra el editor y vuelve a abrirlo.'
+  if (status === 403) return 'Luzeira ha rechazado la petición. Cierra el editor y vuelve a abrirlo.'
   if (serverMessage) return serverMessage
   if (status === 404) return 'No se ha encontrado.'
   if (status === 409) return 'Este tema no se puede cambiar. Usa «Guardar como…» para hacer tu copia.'
@@ -49,7 +49,7 @@ export function pickInitialTheme<T extends { name: string; builtin: boolean }>(
 /** Lo que queda sin guardar al cerrar. Ver docs/planning/fase-5-editor.md, «Remate 2». */
 export type Pending = 'none' | 'invalid' | 'builtin' | 'error'
 
-/** Respuesta de `window.visoriaEditor.flush()`, que la ventana lee al cerrar. */
+/** Respuesta de `window.luzeiraEditor.flush()`, que la ventana lee al cerrar. */
 export interface FlushResult {
   saved: boolean
   pending: Pending
@@ -99,7 +99,7 @@ export function appliedMessage(
     case 'suspended':
       return { message: `${saved} Se verá cuando el equipo salga del reposo.`, kind: 'info' }
     case 'stopped':
-      return { message: `${saved} Se verá cuando Visoria ponga la pantalla en marcha.`, kind: 'info' }
+      return { message: `${saved} Se verá cuando Luzeira ponga la pantalla en marcha.`, kind: 'info' }
     case 'simulado':
       return { message: `Aplicado «${title}» (modo simulado: no hay pantalla de verdad).`, kind: 'info' }
     case 'theme_error':
@@ -118,13 +118,13 @@ export function isDroppableImage(name: string): boolean {
   return /\.(png|jpe?g|gif)$/i.test(name)
 }
 
-/** El tema por defecto de Visoria (`DEFAULT_THEME` de `src/visoria/config.py`; un test de
+/** El tema por defecto de Luzeira (`DEFAULT_THEME` de `src/luzeira/config.py`; un test de
  * Python vigila que coincidan). Es el que se pone si se borra el que estaba en pantalla. */
 export const DEFAULT_THEME = 'esencial'
 
 /** Aviso tras mover un tema a la papelera. */
 export function deletedMessage(wasOnScreen: boolean): string {
-  const moved = 'Tema movido a la papelera de Visoria.'
+  const moved = 'Tema movido a la papelera de Luzeira.'
   return wasOnScreen ? `${moved} En la pantalla se ha puesto «Esencial».` : moved
 }
 

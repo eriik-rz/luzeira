@@ -1,0 +1,25 @@
+{
+  "format": "luzeira-theme/1",
+  "name": "Blanco Vertical",
+  "author": "Luzeira",
+  "orientation": "portrait",
+  "background": {"color": "#f3f1ec", "image": "fondo.png"},
+  "widgets": [
+    {"type": "clock", "format": "date-long", "box": {"x": 24, "y": 26, "width": 272, "height": 24}, "style": {"size": 16, "color": "#181818", "align": "left"}},
+    {"type": "clock", "format": "HH:MM", "box": {"x": 18, "y": 50, "width": 290, "height": 116}, "style": {"size": 96, "color": "#181818", "align": "left"}},
+    {"type": "text", "text": "CPU", "box": {"x": 24, "y": 194, "width": 100, "height": 20}, "style": {"size": 14, "bold": true, "color": "#5f5b54", "align": "left"}},
+    {"type": "sensor", "sensor": "system.uptime", "decimals": 1, "prefix": "activo ", "box": {"x": 24, "y": 216, "width": 110, "height": 20}, "style": {"size": 14, "color": "#5f5b54", "align": "left"}},
+    {"type": "sensor", "sensor": "cpu.usage", "show_unit": false, "suffix": "%", "box": {"x": 130, "y": 190, "width": 166, "height": 58}, "style": {"size": 50, "color": "#181818", "align": "right"}},
+    {"type": "bar", "sensor": "cpu.usage", "fill": "#181818", "track": "#dcd8cf", "box": {"x": 24, "y": 252, "width": 272, "height": 6}},
+    {"type": "text", "text": "GPU", "box": {"x": 24, "y": 274, "width": 100, "height": 20}, "style": {"size": 14, "bold": true, "color": "#5f5b54", "align": "left"}},
+    {"type": "sensor", "sensor": "gpu.temperature", "box": {"x": 24, "y": 296, "width": 110, "height": 20}, "style": {"size": 14, "color": "#5f5b54", "align": "left"}},
+    {"type": "sensor", "sensor": "gpu.usage", "show_unit": false, "suffix": "%", "box": {"x": 130, "y": 270, "width": 166, "height": 58}, "style": {"size": 50, "color": "#181818", "align": "right"}},
+    {"type": "bar", "sensor": "gpu.usage", "fill": "#181818", "track": "#dcd8cf", "box": {"x": 24, "y": 332, "width": 272, "height": 6}},
+    {"type": "text", "text": "RAM", "box": {"x": 24, "y": 354, "width": 100, "height": 20}, "style": {"size": 14, "bold": true, "color": "#5f5b54", "align": "left"}},
+    {"type": "sensor", "sensor": "memory.used", "decimals": 1, "box": {"x": 24, "y": 376, "width": 110, "height": 20}, "style": {"size": 14, "color": "#5f5b54", "align": "left"}},
+    {"type": "sensor", "sensor": "memory.usage", "show_unit": false, "suffix": "%", "box": {"x": 130, "y": 350, "width": 166, "height": 58}, "style": {"size": 50, "color": "#181818", "align": "right"}},
+    {"type": "bar", "sensor": "memory.usage", "fill": "#181818", "track": "#dcd8cf", "box": {"x": 24, "y": 412, "width": 272, "height": 6}},
+    {"type": "sensor", "sensor": "network.download", "decimals": 1, "prefix": "↓ ", "box": {"x": 24, "y": 442, "width": 136, "height": 26}, "style": {"size": 16, "color": "#181818", "align": "left"}},
+    {"type": "sensor", "sensor": "network.upload", "decimals": 1, "prefix": "↑ ", "box": {"x": 160, "y": 442, "width": 136, "height": 26}, "style": {"size": 16, "color": "#5f5b54", "align": "right"}}
+  ]
+}

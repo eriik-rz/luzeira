@@ -1,7 +1,7 @@
 {
-  "format": "visoria-theme/1",
+  "format": "luzeira-theme/1",
   "name": "Ejemplo completo ¡Ñandú!",
-  "author": "Visoria",
+  "author": "Luzeira",
   "orientation": "landscape",
   "background": {"color": "#101418", "image": "fondo.png"},
   "widgets": [

@@ -5,9 +5,9 @@ from datetime import datetime
 import pytest
 from PIL import Image, ImageFont
 
-from visoria.render import Renderer, format_clock, format_reading
-from visoria.sensores.base import Reading
-from visoria.temas.modelo import SensorWidget, Theme
+from luzeira.render import Renderer, format_clock, format_reading
+from luzeira.sensores.base import Reading
+from luzeira.temas.modelo import SensorWidget, Theme
 
 
 def font_for(style):
@@ -27,7 +27,7 @@ class FakeClock:
 
 def make_theme(*widgets, orientation="landscape", background=None):
     data = {
-        "format": "visoria-theme/1",
+        "format": "luzeira-theme/1",
         "name": "Prueba",
         "orientation": orientation,
         "widgets": list(widgets),
@@ -374,7 +374,7 @@ def test_broken_theme_font_falls_back_instead_of_crashing():
         {"type": "text", "text": "Hola", "style": {"font": "rota.ttf"}, "box": box()}
     )
     frame = Renderer(theme, font_for=font, read_sensor=lambda s: Reading(None, "")).full_frame()
-    assert calls == ["rota.ttf", None]  # probó la del tema y cayó a la de Visoria
+    assert calls == ["rota.ttf", None]  # probó la del tema y cayó a la de Luzeira
     assert frame.crop((0, 0, 100, 40)).getbbox() is not None  # y pintó algo
 
 

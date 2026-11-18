@@ -11,8 +11,8 @@ from ctypes import wintypes
 
 import pytest
 
-from visoria.sistema import sesion
-from visoria.sistema.sesion import WM_ENDSESSION, WM_QUERYENDSESSION, SessionWatcher
+from luzeira.sistema import sesion
+from luzeira.sistema.sesion import WM_ENDSESSION, WM_QUERYENDSESSION, SessionWatcher
 
 windows_only = pytest.mark.skipif(sys.platform != "win32", reason="solo Windows")
 
@@ -70,8 +70,8 @@ def test_end_session_false_does_not_call(watcher, calls):
 
 @windows_only
 def test_other_messages_go_to_defwindowproc(watcher):
-    # DefWindowProc responde a WM_GETTEXTLENGTH con la longitud del título «Visoria».
-    assert user32.SendMessageW(watcher.hwnd, WM_GETTEXTLENGTH, 0, 0) == len("Visoria")
+    # DefWindowProc responde a WM_GETTEXTLENGTH con la longitud del título «Luzeira».
+    assert user32.SendMessageW(watcher.hwnd, WM_GETTEXTLENGTH, 0, 0) == len("Luzeira")
 
 
 @windows_only
@@ -79,7 +79,7 @@ def test_callback_errors_are_logged_not_raised(caplog):
     def boom() -> None:
         raise RuntimeError("fallo del usuario")
 
-    with SessionWatcher(boom) as w, caplog.at_level(logging.ERROR, logger="visoria.sistema.sesion"):
+    with SessionWatcher(boom) as w, caplog.at_level(logging.ERROR, logger="luzeira.sistema.sesion"):
         assert user32.SendMessageW(w.hwnd, WM_ENDSESSION, 1, 0) == 0
         assert w.active
     assert any("on_end_session" in r.getMessage() and r.exc_info for r in caplog.records)
@@ -119,7 +119,7 @@ def test_window_is_top_level_and_hidden(watcher):
 def test_start_fails_cleanly_when_class_cannot_register(caplog):
     w = SessionWatcher(lambda: None)
     w.class_name = "x" * 300  # más de 256 caracteres: RegisterClassExW lo rechaza
-    with caplog.at_level(logging.ERROR, logger="visoria.sistema.sesion"):
+    with caplog.at_level(logging.ERROR, logger="luzeira.sistema.sesion"):
         assert w.start() is False
     assert not w.active
     assert any("registrar la clase" in r.getMessage() for r in caplog.records)
@@ -129,6 +129,6 @@ def test_start_fails_cleanly_when_class_cannot_register(caplog):
 def test_start_without_api_warns(monkeypatch, caplog):
     monkeypatch.setattr(sesion, "_load_user32", lambda: None)
     w = SessionWatcher(lambda: None)
-    with caplog.at_level(logging.WARNING, logger="visoria.sistema.sesion"):
+    with caplog.at_level(logging.WARNING, logger="luzeira.sistema.sesion"):
         assert w.start() is False
     assert any(r.levelno == logging.WARNING for r in caplog.records)

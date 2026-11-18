@@ -110,7 +110,7 @@ export function FontPicker({ value, services, onChange, error }: FontProps) {
           value={value ?? ''}
           onChange={(e) => onChange(e.target.value || null)}
         >
-          <option value="">La de Visoria</option>
+          <option value="">La de Luzeira</option>
           {fonts.map((f) => (
             <option key={f} value={f}>
               {baseName(f)}
@@ -136,7 +136,7 @@ export function FontPicker({ value, services, onChange, error }: FontProps) {
           {error}
         </p>
       ) : (
-        <p className="hint">La de Visoria tiene tildes y ñ. Puedes subir la tuya (.ttf u .otf).</p>
+        <p className="hint">La de Luzeira tiene tildes y ñ. Puedes subir la tuya (.ttf u .otf).</p>
       )}
     </div>
   )

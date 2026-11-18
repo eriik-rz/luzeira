@@ -7,9 +7,9 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from visoria.pantallas import turing_rev_a
-from visoria.pantallas.rgb565 import pixel_to_rgb565_le, to_rgb565_le
-from visoria.pantallas.turing_rev_a import (
+from luzeira.pantallas import turing_rev_a
+from luzeira.pantallas.rgb565 import pixel_to_rgb565_le, to_rgb565_le
+from luzeira.pantallas.turing_rev_a import (
     TURING_3_5,
     USBMONITOR_5,
     Command,

@@ -25,7 +25,7 @@ import type { Theme, ThemeJson } from '../src/model/types.ts'
 const LANDSCAPE = { width: 480, height: 320 }
 
 const json: ThemeJson = {
-  format: 'visoria-theme/1',
+  format: 'luzeira-theme/1',
   name: 'Prueba',
   orientation: 'landscape',
   widgets: [
@@ -397,7 +397,7 @@ test('Alt+clic baja una capa en el punto y vuelve arriba al llegar al fondo', ()
 })
 
 test('al borrar el tema que estaba en pantalla, el aviso dice qué se ha puesto', () => {
-  assert.equal(deletedMessage(false), 'Tema movido a la papelera de Visoria.')
+  assert.equal(deletedMessage(false), 'Tema movido a la papelera de Luzeira.')
   assert.ok(/papelera.*En la pantalla se ha puesto «Esencial»/.test(deletedMessage(true)))
 })
 

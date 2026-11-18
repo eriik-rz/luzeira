@@ -1,14 +1,14 @@
 // Datos falsos del modo simulado. El tema «Esencial» es una copia del incluido en
-// src/visoria/recursos/temas/esencial/theme.json (si cambia allí, da igual: es solo
+// src/luzeira/recursos/temas/esencial/theme.json (si cambia allí, da igual: es solo
 // para desarrollar y hacer capturas).
 
 import type { ThemeJson } from '../model/types.ts'
 import type { SensorInfo } from '../api.ts'
 
 export const ESENCIAL: ThemeJson = {
-  format: 'visoria-theme/1',
+  format: 'luzeira-theme/1',
   name: 'Esencial',
-  author: 'Visoria',
+  author: 'Luzeira',
   orientation: 'landscape',
   background: { color: '#0c101c' },
   widgets: [
@@ -33,7 +33,7 @@ export const ESENCIAL: ThemeJson = {
 }
 
 export const MI_TEMA: ThemeJson = {
-  format: 'visoria-theme/1',
+  format: 'luzeira-theme/1',
   name: 'Mi tema',
   author: null,
   orientation: 'landscape',

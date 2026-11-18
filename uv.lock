@@ -620,7 +620,7 @@ wheels = [
 ]
 
 [[package]]
-name = "visoria"
+name = "luzeira"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

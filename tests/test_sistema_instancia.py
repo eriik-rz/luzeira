@@ -8,14 +8,14 @@ import uuid
 
 import pytest
 
-from visoria.sistema.instancia import SingleInstance
+from luzeira.sistema.instancia import SingleInstance
 
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="solo Windows")
 
 
 @pytest.fixture
 def name():
-    return f"VisoriaTest-{uuid.uuid4().hex}"
+    return f"LuzeiraTest-{uuid.uuid4().hex}"
 
 
 def test_second_instance_is_refused(name):
@@ -58,7 +58,7 @@ def test_context_manager(name):
 def test_other_process_is_refused(name):
     code = (
         "import sys\n"
-        "from visoria.sistema.instancia import SingleInstance\n"
+        "from luzeira.sistema.instancia import SingleInstance\n"
         f"sys.exit(0 if SingleInstance({name!r}).acquire() else 3)\n"
     )
     with SingleInstance(name) as lock:

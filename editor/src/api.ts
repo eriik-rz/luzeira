@@ -1,8 +1,8 @@
-// Capa de API: habla con el servidor local de Visoria (docs/planning/fase-5-editor.md).
+// Capa de API: habla con el servidor local de Luzeira (docs/planning/fase-5-editor.md).
 //
 // Seguridad (RQ-14):
-//  - El token NUNCA va en la URL de las peticiones: viaja en la cabecera X-Visoria-Token.
-//  - En la ventana de Visoria (pywebview) el token se pide al puente JS:
+//  - El token NUNCA va en la URL de las peticiones: viaja en la cabecera X-Luzeira-Token.
+//  - En la ventana de Luzeira (pywebview) el token se pide al puente JS:
 //    `await window.pywebview.api.token()`.
 //  - En desarrollo (`npm run dev` en un navegador) se lee del fragmento `#token=…`, que
 //    el navegador no envía al servidor.
@@ -140,7 +140,7 @@ async function obtainToken(timeoutMs = 4000): Promise<string> {
   })
   if (waited) return waited
   throw new ApiError(
-    'No se pudo conectar con Visoria. Abre el editor desde el icono de Visoria en la bandeja.',
+    'No se pudo conectar con Luzeira. Abre el editor desde el icono de Luzeira en la bandeja.',
     0,
   )
 }
@@ -163,14 +163,14 @@ class HttpApi implements EditorApi {
     extraHeaders: Record<string, string> = {},
     keepalive = false,
   ): Promise<Response> {
-    const headers: Record<string, string> = { ...extraHeaders, 'X-Visoria-Token': this.token }
+    const headers: Record<string, string> = { ...extraHeaders, 'X-Luzeira-Token': this.token }
     if (contentType) headers['Content-Type'] = contentType
     let res: Response
     try {
       res = await fetch(path, { method, headers, body, signal, keepalive, cache: 'no-store', credentials: 'omit' })
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') throw e
-      throw new ApiError('Se ha perdido la conexión con Visoria. ¿Sigue abierta?', 0)
+      throw new ApiError('Se ha perdido la conexión con Luzeira. ¿Sigue abierta?', 0)
     }
     if (!res.ok) throw await errorFrom(res)
     return res
@@ -186,7 +186,7 @@ class HttpApi implements EditorApi {
     try {
       return (await res.json()) as T
     } catch {
-      throw new ApiError('Visoria ha respondido algo inesperado. Cierra el editor y vuelve a abrirlo.', res.status)
+      throw new ApiError('Luzeira ha respondido algo inesperado. Cierra el editor y vuelve a abrirlo.', res.status)
     }
   }
 

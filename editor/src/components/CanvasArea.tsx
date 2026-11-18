@@ -184,7 +184,7 @@ export function CanvasArea(props: Props) {
           role="group"
         >
           {simulated && (
-            <div className="sim-badge" title="Sin servidor: la imagen es una aproximación dibujada en el navegador, no la de Visoria.">
+            <div className="sim-badge" title="Sin servidor: la imagen es una aproximación dibujada en el navegador, no la de Luzeira.">
               <IconInfo /> Vista previa simulada (aproximada)
             </div>
           )}

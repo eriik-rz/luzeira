@@ -52,8 +52,8 @@ interface Props {
 
 declare global {
   interface Window {
-    /** Para la ventana de Visoria: guarda lo pendiente antes de cerrar. */
-    visoriaEditor?: { flush: () => Promise<FlushResult> }
+    /** Para la ventana de Luzeira: guarda lo pendiente antes de cerrar. */
+    luzeiraEditor?: { flush: () => Promise<FlushResult> }
   }
 }
 
@@ -205,7 +205,7 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
   /**
    * Guarda ya lo pendiente (antes de cambiar de tema, aplicar o cerrar) y dice si queda
    * algo que no se ha podido guardar. Es lo que llama la ventana al cerrar
-   * (`window.visoriaEditor.flush()`, ver «Remate 2» en docs/planning/fase-5-editor.md).
+   * (`window.luzeiraEditor.flush()`, ver «Remate 2» en docs/planning/fase-5-editor.md).
    */
   const flush = useCallback(async (): Promise<FlushResult> => {
     const { theme: t, current: c } = latest.current
@@ -221,7 +221,7 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
   }, [enqueueSave])
 
   useEffect(() => {
-    window.visoriaEditor = { flush }
+    window.luzeiraEditor = { flush }
     // Al descargar la página no da tiempo a esperar la cola: se manda el PUT ya (con
     // `keepalive`, que lo deja terminar aunque la página se vaya).
     const onUnload = () => {
@@ -235,7 +235,7 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
     window.addEventListener('beforeunload', onUnload)
     return () => {
       window.removeEventListener('beforeunload', onUnload)
-      if (window.visoriaEditor?.flush === flush) delete window.visoriaEditor
+      if (window.luzeiraEditor?.flush === flush) delete window.luzeiraEditor
     }
   }, [flush, api])
 
@@ -815,7 +815,7 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
             </>
           }
         >
-          <p>Desaparece de la lista, pero no se borra del todo: queda en la carpeta «papelera» de Visoria por si lo quieres recuperar.</p>
+          <p>Desaparece de la lista, pero no se borra del todo: queda en la carpeta «papelera» de Luzeira por si lo quieres recuperar.</p>
           {dialog.onScreen && <p>Es el tema que está ahora en la pantalla: se pondrá «Esencial» en su lugar.</p>}
         </Dialog>
       )}
