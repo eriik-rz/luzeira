@@ -9,6 +9,27 @@ from visoria.config import DEFAULT_THEME, AppConfig
 from visoria.servicio import Status
 
 
+@pytest.fixture(autouse=True)
+def free_tray_window_classes(monkeypatch):
+    """pystray registra una clase de ventana llamada con ``id(icono)`` y solo la libera al
+    parar un icono que se llegó a ejecutar. En los tests nunca se ejecutan: si Python reusa
+    la dirección de un icono muerto para el siguiente, el nombre choca («Esta clase ya
+    existe», intermitente). Se guardan vivos durante el test y se libera su clase al final.
+    En la app no pasa: hay un solo icono."""
+    created = []
+    real_init = pystray.Icon.__init__
+
+    def init(self, *args, **kwargs):
+        real_init(self, *args, **kwargs)
+        created.append(self)
+
+    monkeypatch.setattr(pystray.Icon, "__init__", init)
+    yield
+    for icon in created:
+        if getattr(icon, "_atom", None):
+            icon._unregister_class(icon._atom)
+
+
 @pytest.fixture
 def app(monkeypatch):
     monkeypatch.setattr(bandeja, "save_config", lambda _c: None)
@@ -249,6 +270,8 @@ def test_editor_opens_on_start_only_when_asked(monkeypatch, open_editor):
     opened = []
     monkeypatch.setattr(tray, "_start_service", lambda: None)
     monkeypatch.setattr(tray, "_open_editor", lambda: opened.append(True))
-    monkeypatch.setattr(tray, "icon", type("FakeIcon", (), {"update_menu": lambda self: None})())
-    tray._setup(tray.icon)
+    # El icono real se queda (soltarlo lo destruye a destiempo y su clase de ventana choca
+    # con la del test siguiente: «Esta clase ya existe», intermitente). Solo se calla.
+    monkeypatch.setattr(tray.icon, "update_menu", lambda: None)
+    tray._setup(type("FakeIcon", (), {"visible": False})())
     assert opened == ([True] if open_editor else [])
