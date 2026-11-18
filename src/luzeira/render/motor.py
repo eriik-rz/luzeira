@@ -192,11 +192,18 @@ class Renderer:
         # entre la carga y ahora (TOCTOU, revisor de la fase 3).
         return open_validated_image(path, path.suffix)
 
+    def _scaled(self, rel: str, size: tuple[int, int], how: str) -> Image.Image:
+        """Imagen del tema ya escalada: ``cover`` (fondo, recorta) o ``contain`` (cabe
+        entera). La vista previa del editor la sobrescribe para guardarla en caché."""
+        if how == "cover":
+            return _fit_cover(self._open(rel).convert("RGB"), size)
+        return _fit_contain(self._open(rel), size)
+
     def _build_background(self) -> Image.Image:
         bg = self.theme.background
         base = Image.new("RGBA", self.size, bg.color)
         if bg.image:
-            base.paste(_fit_cover(self._open(bg.image).convert("RGB"), self.size))
+            base.paste(self._scaled(bg.image, self.size, "cover"))
         return base
 
     def _make_layer(self, widget) -> _Layer:
@@ -206,7 +213,7 @@ class Renderer:
             self._draw_text(layer.image, widget.text, widget.style)
         elif isinstance(widget, ImageWidget):
             b = widget.box
-            img = _fit_contain(self._open(widget.file), (b.width, b.height))
+            img = self._scaled(widget.file, (b.width, b.height), "contain")
             layer.image.alpha_composite(
                 img, ((b.width - img.width) // 2, (b.height - img.height) // 2)
             )

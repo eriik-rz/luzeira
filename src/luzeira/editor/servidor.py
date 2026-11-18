@@ -60,10 +60,6 @@ from PIL import Image
 from luzeira import __version__
 from luzeira.render.motor import (
     Renderer,
-    _box_of,
-    _fit_contain,
-    _fit_cover,
-    _Layer,
     format_clock,
 )
 from luzeira.sensores.base import Reading, SensorInfo
@@ -72,7 +68,6 @@ from luzeira.temas.cargar import MAX_ZIP_BYTES
 from luzeira.temas.modelo import (
     ORIENTATION_SIZES,
     ClockWidget,
-    ImageWidget,
     SensorWidget,
     TextWidget,
 )
@@ -192,10 +187,9 @@ class ScaledImageCache:
 class _PreviewRenderer(Renderer):
     """El ``Renderer`` de siempre con la caché de imágenes escaladas y un freno.
 
-    Repite el escalado de ``Renderer._build_background`` y de la capa de imagen de
-    ``Renderer._make_layer`` con las mismas funciones (``_fit_cover``, ``_fit_contain``);
-    el test ``test_cached_preview_matches_plain_renderer`` comprueba que el resultado es
-    idéntico píxel a píxel al del motor (lo que va a la pantalla).
+    Solo cambia ``_scaled``: el escalado es el del motor (``super()._scaled``), así que
+    la vista previa es la misma que va a la pantalla (lo comprueba además
+    ``test_cached_preview_matches_plain_renderer``, píxel a píxel).
     """
 
     def __init__(
@@ -218,28 +212,9 @@ class _PreviewRenderer(Renderer):
             return hit
         if self._cancelled():
             raise _Cancelled
-        if how == "cover":
-            img = _fit_cover(self._open(rel).convert("RGB"), size)
-        else:
-            img = _fit_contain(self._open(rel), size)
+        img = super()._scaled(rel, size, how)
         self._cache.put(key, img)
         return img
-
-    def _build_background(self) -> Image.Image:
-        bg = self.theme.background
-        base = Image.new("RGBA", self.size, bg.color)
-        if bg.image:
-            base.paste(self._scaled(bg.image, self.size, "cover"))
-        return base
-
-    def _make_layer(self, widget):
-        if not isinstance(widget, ImageWidget):
-            return super()._make_layer(widget)
-        b = widget.box
-        layer = _Layer(widget, _box_of(widget), self._blank(widget), False)
-        img = self._scaled(widget.file, (b.width, b.height), "contain")
-        layer.image.alpha_composite(img, ((b.width - img.width) // 2, (b.height - img.height) // 2))
-        return layer
 
 
 def find_missing_glyphs(theme, files, moment: datetime | None = None) -> list[dict]:
