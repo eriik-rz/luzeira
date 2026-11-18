@@ -840,7 +840,8 @@ def menu_texts(app):
     return [i.text for i in walk(app.icon.menu) if i.visible]
 
 
-def test_without_keys_there_is_no_update_menu_nor_question(app, settings):
+def test_without_keys_there_is_no_update_menu_nor_question(app, settings, monkeypatch):
+    monkeypatch.setattr(bandeja.actualizar, "PUBLIC_KEYS", ())
     assert not any("actualiza" in t.lower() for t in menu_texts(app))
     assert settings.updates_question() is False
     assert settings.snapshot()["updates"]["can_check"] is False

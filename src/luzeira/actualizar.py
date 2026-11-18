@@ -61,7 +61,10 @@ ALLOWED_HOSTS = frozenset(
 #: Claves públicas Ed25519 (32 bytes en base64) de quien firma las versiones: la que se
 #: usa y una de reserva, por si hubiera que cambiar de clave sin dejar a nadie sin
 #: actualizaciones. Vacío = no hay con qué comprobar: no se busca nada.
-PUBLIC_KEYS: tuple[str, ...] = ()
+PUBLIC_KEYS: tuple[str, ...] = (
+    "9sCofpm/Fpa1cLFv8cPDv5xPAOvRjguMchK/fvBPkKQ=",  # principal (2026-11-18)
+    "J+ArjKOLJIEbsR45x/RjHNTk9HKSANuzcSb3UCAduh0=",  # reserva, guardada aparte
+)
 
 MAX_MANIFEST_BYTES = 4096
 MAX_SIGNATURE_BYTES = 512

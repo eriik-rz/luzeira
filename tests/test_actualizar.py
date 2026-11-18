@@ -256,3 +256,9 @@ def test_clean_downloads(tmp_path):
     actualizar.clean_downloads(tmp_path)
     assert list(tmp_path.iterdir()) == []
     actualizar.clean_downloads(tmp_path / "no-existe")  # sin carpeta, nada
+
+
+def test_the_shipped_keys_are_two_distinct_ed25519_public_keys():
+    keys = actualizar.PUBLIC_KEYS
+    assert len(keys) == 2 and len(set(keys)) == 2  # la principal y la de reserva
+    assert len(actualizar._load_keys(keys)) == 2

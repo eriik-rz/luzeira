@@ -17,13 +17,15 @@ En cada versión, con la release ya en borrador (la deja así el workflow ``rele
 Baja el instalador del borrador, comprueba su attestation de GitHub y su línea de
 ``SHA256SUMS``, escribe ``manifest.json`` y ``manifest.json.sig`` y los sube al borrador.
 Publicar lo haces tú después: ``gh release edit v0.2.0 --draft=false -R eriik-rz/luzeira``.
+
+Las contraseñas se piden en una ventanita de Windows: así las escribes tú y no pasan por
+ningún registro (ni por la conversación con Claude Code, si lo lanza él).
 """
 
 from __future__ import annotations
 
 import argparse
 import base64
-import getpass
 import hashlib
 import subprocess
 import sys
@@ -46,6 +48,37 @@ from luzeira import actualizar  # noqa: E402
 from luzeira.actualizar import Manifest, parse_version  # noqa: E402
 
 MIN_PASSWORD = 12
+
+
+def ask_password(prompt: str) -> str:
+    """Siempre en una ventanita: lo que se escribe no se ve ni sale por la salida del
+    programa. No se usa ``getpass``: en Windows, ``isatty()`` es True también para NUL
+    (``</dev/null``), y ``getpass`` se queda esperando una consola que no hay (pasó el
+    2026-11-18)."""
+    import tkinter
+
+    # Ventana normal y siempre encima: un diálogo colgado de una ventana oculta
+    # (simpledialog con root.withdraw()) puede quedarse invisible (pasó el 2026-11-18).
+    root = tkinter.Tk()
+    root.title("Luzeira: firma")
+    root.attributes("-topmost", True)
+    root.resizable(False, False)
+    result: dict[str, str] = {}
+    tkinter.Label(root, text=prompt, padx=16, pady=10).pack()
+    entry = tkinter.Entry(root, show="•", width=40)
+    entry.pack(padx=16)
+
+    def accept(_event=None) -> None:
+        result["value"] = entry.get()
+        root.destroy()
+
+    tkinter.Button(root, text="Aceptar", command=accept, width=12).pack(pady=10)
+    root.bind("<Return>", accept)
+    root.after(100, lambda: (root.lift(), root.focus_force(), entry.focus_set()))
+    root.mainloop()
+    if "value" not in result:
+        sys.exit("Cancelado.")
+    return result["value"]
 
 
 def public_key_of(private: Ed25519PrivateKey) -> str:
@@ -117,10 +150,10 @@ def gh(*args: str) -> None:
 
 
 def cmd_generate(args: argparse.Namespace) -> None:
-    password = getpass.getpass("Contraseña nueva para la clave (mínimo 12 caracteres): ")
+    password = ask_password(f"Contraseña nueva para {args.salida.name} (mínimo 12 caracteres):")
     if len(password) < MIN_PASSWORD:
         sys.exit("Demasiado corta.")
-    if getpass.getpass("Repítela: ") != password:
+    if ask_password("Repítela:") != password:
         sys.exit("No coinciden.")
     public = write_key(args.salida, password.encode("utf-8"))
     print(
@@ -140,7 +173,8 @@ def cmd_sign(args: argparse.Namespace) -> None:
     version = tag[1:]
     parse_version(version)
     repo = actualizar.REPO
-    private = read_key(args.clave, getpass.getpass("Contraseña de la clave: ").encode("utf-8"))
+    password = ask_password(f"Contraseña de {args.clave.name}:")
+    private = read_key(args.clave, password.encode("utf-8"))
     with tempfile.TemporaryDirectory(prefix="luzeira-firmar-") as tmp:
         folder = Path(tmp)
         name = f"Luzeira-{version}-instalador.exe"
