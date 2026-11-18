@@ -1,0 +1,24 @@
+{
+  "format": "visoria-theme/1",
+  "name": "Aurora",
+  "author": "Visoria",
+  "orientation": "landscape",
+  "background": {"color": "#060c22", "image": "fondo.png"},
+  "widgets": [
+    {"type": "clock", "format": "HH:MM", "box": {"x": 16, "y": 28, "width": 232, "height": 84}, "style": {"size": 72, "color": "#ffffff", "align": "left", "bold": true}},
+    {"type": "clock", "format": "date-long", "box": {"x": 18, "y": 112, "width": 232, "height": 26}, "style": {"size": 17, "color": "#9ff0d0", "align": "left"}},
+    {"type": "text", "text": "CPU", "box": {"x": 272, "y": 26, "width": 90, "height": 22}, "style": {"size": 15, "color": "#6dffb4", "align": "left", "bold": true}},
+    {"type": "sensor", "sensor": "cpu.usage", "box": {"x": 272, "y": 48, "width": 178, "height": 42}, "style": {"size": 36, "color": "#ffffff", "align": "left", "bold": true}},
+    {"type": "bar", "sensor": "cpu.usage", "fill": "#6dffb4", "track": "#1a2c48", "box": {"x": 272, "y": 90, "width": 178, "height": 8}},
+    {"type": "text", "text": "GPU", "box": {"x": 272, "y": 122, "width": 90, "height": 22}, "style": {"size": 15, "color": "#5ee0f0", "align": "left", "bold": true}},
+    {"type": "sensor", "sensor": "gpu.temperature", "box": {"x": 352, "y": 122, "width": 98, "height": 22}, "style": {"size": 15, "color": "#c8d8f0", "align": "right"}},
+    {"type": "sensor", "sensor": "gpu.usage", "box": {"x": 272, "y": 144, "width": 178, "height": 42}, "style": {"size": 36, "color": "#ffffff", "align": "left", "bold": true}},
+    {"type": "bar", "sensor": "gpu.usage", "fill": "#5ee0f0", "track": "#1a2c48", "box": {"x": 272, "y": 186, "width": 178, "height": 8}},
+    {"type": "text", "text": "RAM", "box": {"x": 272, "y": 218, "width": 90, "height": 22}, "style": {"size": 15, "color": "#b9a0ff", "align": "left", "bold": true}},
+    {"type": "sensor", "sensor": "memory.used", "decimals": 1, "box": {"x": 352, "y": 218, "width": 98, "height": 22}, "style": {"size": 15, "color": "#c8d8f0", "align": "right"}},
+    {"type": "sensor", "sensor": "memory.usage", "box": {"x": 272, "y": 240, "width": 178, "height": 42}, "style": {"size": 36, "color": "#ffffff", "align": "left", "bold": true}},
+    {"type": "bar", "sensor": "memory.usage", "fill": "#b9a0ff", "track": "#1a2c48", "box": {"x": 272, "y": 282, "width": 178, "height": 8}},
+    {"type": "sensor", "sensor": "network.download", "decimals": 1, "prefix": "↓ ", "box": {"x": 32, "y": 242, "width": 196, "height": 28}, "style": {"size": 18, "color": "#ffffff", "align": "left", "bold": true}},
+    {"type": "sensor", "sensor": "network.upload", "decimals": 1, "prefix": "↑ ", "box": {"x": 32, "y": 272, "width": 196, "height": 26}, "style": {"size": 17, "color": "#c9b8ff", "align": "left"}}
+  ]
+}

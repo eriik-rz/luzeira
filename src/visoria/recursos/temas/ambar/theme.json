@@ -1,0 +1,33 @@
+{
+  "format": "visoria-theme/1",
+  "name": "Retro Ámbar",
+  "author": "Visoria",
+  "orientation": "landscape",
+  "background": {"color": "#0e0802", "image": "fondo.png"},
+  "widgets": [
+    {"type": "clock", "format": "date-long", "box": {"x": 24, "y": 10, "width": 280, "height": 24}, "style": {"size": 16, "color": "#d08a10", "align": "left"}},
+    {"type": "sensor", "sensor": "system.uptime", "decimals": 1, "prefix": "encendido ", "interval": 60, "box": {"x": 300, "y": 10, "width": 156, "height": 24}, "style": {"size": 15, "color": "#d08a10", "align": "right"}},
+
+    {"type": "clock", "format": "HH:MM", "box": {"x": 16, "y": 44, "width": 448, "height": 108}, "style": {"size": 104, "bold": true, "color": "#ffb000", "align": "center"}},
+
+    {"type": "text", "text": "CPU", "box": {"x": 24, "y": 166, "width": 60, "height": 22}, "style": {"size": 16, "bold": true, "color": "#d08a10", "align": "left"}},
+    {"type": "sensor", "sensor": "cpu.usage", "box": {"x": 24, "y": 190, "width": 128, "height": 52}, "style": {"size": 42, "bold": true, "color": "#ffb000", "align": "left"}},
+    {"type": "bar", "sensor": "cpu.usage", "fill": "#ffb000", "track": "#3a2304", "box": {"x": 24, "y": 248, "width": 128, "height": 10}},
+
+    {"type": "text", "text": "GPU", "box": {"x": 176, "y": 166, "width": 60, "height": 22}, "style": {"size": 16, "bold": true, "color": "#d08a10", "align": "left"}},
+    {"type": "sensor", "sensor": "gpu.temperature", "box": {"x": 236, "y": 166, "width": 68, "height": 22}, "style": {"size": 15, "color": "#d08a10", "align": "right"}},
+    {"type": "sensor", "sensor": "gpu.usage", "box": {"x": 176, "y": 190, "width": 128, "height": 52}, "style": {"size": 42, "bold": true, "color": "#ffb000", "align": "left"}},
+    {"type": "bar", "sensor": "gpu.usage", "fill": "#ffb000", "track": "#3a2304", "box": {"x": 176, "y": 248, "width": 128, "height": 10}},
+
+    {"type": "text", "text": "RAM", "box": {"x": 328, "y": 166, "width": 60, "height": 22}, "style": {"size": 16, "bold": true, "color": "#d08a10", "align": "left"}},
+    {"type": "sensor", "sensor": "memory.used", "decimals": 1, "box": {"x": 376, "y": 166, "width": 80, "height": 22}, "style": {"size": 15, "color": "#d08a10", "align": "right"}},
+    {"type": "sensor", "sensor": "memory.usage", "box": {"x": 328, "y": 190, "width": 128, "height": 52}, "style": {"size": 42, "bold": true, "color": "#ffb000", "align": "left"}},
+    {"type": "bar", "sensor": "memory.usage", "fill": "#ffb000", "track": "#3a2304", "box": {"x": 328, "y": 248, "width": 128, "height": 10}},
+
+    {"type": "text", "text": "RED", "box": {"x": 24, "y": 282, "width": 50, "height": 26}, "style": {"size": 16, "bold": true, "color": "#d08a10", "align": "left"}},
+    {"type": "sensor", "sensor": "network.download", "decimals": 1, "prefix": "↓ ", "box": {"x": 76, "y": 282, "width": 180, "height": 26}, "style": {"size": 18, "bold": true, "color": "#ffb000", "align": "left"}},
+    {"type": "sensor", "sensor": "network.upload", "decimals": 1, "prefix": "↑ ", "box": {"x": 266, "y": 282, "width": 190, "height": 26}, "style": {"size": 18, "color": "#ffb000", "align": "right"}},
+
+    {"type": "image", "file": "barrido.png", "box": {"x": 0, "y": 0, "width": 480, "height": 320}}
+  ]
+}

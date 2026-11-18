@@ -70,8 +70,12 @@ def test_list_themes_builtin_first_and_cannot_be_impersonated(tmp_path):
     (tmp_path / "sin-json").mkdir()
     themes = list_themes(tmp_path)
     names = [t.name for t in themes]
-    assert names[0] == DEFAULT_THEME and themes[0].builtin
-    assert themes[0].path == BUILTIN_THEMES / DEFAULT_THEME
+    # Primero todos los incluidos, después los del usuario.
+    flags = [t.builtin for t in themes]
+    assert flags == sorted(flags, reverse=True) and flags[0]
+    # El que se llama como uno incluido es el incluido, no el del usuario.
+    default = next(t for t in themes if t.name == DEFAULT_THEME)
+    assert default.builtin and default.path == BUILTIN_THEMES / DEFAULT_THEME
     assert "mio" in names
     assert ".importando-abc" not in names and "sin-json" not in names
     assert names.count(DEFAULT_THEME) == 1

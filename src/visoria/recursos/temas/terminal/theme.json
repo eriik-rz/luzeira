@@ -1,6 +1,6 @@
 {
   "format": "visoria-theme/1",
-  "name": "Neón Terminal",
+  "name": "Terminal",
   "author": "Visoria",
   "orientation": "landscape",
   "background": {"color": "#020904", "image": "fondo.png"},

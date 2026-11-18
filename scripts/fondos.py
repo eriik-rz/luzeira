@@ -129,7 +129,7 @@ SYNTH_HORIZON = 196
 SYNTH_PANELS = [(16, 212, 160, 306), (168, 212, 312, 306), (320, 212, 464, 306)]
 
 
-def neon_synthwave() -> Image.Image:
+def synthwave() -> Image.Image:
     hz = SYNTH_HORIZON
     img = _gradient(
         (W, H),
@@ -185,7 +185,7 @@ def neon_synthwave() -> Image.Image:
     return img.convert("RGB")
 
 
-def neon_terminal() -> Image.Image:
+def terminal() -> Image.Image:
     img = Image.new("RGBA", (W, H), (2, 9, 4, 255))
     _light(img, (40, 40, 440, 300), (20, 90, 40, 70), 70)
     d = ImageDraw.Draw(img)
@@ -197,7 +197,7 @@ def neon_terminal() -> Image.Image:
     return img.convert("RGB")
 
 
-def neon_terminal_segmentos() -> Image.Image:
+def terminal_segmentos() -> Image.Image:
     """Capa que va ENCIMA de las barras: las corta en bloques, como «█████░░░» de consola."""
     seg = Image.new("RGBA", (176, 12), (0, 0, 0, 0))
     d = ImageDraw.Draw(seg)
@@ -209,7 +209,7 @@ def neon_terminal_segmentos() -> Image.Image:
 HIELO_PANELS = [(12, y, 308, y + 76) for y in (136, 220, 304, 388)]
 
 
-def neon_hielo() -> Image.Image:
+def hielo_vertical() -> Image.Image:
     img = _gradient(
         (VW, VH), [(0.0, (8, 24, 48)), (0.45, (5, 16, 34)), (1.0, (3, 10, 22))]
     ).convert("RGBA")
@@ -242,7 +242,7 @@ def reloj() -> Image.Image:
     return img.convert("RGB")
 
 
-def reloj_minimal() -> Image.Image:
+def reloj_minimalista() -> Image.Image:
     img = Image.new("RGBA", (W, H), (7, 7, 9, 255))
     _light(img, (60, 20, 420, 300), (34, 34, 42, 255), 80)
     ImageDraw.Draw(img).line((216, 214, 264, 214), fill=(255, 255, 255, 60), width=1)
@@ -402,12 +402,12 @@ def tarjetas_vertical() -> Image.Image:
 
 FONDOS: list[tuple[str, str, Callable[[], Image.Image]]] = [
     ("neon", "fondo.png", neon),
-    ("neon-synthwave", "fondo.png", neon_synthwave),
-    ("neon-terminal", "fondo.png", neon_terminal),
-    ("neon-terminal", "segmentos.png", neon_terminal_segmentos),
-    ("neon-hielo", "fondo.png", neon_hielo),
+    ("synthwave", "fondo.png", synthwave),
+    ("terminal", "fondo.png", terminal),
+    ("terminal", "segmentos.png", terminal_segmentos),
+    ("hielo-vertical", "fondo.png", hielo_vertical),
     ("reloj", "fondo.png", reloj),
-    ("reloj-minimal", "fondo.png", reloj_minimal),
+    ("reloj-minimalista", "fondo.png", reloj_minimalista),
     ("reloj-segundos", "fondo.png", reloj_segundos),
     ("reloj-vertical", "fondo.png", reloj_vertical),
     ("esencial-claro", "fondo.png", esencial_claro),
@@ -420,8 +420,25 @@ FONDOS: list[tuple[str, str, Callable[[], Image.Image]]] = [
 ]
 
 
+def _style_modules() -> list[tuple[str, str, Callable[[], Image.Image]]]:
+    """Fondos de ``scripts/estilos/*.py``: cada módulo, un estilo (o varios), con su propia
+    lista ``FONDOS``. Así varios estilos se pueden escribir a la vez sin tocar este fichero;
+    las utilidades de aquí (``_gradient``, ``_glow``…) se importan con ``from fondos import``."""
+    import importlib.util
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    found: list[tuple[str, str, Callable[[], Image.Image]]] = []
+    for path in sorted((Path(__file__).resolve().parent / "estilos").glob("*.py")):
+        spec = importlib.util.spec_from_file_location(f"estilos.{path.stem}", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        found += module.FONDOS
+    return found
+
+
 def main() -> None:
-    for folder, filename, make in FONDOS:
+    for folder, filename, make in [*FONDOS, *_style_modules()]:
         out = TEMAS / folder / filename
         out.parent.mkdir(parents=True, exist_ok=True)
         make().save(out, optimize=True)
