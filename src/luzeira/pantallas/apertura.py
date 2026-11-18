@@ -25,6 +25,7 @@ from luzeira.pantallas.modelos import (
     REV_A,
     REV_B,
     REV_C,
+    VID_PID_CH552,
     DisplayChoice,
     PortInfo,
     identify,
@@ -53,7 +54,8 @@ def open_auto(
     2. Una rev B reconocida por su serie → su driver, que saluda y comprueba la respuesta.
     3. Un ``1a86:5722`` sin serie conocido → :class:`ConfirmationNeeded` (rev A o rev B:
        decide el usuario), como antes.
-    4. Una Kipye → :class:`ModelToConfirm`: solo por su USB, la confirma el usuario.
+    4. Una Kipye → :class:`ModelToConfirm`: solo por su USB, la confirma el usuario
+       (el servicio sigue buscando mientras: si aparece una rev A, se abre sola).
     5. Una rev C → :class:`UnsupportedModel`.
     6. Nada → el mismo error de siempre.
 
@@ -92,8 +94,13 @@ def open_chosen(
     """Abre la pantalla que eligió el usuario, con el driver de ese modelo y nada más.
 
     Antes se revalida contra lo que Windows dice ahora (:func:`match_choice`); si ya no
-    coincide, :class:`ChosenDisplayMissing` sin abrir nada. Si la pantalla no contesta
-    como ese modelo, :class:`WrongModel` con el puerto ya cerrado.
+    coincide, :class:`ChosenDisplayMissing` sin abrir nada. Si la pantalla contesta otra
+    cosa que ese modelo, :class:`WrongModel` con el puerto ya cerrado.
+
+    La pantalla devuelta lleva ``verified``: False si su primera prueba no ha podido
+    demostrar que es ese modelo (la Kipye, que no tiene saludo, o una rev A que no
+    contesta en un puerto que no es ``1a86:5722``). Esa elección no se recuerda sin que
+    el usuario confirme que se ve bien.
     """
     model = model_by_key(choice.model)
     port = match_choice(choice, list_ports(ports))
@@ -107,6 +114,9 @@ def open_chosen(
         if answer and not (len(answer) == 6 and len(set(answer)) == 1):
             display.close()
             raise WrongModel(port.device, REV_A.label)
+        # Sin respuesta solo cuenta como rev A con su USB (el Turing oficial no contesta):
+        # en otro puerto, el silencio no demuestra nada.
+        display.verified = bool(answer) or port.usb_id == VID_PID_CH552
         return display
     if model is REV_B:
         return XuanFangRevB.open(port.device, serial_factory=serial_factory, sleep=sleep)

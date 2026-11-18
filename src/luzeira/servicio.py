@@ -36,8 +36,10 @@ from luzeira.pantallas import (
     DisplayBusy,
     DisplayChoice,
     DisplayError,
+    ModelToConfirm,
     Orientation,
     TuringRevA,
+    UnsupportedModel,
     WrongModel,
 )
 from luzeira.pantallas.apertura import open_auto, open_chosen
@@ -129,6 +131,12 @@ class DisplayInfo:
 
     model_key: str  # clave de ``pantallas.modelos`` ("" si el driver no la dice)
     device: str | None
+    # La elección con la que se abrió (None: detección sola). Con ella sabe la bandeja si
+    # lo que se ve es lo que el usuario eligió, aunque Windows le haya cambiado el COM.
+    choice: DisplayChoice | None = None
+    # False: la primera prueba no demuestra que ahí esté ese modelo (Kipye, o una rev A
+    # muda fuera de su USB). La bandeja pregunta al usuario antes de recordarla.
+    verified: bool = True
 
 
 def open_once(port: str | None) -> Display:
@@ -138,9 +146,10 @@ def open_once(port: str | None) -> Display:
     poder atender a ``stop()`` ni a ``suspend()``. Aquí los reintentos los hace el
     servicio con esperas interrumpibles.
 
-    ``port`` = el usuario ha confirmado que ahí hay una rev A. Sin él, detección sin
-    enviar bytes (``pantallas.apertura.open_auto``): la rev A con su serie se abre igual
-    que siempre; las demás, solo si su serie las identifica sin duda.
+    ``port`` = el usuario ha confirmado que ahí hay una rev A. Sin él, detección
+    (``pantallas.apertura.open_auto``): se decide con lo que Windows ya sabe del USB, sin
+    enviar bytes, y solo se abre (y se le manda algo) a una pantalla que su número de serie
+    identifica sin duda: la rev A, igual que siempre, o la rev B.
     """
     if port is not None:
         return TuringRevA.open(port, retries=1)
@@ -164,6 +173,8 @@ def _no_display_message(exc: DisplayError) -> str:
     """El mensaje del driver ya es para el usuario (la causa técnica va en ``__cause__``).
     «Ocupada» (``DisplayBusy``) dice qué hacer; se añade que se sigue intentando."""
     text = str(exc)
+    if isinstance(exc, UnsupportedModel):
+        return text  # ya dice qué pasa: no se le manda nada, se sigue buscando otra
     if isinstance(exc, DisplayBusy) or "intentando" not in text:
         text += MSG_RETRYING
     return text
@@ -336,9 +347,10 @@ class DisplayService:
 
     def choose_display(self, choice: DisplayChoice | None) -> None:
         """Usar esta pantalla (modelo + puerto) en vez de la que haya; ``None``: volver a
-        la detección sola. Se suelta la pantalla actual y se prueba la elegida con el
-        saludo de su modelo; si no contesta como tal, el estado pasa a NEEDS_CONFIRMATION
-        con el aviso y no se prueba ningún otro modelo."""
+        la detección sola. Se suelta la pantalla actual y se prueba la elegida con la
+        primera prueba de su modelo (el saludo; la Kipye no tiene y su prueba es un brillo);
+        si contesta otra cosa, el estado pasa a NEEDS_CONFIRMATION con el aviso y no se
+        prueba ningún otro modelo."""
         with self._cond:
             self._new_choice = (choice,)  # en tupla: «elegir None» también es una orden
             self._kick = True
@@ -444,16 +456,24 @@ class DisplayService:
             self._wait(self._retry_at - now)
             return
         try:
-            display = self._open()
+            display, opened_with = self._open()
+        except ModelToConfirm as exc:
+            # Una beta reconocida solo por su USB (Kipye): no se le manda nada, pero se sigue
+            # buscando (enumerar puertos no manda nada). Si mientras tanto aparece una rev A
+            # con su serie, se abre sola; la propuesta sigue en pie con el mismo aviso.
+            self._schedule_retry()
+            self._set(Status.NEEDS_CONFIRMATION, str(exc), device=exc.device, choice=exc.choice)
+            return
         except ConfirmationNeeded as exc:
             # Podría ser otro modelo: no se reintenta hasta que el usuario responda.
             self._retry_at = math.inf
             self._set(Status.NEEDS_CONFIRMATION, str(exc), device=exc.device, choice=exc.choice)
             return
         except WrongModel as exc:
-            # La elegida no contesta como ese modelo y el driver ya cerró el puerto. Ni se
-            # reintenta ni se prueba otro modelo. Con la próxima orden se vuelve a la
-            # detección sola, que no manda nada a lo que no reconoce.
+            # La elegida ha contestado otra cosa que ese modelo y el driver ya cerró el
+            # puerto. Ni se reintenta ni se prueba otro modelo. Con la próxima orden se
+            # vuelve a la detección sola, que solo abre lo que su serie identifica sin duda.
+            # (Que no conteste nada no llega aquí: es un DisplayError y se reintenta.)
             self._choice = None
             with self._cond:
                 self._confirmed.discard(exc.device)  # un «sí» que resultó no ser: se olvida
@@ -467,7 +487,10 @@ class DisplayService:
         self._display = display
         with self._cond:
             self._info = DisplayInfo(
-                getattr(display, "model_key", ""), getattr(display, "device", None)
+                getattr(display, "model_key", ""),
+                getattr(display, "device", None),
+                choice=opened_with,
+                verified=bool(getattr(display, "verified", True)),
             )
         try:
             display.screen_on()
@@ -481,22 +504,24 @@ class DisplayService:
         self._full_at = self._monotonic() + self._t.warmup
         self._set(Status.STARTING, MSG_CONNECTING)
 
-    def _open(self) -> Display:
+    def _open(self) -> tuple[Display, DisplayChoice | None]:
+        """Abre una pantalla. Devuelve también la elección con la que se abrió (None si
+        es la de la detección sola o una rev A confirmada)."""
         if self._choice is not None:
             try:
-                return self._open_choice(self._choice)
+                return self._open_choice(self._choice), self._choice
             except ChosenDisplayMissing:
                 pass  # la elegida no está (o su USB ya no coincide): detección sola
         try:
-            return self._open_display(None)
+            return self._open_display(None), None
         except ConfirmationNeeded as exc:
             with self._cond:
                 confirmed = exc.device in self._confirmed
             if not confirmed:
                 raise
             if exc.choice is not None:  # una propuesta beta confirmada: con su driver
-                return self._open_choice(exc.choice)
-            return self._open_display(exc.device)
+                return self._open_choice(exc.choice), exc.choice
+            return self._open_display(exc.device), None
 
     def _schedule_retry(self) -> None:
         self._retry_at = self._monotonic() + self._backoff

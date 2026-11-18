@@ -8,7 +8,7 @@ no con las funciones del driver.
 import pytest
 from PIL import Image
 
-from luzeira.pantallas.comun import DisplayError, Orientation, WrongModel
+from luzeira.pantallas.comun import DisplayError, NoAnswer, Orientation, WrongModel
 from luzeira.pantallas.rgb565 import pixel_to_rgb565_le, to_rgb565_be
 from luzeira.pantallas.xuanfang_rev_b import (
     HELLO_ATTEMPTS,
@@ -109,11 +109,27 @@ def test_wrong_hello_answer_closes_port_and_sends_nothing_else(answer):
 
 def test_silent_display_gets_a_capped_number_of_hellos():
     port = FakeSerial()  # nunca contesta
-    with pytest.raises(WrongModel):
+    # Remate C-44: no contestar nada no es «otro modelo» (WrongModel, que para el
+    # servicio para siempre), sino un fallo que se reintenta (puede estar arrancando).
+    with pytest.raises(NoAnswer) as info_:
         XuanFangRevB.open("COM5", serial_factory=lambda _d: port)
+    assert not isinstance(info_.value, WrongModel)
+    assert str(info_.value) == "La pantalla de COM5 no contesta todavía. Lo sigo intentando."
     assert port.writes == [HELLO_REQUEST] * HELLO_ATTEMPTS
     assert HELLO_ATTEMPTS == 2
     assert port.closed
+
+
+def test_silent_display_is_retried_on_a_fresh_port():
+    ports = []
+
+    def factory(_device):
+        ports.append(FakeSerial())
+        return ports[-1]
+
+    with pytest.raises(NoAnswer):
+        XuanFangRevB.open("COM5", retries=3, serial_factory=factory, sleep=lambda _s: None)
+    assert len(ports) == 3 and all(p.closed for p in ports)
 
 
 def test_second_hello_can_succeed_after_a_silent_first():

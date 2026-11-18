@@ -65,3 +65,12 @@ def test_warning_defaults_to_no():
 def test_confirm_without_windows_is_no(monkeypatch):
     monkeypatch.setattr(dialogos, "_message_box", lambda: None)
     assert dialogos.confirm("t", "x") is False
+
+
+def test_default_no_keeps_the_question_icon_and_passes_through(monkeypatch):
+    flags = dialogos.confirm_flags(warning=False, default_no=True)
+    assert flags & 0xF0 == 0x20  # MB_ICONQUESTION: no es una advertencia
+    assert flags & 0xF00 == 0x100  # MB_DEFBUTTON2: Intro = «No»
+    calls = fake_box(monkeypatch, 7)
+    assert dialogos.confirm("t", "¿Se ve bien?", default_no=True) is False
+    assert calls[0][3] == flags

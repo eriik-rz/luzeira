@@ -17,7 +17,9 @@ from luzeira.pantallas import (
     DisplayChoice,
     DisplayError,
     ModelToConfirm,
+    NoAnswer,
     Orientation,
+    UnsupportedModel,
     WrongModel,
 )
 from luzeira.sensores.base import Reading
@@ -582,7 +584,8 @@ def test_choose_display_releases_the_current_one_and_probes_the_new_one():
 
 def test_proposed_beta_model_is_offered_and_confirming_uses_its_driver():
     kipye = DisplayChoice("kipye-rev-d", "COM8", 0x454D, 0x4E41)
-    opener = Opener(plan=[ModelToConfirm(kipye, 'Kipye Qiye 3,5"')] * 2)
+    # Muchas: mientras se espera el «sí», el servicio sigue buscando (remate C-44).
+    opener = Opener(plan=[ModelToConfirm(kipye, 'Kipye Qiye 3,5"')] * 10_000)
     chooser = ChoiceOpener(opener.log)
     with Harness(opener=opener, open_choice=chooser) as h:
         h.wait_status(Status.NEEDS_CONFIRMATION)
@@ -592,6 +595,7 @@ def test_proposed_beta_model_is_offered_and_confirming_uses_its_driver():
         h.service.confirm_port("COM8")
         h.wait_status(Status.RUNNING)
         assert h.service.pending_choice is None
+        assert h.service.display_info.choice == kipye
     assert chooser.calls == [kipye]
 
 
@@ -600,3 +604,64 @@ def test_plain_rev_a_confirmation_has_no_proposed_model():
     with Harness(opener=opener) as h:
         h.wait_status(Status.NEEDS_CONFIRMATION)
         assert h.service.pending_choice is None
+
+
+# --- remate C-44 -----------------------------------------------------------------------
+
+
+def test_unconfirmed_kipye_does_not_stop_the_search_for_a_rev_a():
+    # Una Kipye propuesta (sin «sí» todavía) no deja de buscar: si luego aparece una rev A
+    # con su serie, la detección sola la abre (aquí: el plan se acaba y da pantalla).
+    kipye = DisplayChoice("kipye-rev-d", "COM8", 0x454D, 0x4E41)
+    opener = Opener(plan=[ModelToConfirm(kipye, 'Kipye Qiye 3,5"')] * 3)
+    with Harness(opener=opener) as h:
+        h.wait_status(Status.NEEDS_CONFIRMATION)
+        h.wait_status(Status.RUNNING)
+        assert h.service.pending_choice is None
+        assert h.service.display_info.choice is None  # la de la detección sola
+    assert opener.calls == [None] * 4
+    notified = [m for s, m in h.statuses if s == Status.NEEDS_CONFIRMATION]
+    assert len(notified) == 1  # la propuesta se avisa una vez, no en cada búsqueda
+
+
+def test_unsupported_model_message_does_not_promise_retries_but_keeps_searching():
+    unsupported = UnsupportedModel("COM11", 'Turing de 2,1", 5" u 8,8" (revisión C)')
+    opener = Opener(plan=[unsupported] * 3)
+    with Harness(opener=opener) as h:
+        h.wait_status(Status.NO_DISPLAY)
+        assert h.service.message == str(unsupported)
+        assert "intentando" not in h.service.message
+        h.wait_status(Status.RUNNING)  # sigue buscando: aparece otra y se usa
+    assert len(opener.calls) == 4
+
+
+def test_chosen_display_that_does_not_answer_yet_is_retried_and_kept():
+    # Remate C-44: no contestar nada no es «otro modelo»: se reintenta la misma elección.
+    opener = Opener()
+    chooser = ChoiceOpener(opener.log, plan=[NoAnswer("COM6"), NoAnswer("COM6")])
+    with Harness(opener=opener, choice=REV_B_CHOICE, open_choice=chooser) as h:
+        h.wait_status(Status.NO_DISPLAY)
+        assert h.service.message == "La pantalla de COM6 no contesta todavía. Lo sigo intentando."
+        h.wait_status(Status.RUNNING)
+        assert h.service.display_info.choice == REV_B_CHOICE
+    assert chooser.calls == [REV_B_CHOICE] * 3 and opener.calls == []
+
+
+def test_display_info_says_whether_the_first_probe_proved_the_model():
+    opener = Opener()
+
+    class Unverified(ChoiceOpener):
+        def __call__(self, choice):
+            display = super().__call__(choice)
+            display.verified = False  # p. ej. la Kipye
+            return display
+
+    chooser = Unverified(opener.log)
+    with Harness(opener=opener, choice=REV_B_CHOICE, open_choice=chooser) as h:
+        h.wait_status(Status.RUNNING)
+        assert h.service.display_info.verified is False
+        h.service.choose_display(None)
+        h.wait_for(lambda: opener.displays)
+        h.wait_status(Status.RUNNING)
+        info = h.service.display_info
+        assert info.verified is True and info.choice is None

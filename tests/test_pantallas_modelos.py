@@ -111,10 +111,26 @@ def test_bluetooth_port_is_nothing():
 
 
 def test_closed_list_is_filtered_by_usb_id():
-    assert compatible_models(info(REV_A_COM3)) == [REV_A, REV_B]
+    assert compatible_models(info(UNKNOWN_CH552)) == [REV_A, REV_B]
     assert compatible_models(info(KIPYE_PORT)) == [KIPYE]
     assert compatible_models(info(BLUETOOTH)) == []  # sin USB: solo en modo avanzado
     assert compatible_models(info(REV_C_SLEEPING)) == []  # sin driver
+
+
+def test_closed_list_offers_only_the_model_its_serial_proves():
+    # Remate C-44: una rev A reconocida por su serie no ofrece «XuanFang (beta)» (ni al
+    # revés); los demás modelos quedan para el modo avanzado.
+    assert compatible_models(info(REV_A_COM3)) == [REV_A]
+    assert compatible_models(info(REV_B_PORT)) == [REV_B]
+
+
+def test_normal_choice_of_another_model_on_a_proven_port_is_not_valid():
+    # Una elección normal «rev B sobre una rev A segura» (de un fichero de antes del
+    # remate, o escrito a mano) no vale; en modo avanzado, sí.
+    forged = DisplayChoice.for_port(REV_B, info(REV_A_COM3))
+    assert match_choice(forged, list_ports([REV_A_COM3])) is None
+    advanced = DisplayChoice.for_port(REV_B, info(REV_A_COM3), advanced=True)
+    assert match_choice(advanced, list_ports([REV_A_COM3])).device == "COM3"
 
 
 def test_beta_models_say_so():
@@ -274,10 +290,10 @@ def test_chosen_rev_b_opens_with_its_driver():
 
 def test_chosen_model_that_does_not_answer_is_closed_and_no_other_model_is_tried():
     factory = Factory(bytes([1] * 6))  # contesta como una rev A
-    choice = DisplayChoice.for_port(REV_B, info(REV_A_COM3))
+    choice = DisplayChoice.for_port(REV_B, info(UNKNOWN_CH552))
     with pytest.raises(WrongModel):
-        apertura.open_chosen(choice, [REV_A_COM3], serial_factory=factory)
-    assert factory.opened == ["COM3"]  # una apertura, un modelo
+        apertura.open_chosen(choice, [UNKNOWN_CH552], serial_factory=factory)
+    assert factory.opened == ["COM9"]  # una apertura, un modelo
     assert factory.ports[0].closed
     assert factory.ports[0].writes == [bytes.fromhex("CA 48 45 4C 4C 4F 00 00 00 CA")]
 
@@ -304,3 +320,41 @@ def test_chosen_rev_a_with_a_garbled_answer_is_rejected():
     with pytest.raises(WrongModel):
         apertura.open_chosen(choice, [UNKNOWN_CH552], serial_factory=factory)
     assert factory.ports[0].closed
+
+
+# --- ¿la prueba ha demostrado algo? (remate C-44) -------------------------------
+
+
+@pytest.mark.parametrize("answer", [b"", bytes([1] * 6)])
+def test_chosen_rev_a_on_its_usb_counts_as_verified(answer):
+    choice = DisplayChoice.for_port(REV_A, info(UNKNOWN_CH552))
+    display = apertura.open_chosen(choice, [UNKNOWN_CH552], serial_factory=Factory(answer))
+    assert display.verified is True  # el Turing oficial no contesta: el silencio vale
+
+
+def test_silent_rev_a_outside_its_usb_is_not_verified():
+    choice = DisplayChoice.for_port(REV_A, info(BLUETOOTH), advanced=True)
+    display = apertura.open_chosen(choice, [BLUETOOTH], serial_factory=Factory(b""))
+    assert display.verified is False
+    answering = apertura.open_chosen(choice, [BLUETOOTH], serial_factory=Factory(bytes([1] * 6)))
+    assert answering.verified is True
+
+
+def test_kipye_is_never_verified():
+    choice = DisplayChoice.for_port(KIPYE, info(KIPYE_PORT))
+    display = apertura.open_chosen(choice, [KIPYE_PORT], serial_factory=Factory())
+    assert display.verified is False
+    assert KIPYE.has_hello is False and REV_B.has_hello and REV_A.has_hello
+
+
+def test_rev_b_that_answers_is_verified():
+    choice = DisplayChoice.for_port(REV_B, info(REV_B_PORT))
+    display = apertura.open_chosen(choice, [REV_B_PORT], serial_factory=Factory(REV_B_HELLO))
+    assert display.verified is True
+
+
+def test_unsupported_model_message_is_coherent():
+    with pytest.raises(UnsupportedModel) as info_:
+        apertura.open_auto([REV_C_SLEEPING])
+    text = str(info_.value)
+    assert "no le mando nada" in text and "intentando" not in text

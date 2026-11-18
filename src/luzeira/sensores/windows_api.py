@@ -255,9 +255,13 @@ def list_adapters() -> list[Adapter]:
 # ⚠ No documentado para programas normales: Learn lista KMTQAITYPE_NODEPERFDATA,
 # _ADAPTERPERFDATA y _ADAPTERPERFDATA_CAPS pero sin su valor numérico, y contando su
 # lista salen 60, 61 y 62. Medido en Windows 10 22H2 (19045): responden 61, 62 y 63 (la
-# lista de Learn omite algún valor). Windows comprueba el tamaño exacto del búfer, así
-# que un número equivocado casi siempre da «parámetro inválido» en vez de basura, y aun
-# así cada valor pasa por límites de cordura en ``windows_gpu``.
+# lista de Learn omite algún valor). Windows comprueba el tamaño exacto del búfer, pero
+# eso **no protege** de un número equivocado cuando dos tipos miden lo mismo: el 62
+# (``ADAPTER_PERFDATA``) es de 64 bytes, igual que el ``NODE_PERFDATA`` de Learn, y
+# pedirlo con esa estructura responde bien y da la frecuencia de la **memoria** (405 MHz
+# en reposo en la RTX 4070 SUPER, medido) en el sitio de la del motor. Lo que protege es
+# el test real que compara con NVML la frecuencia máxima (``node_clocks``), y los límites
+# de cordura de ``windows_gpu`` para los disparates.
 # https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/d3dkmthk/ne-d3dkmthk-_kmtqueryadapterinfotype
 _KMT_NODEPERFDATA = 61
 _KMT_ADAPTERPERFDATA = 62
@@ -367,6 +371,12 @@ class RealKmtAdapter:
 
     def clock_hz(self) -> int:
         """Frecuencia del motor 0 (en las tarjetas medidas, el 3D, el que se usa al jugar)."""
+        return self.node_clocks()[0]
+
+    def node_clocks(self) -> tuple[int, int]:
+        """Frecuencia actual y máxima del motor 0, en hercios. La máxima no la enseña la
+        app; la usa el test real para comprobar que el tipo de consulta es el bueno (no
+        cambia con la carga, así que se puede comparar con la de NVML sin margen grande)."""
         kinds = (
             [self._node_struct]
             if self._node_struct
@@ -378,9 +388,9 @@ class RealKmtAdapter:
             status = self._query(_KMT_NODEPERFDATA, data)
             if status == 0:
                 self._node_struct = kind
-                return int(data.Frequency)
+                return int(data.Frequency), int(data.MaxFrequency)
         _check(status, "NODEPERFDATA")
-        return 0
+        return 0, 0
 
     def close(self) -> None:
         if self._handle:

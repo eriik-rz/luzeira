@@ -94,19 +94,23 @@ def _message_box():
         return None
 
 
-def confirm_flags(*, warning: bool) -> int:
+def confirm_flags(*, warning: bool, default_no: bool = False) -> int:
     """Botones Sí/No. Con ``warning``: icono de advertencia y «No» por defecto, para que
-    un Intro despistado no acepte algo arriesgado."""
+    un Intro despistado no acepte algo arriesgado. Con ``default_no``: «No» por defecto
+    pero con el icono de pregunta (p. ej. «¿se ve bien?»: un Intro no debe valer de «sí»)."""
     flags = MB_YESNO | MB_SETFOREGROUND | MB_TOPMOST
     if warning:
         return flags | MB_ICONWARNING | MB_DEFBUTTON2
+    if default_no:
+        return flags | MB_ICONQUESTION | MB_DEFBUTTON2
     return flags | MB_ICONQUESTION
 
 
-def confirm(title: str, text: str, *, warning: bool = False) -> bool:
+def confirm(title: str, text: str, *, warning: bool = False, default_no: bool = False) -> bool:
     """Pregunta Sí/No con el diálogo de Windows. True solo si el usuario pulsa «Sí»
     (cerrar el diálogo o no estar en Windows cuenta como «No»)."""
     box = _message_box()
     if box is None:
         return False
-    return box(None, text, title, confirm_flags(warning=warning)) == IDYES
+    flags = confirm_flags(warning=warning, default_no=default_no)
+    return box(None, text, title, flags) == IDYES

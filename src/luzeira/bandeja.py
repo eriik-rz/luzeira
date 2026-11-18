@@ -24,6 +24,7 @@ import sys
 import threading
 import time
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 
 import pystray
@@ -96,12 +97,35 @@ MSG_NO_WEBVIEW2 = (
 
 # --- elegir pantalla (C-44) ---------------------------------------------------------------
 TITLE_BETA = "Luzeira: probar un modelo en beta"
+# Para los modelos con saludo (la prueba puede decir «esa no es»).
 MSG_BETA = (
     "Vas a probar Luzeira con una {model} en {device}.\n\n"
     "Este modelo está en beta: todavía no se ha probado con una pantalla de verdad.\n\n"
     "Luzeira solo le mandará primero un saludo. Si no contesta como debe, cerrará el "
     "puerto y te avisará, sin probar nada más.\n\n¿Quieres probarlo?"
 )
+# Para los modelos sin saludo (Kipye): la prueba no puede fallar, así que no se promete.
+MSG_BETA_UNCHECKED = (
+    "Vas a probar Luzeira con una {model} en {device}.\n\n"
+    "Este modelo está en beta: todavía no se ha probado con una pantalla de verdad.\n\n"
+    "Además, este modelo no contesta a ningún saludo, así que Luzeira no puede comprobar "
+    "que sea tu pantalla: le mandará la imagen directamente.\n\n"
+    "Si ves rayas o no se ve nada, desconéctala o elige «Pantalla» > «Volver a "
+    "detectarla sola».\n\n¿Quieres probarlo?"
+)
+TITLE_LOOKS_RIGHT = "Luzeira: ¿se ve bien?"
+MSG_LOOKS_RIGHT = (
+    "Luzeira está mandando el tema a la {model} de {device}, pero no puede comprobar "
+    "por sí sola que se vea.\n\n"
+    "¿Se ve bien el tema en la pantalla?\n\n"
+    "Si contestas «Sí», la recordaré para la próxima vez. Si ves rayas, colores raros o "
+    "nada, contesta «No» y dejaré de usarla."
+)
+MSG_TRIAL_REJECTED = (
+    "Vale: no la recuerdo y dejo de mandarle nada. Si la pantalla se ha quedado con rayas, "
+    "desconéctala y vuelve a conectarla."
+)
+MSG_DIALOG_OPEN = "Antes contesta la pregunta de Luzeira que tienes abierta."
 TITLE_ADVANCED = "Luzeira: modo avanzado"
 MSG_ADVANCED = (
     "Cuidado: vas a mandar datos de pantalla a {device} como si fuera una {model}, "
@@ -180,6 +204,11 @@ class TrayApp:
         self._startup_notice: str | None = None
         # Pantalla elegida a mano que se está probando: se guarda solo si funciona.
         self._trial: DisplayChoice | None = None
+        # Diálogos Sí/No: uno cada vez. ``MessageBoxW`` sigue atendiendo los mensajes de la
+        # ventana mientras está abierto, así que el menú y la cola pueden volver a entrar.
+        self._dialog_open = False
+        self._asking: DisplayChoice | None = None  # la de «¿se ve bien?», mientras se pregunta
+        self._question_waiting: DisplayChoice | None = None  # esperando a otro diálogo
         self._ports_cache: tuple[float, list[PortInfo]] | None = None
         if not is_theme_valid(config.theme):
             # Un tema que dejó de funcionar no puede dejar la pantalla apagada para siempre.
@@ -287,7 +316,16 @@ class TrayApp:
 
     def _settle_trial(self, status: Status) -> None:
         """¿Ha funcionado la pantalla elegida a mano? Si se ve imagen, se recuerda; si
-        no contestó como ese modelo, se olvida (el aviso ya lo da el servicio)."""
+        no contestó como ese modelo, se olvida (el aviso ya lo da el servicio).
+
+        Si su prueba no podía fallar (Kipye, o una rev A muda fuera de su USB), «se ve
+        imagen» solo quiere decir que el puerto acepta datos: se pregunta al usuario antes
+        de recordarla.
+
+        Se compara con la elección con la que el servicio abrió la pantalla, no con el COM:
+        si Windows la ha movido de puerto, sigue siendo la elegida (se guarda el COM nuevo).
+        Un RUNNING de la pantalla anterior (llegado tarde) no la resuelve.
+        """
         trial = self._trial
         if trial is None:
             return
@@ -295,13 +333,49 @@ class TrayApp:
             self._trial = None
             return
         info = self.service.display_info
-        if status is not Status.RUNNING or info is None:
-            return
-        if (info.model_key, info.device) != (trial.model, trial.device):
+        if status is not Status.RUNNING or info is None or info.choice != trial:
             return
         self._trial = None
-        self._save(self.config.model_copy(update={"display": setting_from_choice(trial)}))
-        self._notify(MSG_CHOICE_SAVED.format(model=model_label(trial.model), device=trial.device))
+        found = replace(trial, device=info.device or trial.device)
+        if info.verified:
+            self._remember(found)
+        else:
+            self._post(lambda: self._ask_looks_right(found))
+
+    def _remember(self, choice: DisplayChoice) -> None:
+        self._save(self.config.model_copy(update={"display": setting_from_choice(choice)}))
+        self._notify(MSG_CHOICE_SAVED.format(model=model_label(choice.model), device=choice.device))
+
+    def _ask(self, title: str, text: str, **flags: bool) -> bool:
+        """Un diálogo Sí/No (nunca dos a la vez: quien llame mira ``_dialog_open``)."""
+        from luzeira.sistema.dialogos import confirm
+
+        self._dialog_open = True
+        try:
+            return confirm(title, text, **flags)
+        finally:
+            self._dialog_open = False
+            waiting, self._question_waiting = self._question_waiting, None
+            if waiting is not None:
+                self._post(lambda: self._ask_looks_right(waiting))
+
+    def _ask_looks_right(self, choice: DisplayChoice) -> None:
+        """«¿Se ve bien?» para una elección cuya prueba no podía fallar. Sí → se recuerda;
+        No (o cerrar el diálogo) → se deja de usar y se vuelve a lo que hubiera guardado."""
+        if self._dialog_open:
+            self._question_waiting = choice  # en cuanto se cierre el que hay
+            return
+        self._asking = choice
+        text = MSG_LOOKS_RIGHT.format(model=model_label(choice.model), device=choice.device)
+        looks_right = self._ask(TITLE_LOOKS_RIGHT, text, default_no=True)
+        if self._asking is not choice:
+            return  # mientras se preguntaba, el usuario eligió otra cosa en el menú
+        self._asking = None
+        if looks_right:
+            self._remember(choice)
+            return
+        self.service.choose_display(choice_from_setting(self.config.display))
+        self._notify(MSG_TRIAL_REJECTED)
 
     # --- acciones del menú (todas en el hilo del icono) -----------------------------
 
@@ -381,25 +455,29 @@ class TrayApp:
 
     def _try_choice(self, choice: DisplayChoice) -> None:
         self._trial = choice
+        self._asking = self._question_waiting = None  # una pregunta pendiente ya no vale
         self.service.choose_display(choice)
 
     def _pick(self, model: DisplayModel, port: PortInfo, *, advanced: bool) -> None:
         """El usuario ha elegido modelo y puerto en el menú. Beta → se explica y se
         pregunta; modo avanzado → advertencia y «No» por defecto."""
-        from luzeira.sistema.dialogos import confirm
-
+        if self._dialog_open:  # ya hay una pregunta abierta: no abrir otra encima
+            self._notify(MSG_DIALOG_OPEN)
+            return
         if advanced:
             text = MSG_ADVANCED.format(device=port.device, model=model.menu_label)
-            if not confirm(TITLE_ADVANCED, text, warning=True):
+            if not self._ask(TITLE_ADVANCED, text, warning=True):
                 return
         elif model.beta:
-            text = MSG_BETA.format(device=port.device, model=model.label)
-            if not confirm(TITLE_BETA, text):
+            template = MSG_BETA if model.has_hello else MSG_BETA_UNCHECKED
+            text = template.format(device=port.device, model=model.label)
+            if not self._ask(TITLE_BETA, text):
                 return
         self._try_choice(DisplayChoice.for_port(model, port, advanced=advanced))
 
     def _back_to_auto(self) -> None:
         self._trial = None
+        self._asking = self._question_waiting = None
         self._save(self.config.model_copy(update={"display": None}))
         self.service.choose_display(None)
         self._notify(MSG_BACK_TO_AUTO)

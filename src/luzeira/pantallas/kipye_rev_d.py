@@ -65,6 +65,9 @@ class KipyeRevD:
     """Pantalla Kipye Qiye 3,5" (beta). Se crea con :meth:`open`."""
 
     model_key = "kipye-rev-d"
+    # Sin saludo, la primera prueba no puede decir si ahí hay una Kipye: abrir no lo
+    # demuestra. Quien la elige tiene que confirmar que se ve bien (bandeja).
+    verified = False
 
     def __init__(self, transport: Transport) -> None:
         self._transport = transport

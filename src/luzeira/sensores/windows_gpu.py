@@ -70,7 +70,12 @@ _LABELS = {
     "fan": "Ventilador de GPU",
     "clock": "Frecuencia de GPU",
 }
-# Qué sensores salen de PDH (caros: ~2 ms) y cuáles de D3DKMT (baratos: < 1 ms).
+# Qué sensores salen de PDH (caros) y cuáles de D3DKMT (baratos). Medido en la RTX 4070
+# SUPER, Windows 10 19045, con ``read_some`` de todo: 2,5 ms de reloj por lectura si se
+# llama 20 veces seguidas (``perf_counter``); a 1 Hz, como en la app, 3,5 ms de reloj y
+# 3,1 ms de CPU por lectura (``process_time`` total en 30 s / 30: por lectura suelta no
+# vale, en Windows avanza a saltos de ~16 ms). Es ~0,3 % de un núcleo. Solo D3DKMT
+# (temperatura): 0,01 ms. Crece con los procesos que usan la GPU (más instancias en PDH).
 PDH_SENSORS = frozenset({"usage", "memory_used", "memory_usage"})
 KMT_SENSORS = frozenset({"temperature", "fan", "clock"})
 
@@ -198,14 +203,30 @@ def choose_adapter(adapters: Iterable[Adapter], pdh_luids: set[int]) -> Adapter 
     - Entre las que quedan, la de más memoria dedicada (en un portátil con gráfica
       integrada y dedicada, la dedicada). A igualdad, la primera de DXGI.
     """
-    hardware = [a for a in adapters if not a.software]
-    known = [a for a in hardware if a.luid in pdh_luids]
-    candidates = known or hardware
     best: Adapter | None = None
-    for a in candidates:
+    for a in _candidates(adapters, pdh_luids):
         if best is None or a.dedicated_bytes > best.dedicated_bytes:
             best = a
     return best
+
+
+def _candidates(adapters: Iterable[Adapter], pdh_luids: set[int]) -> list[Adapter]:
+    """Las tarjetas entre las que elige ``choose_adapter`` (ver sus reglas)."""
+    hardware = [a for a in adapters if not a.software]
+    known = [a for a in hardware if a.luid in pdh_luids]
+    return known or hardware
+
+
+def same_vendor_count(adapters: Iterable[Adapter], pdh_luids: set[int], chosen: Adapter) -> int:
+    """Cuántas tarjetas candidatas son del mismo fabricante que la elegida (ella incluida).
+
+    Sirve para no mezclar fuentes con dos NVIDIA: NVML lee la suya (la 0 de NVML) y
+    Windows la de más memoria, y no hay forma barata de saber si son la misma. Con una
+    sola NVIDIA, sí lo son seguro. La entrada repetida que lista DXGI sin datos en PDH no
+    cuenta (no es candidata); si PDH no va, sí cuenta, y entonces no se mezcla: mejor
+    «sin dato» que el dato de otra tarjeta.
+    """
+    return sum(1 for a in _candidates(adapters, pdh_luids) if a.vendor_id == chosen.vendor_id)
 
 
 def clean_name(raw: str) -> str:
@@ -226,6 +247,7 @@ class _Started:
     adapter: Adapter
     kmt: KmtAdapter | None
     caps: PerfCaps | None
+    same_vendor: int = 1  # ver ``same_vendor_count``
 
 
 class WindowsGpuSource:
@@ -258,6 +280,10 @@ class WindowsGpuSource:
         self._last_attempt: float | None = None
         self._last_reselect = 0.0
         self._closed = False
+        # Sube en cada ``release()``: un arranque que estaba en marcha en el hilo y termina
+        # después de soltar la fuente ve que su «generación» ya no es la actual y cierra lo
+        # que abrió en vez de guardarlo.
+        self._generation = 0
         self._logged_kmt = False
         self._sensors = [
             *(SensorInfo(self._id(n), _LABELS[n], u, "gpu") for n, u in _UNITS.items()),
@@ -271,10 +297,13 @@ class WindowsGpuSource:
         return list(self._sensors)
 
     @property
-    def vendor_id(self) -> int | None:
-        """Fabricante de la tarjeta elegida (``None`` si aún no hay)."""
+    def sole_vendor_id(self) -> int | None:
+        """Fabricante de la tarjeta elegida **si es la única de su marca** entre las
+        candidatas; ``None`` si aún no hay tarjeta o si hay otra de la misma marca."""
         started = self._started
-        return started.adapter.vendor_id if started else None
+        if started is None or started.same_vendor != 1:
+            return None
+        return started.adapter.vendor_id
 
     # --- arranque ---
 
@@ -292,16 +321,17 @@ class WindowsGpuSource:
                 return
             self._last_attempt = now
             self._attempts += 1
+            generation = self._generation
             if self._background:
                 # Un hilo «daemon» no impide que la app se cierre si aún está arrancando.
                 self._thread = threading.Thread(
-                    target=self._start, name="luzeira-gpu-windows", daemon=True
+                    target=self._start, args=(generation,), name="luzeira-gpu-windows", daemon=True
                 )
                 self._thread.start()
                 return
-        self._start()  # sin hilo (tests): fuera del candado, porque _start lo coge
+        self._start(generation)  # sin hilo (tests): fuera del candado, porque _start lo coge
 
-    def _start(self) -> None:
+    def _start(self, generation: int) -> None:
         """Abre DXGI, PDH y D3DKMT. Corre en el hilo (o directamente en los tests)."""
         try:
             started = self._open()
@@ -310,14 +340,36 @@ class WindowsGpuSource:
             level = logging.INFO if self._attempts == 1 else logging.DEBUG
             log.log(level, "GPU por Windows no disponible (%s).", type(exc).__name__)
             with self._lock:
-                self._failure = NOT_FOUND
+                if generation == self._generation:
+                    self._failure = NOT_FOUND
             return
         with self._lock:
-            if self._closed:  # se cerró mientras arrancaba: se suelta todo aquí
+            # Se cerró o se soltó mientras arrancaba: se suelta todo aquí.
+            if self._closed or generation != self._generation:
                 _close_started(started)
                 return
             self._started = started
             self._failure = None
+
+    def release(self) -> None:
+        """Suelta PDH y D3DKMT sin cerrar la fuente: si vuelven a hacer falta, se abren
+        otra vez (con sus reintentos desde cero).
+
+        Para cuando NVML arranca tarde (el controlador cargó después que la app): hasta
+        entonces Windows lo daba todo; después NVML manda y lo de Windows solo gastaría.
+        Sin nada abierto, no hace nada (se puede llamar en cada ciclo).
+        """
+        with self._lock:
+            if self._started is None and self._attempts == 0:
+                return
+            started, self._started = self._started, None
+            self._generation += 1
+            self._attempts = 0
+            self._last_attempt = None
+            self._failure = None
+        log.debug("GPU por Windows soltada: NVML ya da todos los datos.")
+        if started is not None:
+            _close_started(started)
 
     def _open(self) -> _Started:
         api = self._api if self._api is not None else _real_api()
@@ -340,7 +392,8 @@ class WindowsGpuSource:
                 _quiet_close(counters)
             counters = None
         try:
-            adapter = choose_adapter(api.list_adapters(), pdh_luids)
+            adapters = api.list_adapters()
+            adapter = choose_adapter(adapters, pdh_luids)
         except Exception:
             if counters is not None:
                 _quiet_close(counters)
@@ -350,7 +403,9 @@ class WindowsGpuSource:
                 _quiet_close(counters)
             raise LookupError("sin tarjeta de hardware")
         kmt, caps = self._open_kmt(api, adapter)
-        return _Started(counters, adapter, kmt, caps)
+        return _Started(
+            counters, adapter, kmt, caps, same_vendor_count(adapters, pdh_luids, adapter)
+        )
 
     def _open_kmt(self, api: WindowsGpuApi, adapter: Adapter):
         try:
@@ -480,18 +535,29 @@ class WindowsGpuSource:
         self._last_reselect = now
         api = self._api if self._api is not None else _real_api()
         try:
-            adapter = choose_adapter(api.list_adapters(), pdh_luids)
+            adapters = api.list_adapters()
+            adapter = choose_adapter(adapters, pdh_luids)
         except Exception as exc:
             log.debug("No se pudo volver a buscar la GPU (%s).", type(exc).__name__)
             return
         old = self._started
         if adapter is None or old is None or adapter.luid == old.adapter.luid:
             return
-        if old.kmt is not None:
-            _quiet_close(old.kmt)
         kmt, caps = self._open_kmt(api, adapter)
+        new = _Started(
+            old.counters, adapter, kmt, caps, same_vendor_count(adapters, pdh_luids, adapter)
+        )
+        # El cambio se hace con el candado y solo si nadie cerró ni soltó la fuente
+        # entretanto; si no, el handle nuevo no lo cerraría nadie. El viejo se cierra después
+        # del cambio, para que ``close()`` no lo cierre dos veces.
         with self._lock:
-            self._started = _Started(old.counters, adapter, kmt, caps)
+            if self._closed or self._started is not old:
+                discard = kmt
+            else:
+                self._started = new
+                discard = old.kmt
+        if discard is not None:
+            _quiet_close(discard)
 
     def _read_kmt(self, started: _Started, out: dict[str, Reading]) -> None:
         temp_id, fan_id, clock_id = self._id("temperature"), self._id("fan"), self._id("clock")

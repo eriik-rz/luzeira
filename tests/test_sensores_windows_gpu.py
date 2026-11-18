@@ -355,6 +355,79 @@ def test_reselects_when_luid_disappears():
     assert api.opened_luids == [LUID, 0x777]
 
 
+def test_reselect_does_not_leak_handle_if_closed_meanwhile():
+    # Otro hilo cierra la fuente justo mientras se abre la tarjeta nueva: el handle nuevo
+    # se cierra y no se guarda (antes quedaba abierto en una fuente ya cerrada).
+    new = Adapter(0x777, "NVIDIA GeForce RTX 4070 SUPER", 0x10DE, 12 * GIB, False)
+    api = FakeApi()
+    clock = Clock()
+    src = make(api, clock)
+    src.read_all()
+    new_kmt = FakeKmt()
+
+    def open_adapter(luid):
+        api.opened_luids.append(luid)
+        src.close()
+        return new_kmt
+
+    api.open_adapter = open_adapter
+    api.adapters = [new, BASIC]
+    api.counters.samples = [sample(luid=0x777)]
+    clock.now += windows_gpu.RESELECT_SECONDS
+    src.read_all()
+    assert api.opened_luids == [LUID, 0x777]
+    assert new_kmt.closed
+    assert src._started is None
+
+
+def test_same_vendor_count_ignores_duplicate_without_pdh():
+    other = Adapter(0x888, "NVIDIA GeForce RTX 3060", 0x10DE, 12 * GIB, False)
+    adapters = [RTX, RTX_DUP, other, RADEON, BASIC]
+    assert windows_gpu.same_vendor_count(adapters, {LUID, RADEON.luid}, RTX) == 1
+    assert windows_gpu.same_vendor_count(adapters, {LUID, 0x888, RADEON.luid}, RTX) == 2
+    # Sin PDH no se sabe cuál es la repetida: cuentan las dos.
+    assert windows_gpu.same_vendor_count(adapters, set(), RTX) == 3
+
+
+def test_release_closes_and_allows_restart():
+    api = FakeApi()
+    src = make(api)
+    src.read_all()
+    src.release()
+    assert api.counters.closed and api.kmt.closed
+    assert src._started is None
+    calls = api.calls
+    src.release()  # sin nada abierto, no hace nada
+    assert api.calls == calls
+    assert src.read_some(["gpu.temperature"])["gpu.temperature"].value == 56.0
+    assert api.opened_luids == [LUID, LUID]  # se volvió a abrir
+
+
+def test_release_during_background_start_discards_result():
+    started = threading.Event()
+    release = threading.Event()
+    api = FakeApi()
+
+    class SlowApi(FakeApi):
+        def open_counters(self):
+            started.set()
+            release.wait(5)
+            return api.counters
+
+    slow = SlowApi()
+    slow.counters = api.counters
+    slow.kmt = api.kmt
+    src = WindowsGpuSource(api=slow, sleep=lambda s: None)
+    src.read_all()
+    assert started.wait(5)
+    src.release()  # NVML respondió mientras Windows aún arrancaba
+    release.set()
+    src._thread.join(5)
+    assert slow.kmt.closed and slow.counters.closed
+    assert src._started is None
+    src.close()
+
+
 def test_read_some_skips_pdh():
     api = FakeApi()
     src = make(api)
@@ -461,6 +534,33 @@ def test_fill_needs_the_same_vendor():
     assert src.read_all()["gpu.fan"].reason == nvidia.NOT_SUPPORTED
 
 
+def test_fill_refused_with_two_nvidia_cards():
+    # Dos NVIDIA con datos en PDH: la de Windows podría no ser la 0 de NVML.
+    other = Adapter(0x888, "NVIDIA GeForce RTX 3060", 0x10DE, 12 * GIB, False)
+    both = PdhSample(
+        engines={**sample().engines, eng(20, 0x888, 0): 5.0},
+        dedicated={**sample().dedicated, mem(0x888): GIB},
+    )
+    api = FakeApi(adapters=[RTX, other, BASIC], samples=[None, both])
+    src = GpuSource(FakeNvml(has_gpu=True, unsupported=("fan",)), make(api))
+    assert src.read_all()["gpu.fan"].reason == nvidia.NOT_SUPPORTED
+
+
+def test_windows_released_when_nvml_arrives_late():
+    nv = FakeNvml(has_gpu=False)
+    api = FakeApi()
+    src = GpuSource(nv, make(api))
+    assert src.read_all()["gpu.usage"] == Reading(35.0, "%")  # de Windows
+    nv.has_gpu = True  # el controlador de NVIDIA terminó de cargar
+    r = src.read_all()
+    assert r["gpu.usage"] == Reading(40.0, "%")  # de NVML, sin mezclar
+    assert api.counters.closed and api.kmt.closed
+    # Si luego NVML dejara de dar algo, Windows vuelve a abrirse para eso.
+    nv.unsupported = ("fan",)
+    assert src.read_all()["gpu.fan"] == Reading(42.0, "%")
+    assert api.opened_luids == [LUID, LUID]
+
+
 def test_memory_is_never_mixed_between_sources():
     api = FakeApi()
     # NVML da la usada pero no la total: no se completa con la total de Windows.
@@ -516,6 +616,7 @@ def test_real_windows_gpu_values_are_plausible():
         assert 10 <= r["gpu.temperature"].value <= 110
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Solo en Windows")
 def test_real_windows_matches_nvml_on_nvidia():
     # En el equipo de pruebas (NVIDIA): si el tipo 62 de D3DKMT o las estructuras dejan
     # de cuadrar con un Windows nuevo, este test cae en vez de dar números raros.
@@ -534,6 +635,40 @@ def test_real_windows_matches_nvml_on_nvidia():
     assert win["gpu.usage"].value is not None
     assert win["gpu.clock"].value is not None
     assert win["gpu.fan"].value is not None
+    _assert_clock_query_is_the_engine_one()
+
+
+def _assert_clock_query_is_the_engine_one():
+    """La frecuencia **máxima** del motor por D3DKMT debe ser la de NVML.
+
+    La actual no sirve para comprobarlo: en reposo el motor va a 210 MHz y la memoria a
+    405 MHz, y bajo carga cambia entre una lectura y otra. Con el tipo de consulta
+    equivocado (62 en vez de 61) sale la máxima de la memoria (10 501 MHz, medido) y no
+    la del motor (3105 MHz): este test cae.
+    """
+    import pynvml
+
+    from luzeira.sensores import windows_api
+
+    pynvml.nvmlInit()
+    try:
+        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+        nv_max_mhz = pynvml.nvmlDeviceGetMaxClockInfo(handle, pynvml.NVML_CLOCK_GRAPHICS)
+    finally:
+        pynvml.nvmlShutdown()
+    src = WindowsGpuSource(background=False, sleep=lambda s: __import__("time").sleep(0.3))
+    try:
+        src.read_all()
+        luid = src._started.adapter.luid
+    finally:
+        src.close()
+    kmt = windows_api.RealKmtAdapter(luid)
+    try:
+        hz, max_hz = kmt.node_clocks()
+    finally:
+        kmt.close()
+    assert abs(max_hz / 1_000_000 - nv_max_mhz) <= nv_max_mhz * 0.03
+    assert 0 < hz <= max_hz
 
 
 def test_default_hub_with_nvidia_does_not_open_windows():

@@ -28,6 +28,7 @@ from PIL import Image
 
 from luzeira.pantallas.comun import (
     DisplayError,
+    NoAnswer,
     Orientation,
     SerialFactory,
     Transport,
@@ -43,7 +44,9 @@ WIDTH, HEIGHT = 320, 480  # en vertical (orientación nativa)
 # las imágenes corruptas» (informe, rev B).
 BITMAP_COOLDOWN = 0.05
 # Tope de saludos por apertura: solo se repite si no llega nada (la pantalla puede tardar
-# en estar lista). Una respuesta que no encaja no se repite: se cierra y se avisa.
+# en estar lista). Si tras el último sigue sin llegar nada, es un fallo que se reintenta
+# más tarde (:class:`NoAnswer`). Una respuesta que no encaja no se repite: se cierra y se
+# avisa (:class:`WrongModel`).
 HELLO_ATTEMPTS = 2
 
 
@@ -92,6 +95,7 @@ class XuanFangRevB:
     """Pantalla XuanFang de revisión B (beta). Se crea con :meth:`open`."""
 
     model_key = "xuanfang-rev-b"
+    verified = True  # si abre, es que ha contestado al saludo como una rev B
 
     def __init__(
         self, transport: Transport, *, sleep: Callable[[float], None] = time.sleep
@@ -153,19 +157,25 @@ class XuanFangRevB:
         self._write(packet(command, data))
 
     def probe(self) -> None:
-        """La primera prueba: solo el saludo. Lanza :class:`WrongModel` si no encaja."""
-        for attempt in range(HELLO_ATTEMPTS):
+        """La primera prueba: solo el saludo.
+
+        - Contesta como una rev B → se apunta la variante.
+        - Contesta otra cosa → :class:`WrongModel` (no es ese modelo; no se reintenta).
+        - No contesta nada tras ``HELLO_ATTEMPTS`` saludos → :class:`NoAnswer` (puede
+          estar arrancando: se reintenta más tarde, como con la rev A).
+        """
+        for _attempt in range(HELLO_ATTEMPTS):
             self._send(Command.HELLO, _HELLO_TEXT)
             answer = bytes(self._transport.read(10))
             self._transport.reset_input_buffer()
-            if not answer and attempt < HELLO_ATTEMPTS - 1:
-                continue  # no ha llegado nada: un segundo saludo, y ya
+            if not answer:
+                continue  # no ha llegado nada: otro saludo, hasta el tope
             sub = self.parse_hello(answer)
             if sub is None:
                 raise WrongModel(self.device or "?", LABEL)
             self.flagship, self.full_range_brightness = SUB_REVISIONS[sub]
             return
-        raise WrongModel(self.device or "?", LABEL)  # no llega aquí (por si HELLO_ATTEMPTS=0)
+        raise NoAnswer(self.device or "?")
 
     @staticmethod
     def parse_hello(answer: bytes) -> int | None:

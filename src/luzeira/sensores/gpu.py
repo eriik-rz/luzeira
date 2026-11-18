@@ -7,9 +7,13 @@ Reglas:
   fuente). PDH y NVML no dan las mismas cifras (~5 puntos de uso y ~270 MB de memoria de
   diferencia medida), así que no se alternan.
 - Sin NVML (AMD, Intel, o NVIDIA sin NVML), todo sale de Windows.
+- Si NVML arranca tarde (el controlador cargó después que la app), Windows lo da todo
+  hasta entonces; en cuanto NVML responde, manda NVML y lo abierto de Windows se suelta
+  (``WindowsGpuSource.release``). Ese cambio de fuente se ve una vez, al arrancar.
 - Con NVML, Windows solo rellena los sensores que NVML dice que esta tarjeta no da
-  (``NOT_SUPPORTED``), y solo si la tarjeta que eligió Windows también es NVIDIA. Un fallo
-  pasajero de NVML no se rellena: se ve su motivo.
+  (``NOT_SUPPORTED``), y solo si la tarjeta que eligió Windows es NVIDIA **y la única
+  NVIDIA**: con dos, NVML lee la 0 y Windows la de más memoria, y podrían ser distintas.
+  Un fallo pasajero de NVML no se rellena: se ve su motivo.
 - La memoria va en bloque: la usada y la total vienen siempre de la misma fuente (si no,
   el porcentaje saldría mal). El consumo en vatios solo lo da NVML.
 """
@@ -22,7 +26,8 @@ from luzeira.sensores.nvidia import NvidiaSource
 from luzeira.sensores.windows_gpu import NVIDIA_VENDOR_ID, WindowsGpuSource
 
 _MEMORY = ("memory_used", "memory_total", "memory_usage")
-# Lo que Windows puede dar sensor a sensor. El uso se rellena aparte (es PDH, más caro).
+# Lo que Windows puede rellenar sensor a sensor (la memoria va en bloque, en ``_MEMORY``).
+# ``WindowsGpuSource.read_some`` solo toca PDH (el caro) si se le pide el uso o la memoria.
 _SINGLE = ("usage", "temperature", "fan", "clock")
 
 
@@ -53,10 +58,15 @@ class GpuSource:
         if memory_missing:
             wanted += [self._id(n) for n in _MEMORY]
         if not wanted:
+            # NVML lo da todo: si Windows quedó abierto de antes de que NVML respondiera,
+            # se suelta (sin nada abierto no hace nada).
+            self._windows.release()
             return readings
         extra = self._windows.read_some(wanted)
-        if self._windows.vendor_id != NVIDIA_VENDOR_ID:
-            return readings  # Windows aún no arrancó o eligió otra tarjeta: no se mezclan
+        if self._windows.sole_vendor_id != NVIDIA_VENDOR_ID:
+            # Windows aún no arrancó, eligió otra marca o hay más de una NVIDIA: no se
+            # mezclan (podría ser el dato de otra tarjeta).
+            return readings
         for name in _SINGLE:
             reading = extra.get(self._id(name))
             if reading is not None and reading.value is not None:

@@ -42,6 +42,9 @@ class DisplayModel:
     usb_ids: frozenset[tuple[int, int]]
     beta: bool  # sin probar todavía en una pantalla de verdad
     supported: bool = True  # False: se reconoce, pero no hay driver
+    # True: su primera prueba es un saludo con respuesta, así que puede decir «ahí no hay
+    # una de estas». False (Kipye): la prueba no puede fallar y no demuestra nada.
+    has_hello: bool = True
 
     @property
     def menu_label(self) -> str:
@@ -54,7 +57,9 @@ REV_A = DisplayModel(
 REV_B = DisplayModel(
     "xuanfang-rev-b", 'XuanFang 3,5" (también «flagship»)', frozenset({VID_PID_CH552}), beta=True
 )
-KIPYE = DisplayModel("kipye-rev-d", 'Kipye Qiye 3,5"', frozenset({VID_PID_KIPYE}), beta=True)
+KIPYE = DisplayModel(
+    "kipye-rev-d", 'Kipye Qiye 3,5"', frozenset({VID_PID_KIPYE}), beta=True, has_hello=False
+)
 REV_C = DisplayModel(
     "turing-rev-c",
     'Turing de 2,1", 5" u 8,8" (revisión C)',
@@ -160,10 +165,18 @@ def identify(port: PortInfo) -> Identification | None:
 
 def compatible_models(port: PortInfo) -> list[DisplayModel]:
     """Lista cerrada para «Elegir modelo y puerto»: los modelos con driver cuyo USB
-    coincide con el del puerto. Un puerto sin USB (Bluetooth, módem…) no tiene ninguno."""
+    coincide con el del puerto. Un puerto sin USB (Bluetooth, módem…) no tiene ninguno.
+
+    Si el número de serie ya identifica el modelo sin duda (una rev A con
+    ``USB35INCHIPS…``), solo ese: ofrecer otro sería invitar a mandarle un protocolo
+    que no es el suyo. Los demás quedan para el «Modo avanzado».
+    """
     usb_id = port.usb_id
     if usb_id is None:
         return []
+    found = identify(port)
+    if found is not None and found.sure and found.model is not None:
+        return [found.model] if found.model.supported else []
     return [m for m in SUPPORTED if usb_id in m.usb_ids]
 
 
@@ -184,4 +197,6 @@ def match_choice(choice: DisplayChoice, ports: Iterable[PortInfo]) -> PortInfo |
     if not choice.advanced and usb_id not in model.usb_ids:
         return None  # una elección normal tiene que seguir siendo de la lista cerrada
     same = [p for p in ports if p.usb_id == usb_id and p.serial == choice.serial]
+    if not choice.advanced:  # …y del puerto concreto (p. ej. no una rev B sobre una rev A)
+        same = [p for p in same if model in compatible_models(p)]
     return next((p for p in same if p.device == choice.device), same[0] if same else None)

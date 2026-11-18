@@ -38,6 +38,7 @@ REV_A_PORT = PortInfo("COM3", 0x1A86, 0x5722, "USB35INCHIPSV2", "Dispositivo ser
 BT_PORT = PortInfo("COM4", description="Serie estándar sobre el vínculo Bluetooth (COM4)")
 KIPYE_PORT = PortInfo("COM8", 0x454D, 0x4E41, "", "Dispositivo serie USB (COM8)")
 REV_C_PORT = PortInfo("COM11", 0x1A86, 0xCA21, "CT21INCH", "")
+UNKNOWN_CH552 = PortInfo("COM9", 0x1A86, 0x5722, "", "Dispositivo serie USB (COM9)")
 PORTS = [REV_A_PORT, BT_PORT, KIPYE_PORT, REV_C_PORT]
 
 
@@ -316,7 +317,7 @@ def answers(monkeypatch):
     asked = []
     replies = []
 
-    def confirm(title, text, *, warning=False):
+    def confirm(title, text, *, warning=False, default_no=False):
         asked.append((title, text, warning))
         return replies.pop(0) if replies else False
 
@@ -331,13 +332,23 @@ def set_info(monkeypatch, app, info):
 def test_display_menu_lists_only_compatible_models_per_port(app):
     labels = [i.text for i in submenu(app, "Pantalla", "Elegir modelo y puerto")]
     assert labels == [
-        'COM3: Turing / UsbPCMonitor 3,5"',
-        'COM3: XuanFang 3,5" (también «flagship») (beta)',
+        'COM3: Turing / UsbPCMonitor 3,5"',  # su serie la identifica: solo ese modelo
         'COM8: Kipye Qiye 3,5" (beta)',
         'COM11: Turing de 2,1", 5" u 8,8" (revisión C) — todavía no compatible',
     ]  # el Bluetooth (COM4) no sale: no tiene USB
     rev_c = submenu(app, "Pantalla", "Elegir modelo y puerto")[-1]
     assert not rev_c.enabled
+
+
+def test_display_menu_offers_both_models_only_when_the_serial_does_not_decide(app, monkeypatch):
+    monkeypatch.setattr(bandeja, "list_ports", lambda: [REV_A_PORT, UNKNOWN_CH552])
+    app._ports_cache = None
+    labels = [i.text for i in submenu(app, "Pantalla", "Elegir modelo y puerto")]
+    assert labels == [
+        'COM3: Turing / UsbPCMonitor 3,5"',
+        'COM9: Turing / UsbPCMonitor 3,5"',
+        'COM9: XuanFang 3,5" (también «flagship») (beta)',
+    ]
 
 
 def test_advanced_mode_offers_every_port_and_every_model(app):
@@ -369,15 +380,28 @@ def test_rev_a_from_the_list_is_tried_without_a_dialog(app, chosen, answers):
     assert chosen == [DisplayChoice("turing-rev-a", "COM3", 0x1A86, 0x5722, "USB35INCHIPSV2")]
 
 
-def test_beta_model_asks_first_and_no_means_nothing(app, chosen, answers):
+def test_beta_model_asks_first_and_no_means_nothing(app, chosen, answers, monkeypatch):
+    monkeypatch.setattr(bandeja, "list_ports", lambda: [UNKNOWN_CH552])
+    app._ports_cache = None
     rev_b = submenu(app, "Pantalla", "Elegir modelo y puerto")[1]
     rev_b(app.icon)  # responde «No»
     assert chosen == [] and len(answers.asked) == 1
     title, text, warning = answers.asked[0]
-    assert "beta" in title and "beta" in text and "COM3" in text and not warning
+    assert "beta" in title and "beta" in text and "COM9" in text and not warning
+    assert "saludo" in text  # la rev B sí tiene saludo: la promesa es cierta
     answers.replies.append(True)
     rev_b(app.icon)
     assert [c.model for c in chosen] == ["xuanfang-rev-b"] and not chosen[0].advanced
+
+
+def test_beta_model_without_hello_does_not_promise_a_check(app, chosen, answers):
+    # Remate C-44: la Kipye no tiene saludo; su prueba (un brillo) no puede fallar.
+    kipye = submenu(app, "Pantalla", "Elegir modelo y puerto")[1]
+    kipye(app.icon)
+    _title, text, _warning = answers.asked[0]
+    assert "saludo. Si no contesta" not in text and "cerrará el puerto" not in text
+    assert "no puede comprobar" in text and "Volver a detectarla sola" in text
+    assert "rayas" in text
 
 
 def test_advanced_mode_warns_and_marks_the_choice(app, chosen, answers):
@@ -392,15 +416,15 @@ def test_advanced_mode_warns_and_marks_the_choice(app, chosen, answers):
 
 
 def test_choice_is_remembered_only_once_it_shows_the_theme(app, chosen, monkeypatch):
-    choice = DisplayChoice("kipye-rev-d", "COM8", 0x454D, 0x4E41)
+    choice = DisplayChoice("xuanfang-rev-b", "COM6", 0x1A86, 0x5722, "2017-2-25")
     app._try_choice(choice)
     set_info(monkeypatch, app, None)
     app._show_status(Status.STARTING, "Pantalla encontrada…")
     assert app.saved == []
-    set_info(monkeypatch, app, DisplayInfo("kipye-rev-d", "COM8"))
+    set_info(monkeypatch, app, DisplayInfo("xuanfang-rev-b", "COM6", choice=choice))
     app._show_status(Status.RUNNING, "Mostrando el tema «Esencial».")
     assert app.config.display == DisplaySetting(
-        model="kipye-rev-d", device="COM8", vid=0x454D, pid=0x4E41
+        model="xuanfang-rev-b", device="COM6", vid=0x1A86, pid=0x5722, serial="2017-2-25"
     )
     assert app.saved[-1].display == app.config.display
     assert any("Lo recordaré" in n for n in app.notes)
@@ -464,3 +488,132 @@ def test_back_to_auto_forgets_the_choice(app, chosen):
     assert back.visible
     back(app.icon)
     assert chosen == [None] and app.config.display is None and app.saved[-1].display is None
+
+
+# --- remate C-44: elecciones cuya prueba no puede fallar ----------------------------------
+
+KIPYE_CHOICE = DisplayChoice("kipye-rev-d", "COM8", 0x454D, 0x4E41)
+
+
+def run_unverified_trial(app, monkeypatch, choice=KIPYE_CHOICE):
+    app._try_choice(choice)
+    set_info(monkeypatch, app, DisplayInfo(choice.model, choice.device, choice, verified=False))
+    app._show_status(Status.RUNNING, "Mostrando el tema «Esencial».")
+
+
+def test_unverified_choice_is_not_saved_without_asking(app, chosen, answers, monkeypatch):
+    run_unverified_trial(app, monkeypatch)
+    assert app.saved == [] and app.config.display is None
+    assert answers.asked == []  # la pregunta va por la cola del icono, no a mitad del estado
+    answers.replies.append(True)
+    app._drain()
+    [(title, text, _warning)] = answers.asked
+    assert "se ve bien" in title.lower() and "¿Se ve bien el tema en la pantalla?" in text
+    assert app.config.display == DisplaySetting(
+        model="kipye-rev-d", device="COM8", vid=0x454D, pid=0x4E41
+    )
+    assert any("Lo recordaré" in n for n in app.notes)
+
+
+def test_unverified_choice_that_looks_wrong_is_dropped(app, chosen, answers, monkeypatch):
+    saved = DisplaySetting(model="turing-rev-a", device="COM3", vid=0x1A86, pid=0x5722)
+    app.config = app.config.model_copy(update={"display": saved})
+    run_unverified_trial(app, monkeypatch)
+    app._drain()  # «No» (también al cerrar el diálogo o pulsar Intro)
+    assert app.saved == [] and app.config.display == saved
+    # Se deja de usar y se vuelve a lo que estaba guardado.
+    assert chosen == [KIPYE_CHOICE, bandeja.choice_from_setting(saved)]
+    assert bandeja.MSG_TRIAL_REJECTED in app.notes
+
+
+def test_looks_right_question_defaults_to_no(app, monkeypatch):
+    from luzeira.sistema import dialogos
+
+    flags = []
+    monkeypatch.setattr(dialogos, "confirm", lambda title, text, **kw: flags.append(kw) or False)
+    monkeypatch.setattr(app.service, "choose_display", lambda _c: None)
+    run_unverified_trial(app, monkeypatch)
+    app._drain()
+    assert flags == [{"default_no": True}]
+
+
+def test_silent_rev_a_in_advanced_mode_is_asked_too(app, chosen, answers, monkeypatch):
+    mute = DisplayChoice("turing-rev-a", "COM4", None, None, "", advanced=True)
+    run_unverified_trial(app, monkeypatch, mute)
+    app._drain()
+    assert len(answers.asked) == 1 and app.saved == []
+
+
+def test_answer_after_choosing_something_else_is_ignored(app, chosen, answers, monkeypatch):
+    run_unverified_trial(app, monkeypatch)
+    rev_a = DisplayChoice("turing-rev-a", "COM3", 0x1A86, 0x5722, "USB35INCHIPSV2")
+
+    def confirm(title, text, **_kw):
+        app._try_choice(rev_a)  # mientras el diálogo está abierto, elige otra en el menú
+        return True
+
+    from luzeira.sistema import dialogos
+
+    monkeypatch.setattr(dialogos, "confirm", confirm)
+    app._drain()
+    assert app.saved == [] and app._trial == rev_a
+
+
+def test_choice_found_on_another_com_is_saved_with_the_new_one(app, chosen, monkeypatch):
+    # Remate C-44: Windows ha movido la elegida de COM6 a COM10 (match_choice sigue su USB).
+    choice = DisplayChoice("xuanfang-rev-b", "COM6", 0x1A86, 0x5722, "2017-2-25")
+    app._try_choice(choice)
+    set_info(monkeypatch, app, DisplayInfo("xuanfang-rev-b", "COM10", choice=choice))
+    app._show_status(Status.RUNNING, "Mostrando…")
+    assert app._trial is None
+    assert app.config.display.device == "COM10" and app.config.display.serial == "2017-2-25"
+
+
+def test_running_auto_display_does_not_resolve_the_trial(app, chosen, monkeypatch):
+    # La misma pantalla y el mismo COM, pero abierta por la detección sola (choice=None):
+    # no es la prueba de la elección; esa sigue pendiente.
+    choice = DisplayChoice("turing-rev-a", "COM3", 0x1A86, 0x5722, "USB35INCHIPSV2")
+    app._try_choice(choice)
+    set_info(monkeypatch, app, DisplayInfo("turing-rev-a", "COM3"))
+    app._show_status(Status.RUNNING, "Mostrando…")
+    assert app.saved == [] and app._trial == choice
+
+
+def test_menu_dialog_cannot_open_on_top_of_another(app, chosen, answers, monkeypatch):
+    # Remate C-44: MessageBoxW sigue atendiendo el menú; un segundo clic no abre otro.
+    from luzeira.sistema import dialogos
+
+    kipye = submenu(app, "Pantalla", "Elegir modelo y puerto")[1]
+    opened = []
+
+    def confirm(title, text, **_kw):
+        opened.append(title)
+        kipye(app.icon)  # el usuario vuelve a pulsar mientras el primero está abierto
+        return False
+
+    monkeypatch.setattr(dialogos, "confirm", confirm)
+    kipye(app.icon)
+    assert len(opened) == 1 and chosen == []
+    assert bandeja.MSG_DIALOG_OPEN in app.notes
+    assert not app._dialog_open
+    kipye(app.icon)  # cerrado el primero, se puede volver a abrir
+    assert len(opened) == 2
+
+
+def test_looks_right_question_waits_for_an_open_dialog(app, chosen, answers, monkeypatch):
+    from luzeira.sistema import dialogos
+
+    asked = []
+
+    def confirm(title, text, **_kw):
+        asked.append(title)
+        if len(asked) == 1:
+            app._ask_looks_right(KIPYE_CHOICE)  # llega mientras hay otro abierto
+            assert asked == [bandeja.TITLE_ADVANCED]  # no se abre encima
+        return False
+
+    monkeypatch.setattr(dialogos, "confirm", confirm)
+    advanced_kipye = submenu(app, "Pantalla", "Modo avanzado (cualquier puerto)")[0]
+    advanced_kipye.submenu.items[2](app.icon)
+    app._drain()
+    assert asked == [bandeja.TITLE_ADVANCED, bandeja.TITLE_LOOKS_RIGHT]

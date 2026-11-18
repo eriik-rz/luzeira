@@ -1,6 +1,6 @@
 """Línea de órdenes provisional de Luzeira (hasta que exista la app con bandeja).
 
-uv run luzeira detectar   -> dice en qué puerto está la pantalla
+uv run luzeira detectar   -> dice qué pantalla hay en cada puerto (sin abrirlos)
 uv run luzeira demo       -> pinta una pantalla de prueba y mide la velocidad
 """
 
@@ -9,32 +9,56 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from PIL import Image, ImageDraw, ImageFont
 
 from luzeira import __version__
-from luzeira.pantallas import DisplayError, Orientation, TuringRevA, find_port
+from luzeira.pantallas import DisplayError, Orientation, TuringRevA
+
+if TYPE_CHECKING:
+    from luzeira.pantallas.modelos import Identification
 
 # Vite del editor en desarrollo: escucha solo en 127.0.0.1 (contrato de la fase 5). Con
 # «localhost» el navegador manda Origin «http://localhost:5173» y el servidor lo rechaza.
 DEV_ORIGIN = "http://127.0.0.1:5173"
 
 
-def _detect() -> int:
-    match = find_port()
-    if match is None:
+def _detect(ports: Iterable | None = None) -> int:
+    """Dice qué pantalla hay en cada puerto, **sin abrir ninguno**: solo con lo que Windows
+    ya sabe del USB (``pantallas.modelos.identify``). ``ports``: para los tests."""
+    from luzeira.pantallas.modelos import identify, list_ports
+
+    found = [(port, identify(port)) for port in list_ports(ports)]
+    found = [(port, ident) for port, ident in found if ident is not None]
+    if not found:
         print("No encuentro ninguna pantalla compatible conectada.")
         return 1
-    if match.by_serial:
-        print(f'Pantalla Turing / UsbPCMonitor 3,5" (revisión A) encontrada en {match.device}.')
-    else:
-        print(
-            f"Hay una pantalla en {match.device} con el USB de la revisión A, pero sin su número "
-            "de serie: podría ser otro modelo. No se le enviará nada sin tu confirmación."
-        )
+    for port, ident in found:
+        print(f"{port.device}: {_detect_line(ident)}")
     return 0
+
+
+def _detect_line(ident: Identification) -> str:
+    model = ident.model
+    if model is None:
+        return (
+            'una pantalla Turing / UsbPCMonitor 3,5" (revisión A) o una XuanFang 3,5" (beta): '
+            "su USB es el de las dos y no trae número de serie conocido. No se le enviará "
+            "nada sin tu confirmación."
+        )
+    if not model.supported:
+        return f"{model.label}, todavía no compatible. No se le enviará nada."
+    if ident.sure:
+        beta = " (beta: todavía sin probar con una pantalla de verdad)" if model.beta else ""
+        return f"{model.label}{beta}. Reconocida por su número de serie."
+    return (
+        f"parece una {model.label} (beta), pero solo por su USB: no es seguro. "
+        "No se le enviará nada sin tu confirmación."
+    )
 
 
 def _font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:

@@ -102,14 +102,28 @@ class WrongModel(DisplayError):
         )
 
 
+class NoAnswer(DisplayError):
+    """La pantalla no ha contestado nada al saludo. No es «otro modelo» (eso es
+    :class:`WrongModel`): puede estar aún arrancando, así que se reintenta como cualquier
+    otro fallo al abrir. El puerto ya está cerrado."""
+
+    def __init__(self, device: str) -> None:
+        self.device = device
+        super().__init__(f"La pantalla de {device} no contesta todavía. Lo sigo intentando.")
+
+
 class UnsupportedModel(DisplayError):
-    """Una pantalla reconocida por su USB que Luzeira aún no sabe manejar. No se abre."""
+    """Una pantalla reconocida por su USB que Luzeira aún no sabe manejar. No se abre.
+
+    Se sigue buscando (enumerar puertos no manda nada): si se conecta otra pantalla
+    compatible, se usa sola. El mensaje ya lo dice; no lleva el «lo sigo intentando»."""
 
     def __init__(self, device: str, label: str) -> None:
         self.device = device
         super().__init__(
             f"He encontrado una {label} en {device}, pero Luzeira todavía no es compatible "
-            "con ese modelo. No le mando nada."
+            "con ese modelo, así que no le mando nada. Si conectas otra pantalla compatible, "
+            "la usaré sola."
         )
 
 
@@ -171,7 +185,8 @@ def open_probed(
 ):
     """Abre ``device``, crea el driver con ``make`` y le hace su primera prueba (``probe``).
 
-    - Si el puerto no abre o se pierde a mitad, se cierra y se reintenta (``retries``).
+    - Si el puerto no abre, se pierde a mitad o la pantalla no contesta nada
+      (:class:`NoAnswer`), se cierra y se reintenta (``retries``).
     - Si la pantalla contesta pero no como el modelo (:class:`WrongModel`), se cierra el
       puerto y se para ahí: ni otro intento ni otro modelo.
     """
@@ -192,7 +207,8 @@ def open_probed(
             # 🔴 Cerrar YA lo que llegó a abrirse (mismo motivo que en la rev A: si se deja
             # al recolector, el siguiente intento choca con nuestro propio handle).
             _close_quietly(transport)
-            last_error = open_error(device, exc)
+            # «No contesta» ya es un mensaje para el usuario; lo demás, el genérico.
+            last_error = exc if isinstance(exc, NoAnswer) else open_error(device, exc)
         if attempt < retries - 1:
             sleep(delay)
     raise last_error
