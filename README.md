@@ -18,7 +18,7 @@ Luzeira es una app libre para las pequeñas pantallas USB que se ponen dentro o 
 - **Ligera**: solo envía a la pantalla lo que cambia (unos pocos KB por segundo) y apenas usa CPU.
 - **Respetuosa**: apaga la pantalla al apagar o suspender el PC y la vuelve a encender al volver; si desenchufas el cable, se reconecta sola.
 - **Editor visual**: arrastra elementos, cambia colores y fondos, mira el resultado exacto antes de aplicarlo.
-- **Segura y limpia**: sin anuncios, sin telemetría y sin conexión a internet. Los temas son datos, nunca programas.
+- **Segura y limpia**: sin anuncios y sin telemetría. Solo se conecta a internet si le dejas, para avisarte de versiones nuevas, y nunca instala nada sin que pulses «Actualizar». Los temas son datos, nunca programas.
 
 ## Instalar
 

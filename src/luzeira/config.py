@@ -91,6 +91,12 @@ class AppConfig(BaseModel):
     brightness: int = Field(default=60, ge=0, le=100)
     flip: bool = False
     display: DisplaySetting | None = None  # None: detección sola
+    # Avisar de versiones nuevas (ADR-006). None: aún no se ha preguntado, y sin un «sí»
+    # la app no se conecta a nada.
+    updates: bool | None = None
+    # La versión más nueva que se ha visto firmada: nunca se ofrece una más vieja.
+    updates_max_seen: str | None = Field(default=None, pattern=r"^\d{1,4}\.\d{1,4}\.\d{1,4}$")
+    updates_last_check: float | None = None  # hora (time.time()) de la última comprobación
 
     @field_validator("display", mode="wrap")
     @classmethod
@@ -101,6 +107,17 @@ class AppConfig(BaseModel):
             return handler(value)
         except ValidationError:
             log.warning("La pantalla guardada en la configuración no es válida; se olvida.")
+            return None
+
+    @field_validator("updates", "updates_max_seen", "updates_last_check", mode="wrap")
+    @classmethod
+    def _forget_broken_updates(cls, value: object, handler):
+        """Igual con lo de las actualizaciones: un valor raro se olvida (y sin «sí» no
+        hay red), sin perder el tema ni la pantalla."""
+        try:
+            return handler(value)
+        except ValidationError:
+            log.warning("Un ajuste de actualizaciones no es válido; se olvida.")
             return None
 
 

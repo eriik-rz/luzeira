@@ -81,6 +81,8 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
     }
   }, [refreshInfo])
   const [answering, setAnswering] = useState(false)
+  // «¿Avisarte de versiones nuevas?» cerrada sin contestar: no se repite en esta sesión.
+  const [updatesAsked, setUpdatesAsked] = useState(false)
   const [state, dispatch] = useReducer(reducer, undefined, () => initialState())
   const [themes, setThemes] = useState(initialThemes)
   const [current, setCurrent] = useState<Current | null>(null)
@@ -433,6 +435,24 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
     } finally {
       setInfo((i) => (i ? { ...i, question: null } : i))
       setAnswering(false)
+      refreshInfo()
+    }
+  }
+
+  const answerUpdates = async (enabled: boolean) => {
+    setUpdatesAsked(true)
+    try {
+      await api.updateSettings({ updates: enabled })
+      toast(
+        enabled
+          ? 'Vale: te avisaré cuando haya una versión nueva. Puedes cambiarlo en «Ajustes».'
+          : 'Vale: no buscaré versiones nuevas. Puedes cambiarlo en «Ajustes».',
+        'info',
+      )
+    } catch (e) {
+      toast(errorMessage(e), 'error')
+    } finally {
+      setInfo((i) => (i ? { ...i, updates_question: false } : i))
       refreshInfo()
     }
   }
@@ -790,6 +810,28 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
           }
         >
           <p className="settings-confirm">{info.question.text}</p>
+        </Dialog>
+      )}
+      {info?.updates_question && !info.question && !updatesAsked && !dialog && (
+        <Dialog
+          title="¿Te aviso de las versiones nuevas?"
+          onClose={() => setUpdatesAsked(true)}
+          actions={
+            <>
+              <button type="button" className="btn" onClick={() => void answerUpdates(false)}>
+                No, gracias
+              </button>
+              <button type="button" className="btn primary" onClick={() => void answerUpdates(true)}>
+                Sí, avísame
+              </button>
+            </>
+          }
+        >
+          <p className="settings-confirm">
+            Luzeira puede mirar una vez al día en GitHub si hay una versión nueva y avisarte. Nunca instala nada sin que pulses
+            «Actualizar», y cada versión va firmada: si la firma no es la de Luzeira, no se instala.
+          </p>
+          <p className="settings-confirm">Para mirarlo no envía nada tuyo: solo pide la lista de versiones, como un navegador.</p>
         </Dialog>
       )}
       {dialog?.kind === 'restore' && (

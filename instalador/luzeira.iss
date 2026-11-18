@@ -59,6 +59,9 @@
 #ifndef UserDataDir
   #define UserDataDir "{userappdata}\Luzeira"
 #endif
+#ifndef ReopenParams
+  #define ReopenParams "-m luzeira"
+#endif
 #ifndef UserLogsDir
   #define UserLogsDir "{localappdata}\Luzeira"
 #endif
@@ -147,6 +150,9 @@ Root: HKCU; Subkey: "{#RunKey}"; ValueType: string; ValueName: "{#RunValue}"; Va
 ; skipifsilent: en una instalación silenciosa no se abre nada. --abrir-editor: la primera
 ; vez se abre también el editor, para que se vea qué se puede hacer.
 Filename: "{#PythonW}"; Parameters: "-m luzeira --abrir-editor"; WorkingDir: "{%USERPROFILE}"; Description: "{cm:AbrirAhora}"; Flags: postinstall nowait skipifsilent
+; Actualización pedida desde la app (/ACTUALIZAR, ADR-006): silenciosa, y al terminar se
+; vuelve a abrir Luzeira (sin el editor), como estaba antes de actualizar.
+Filename: "{#PythonW}"; Parameters: "{#ReopenParams}"; WorkingDir: "{%USERPROFILE}"; Flags: nowait; Check: IsUpdate
 
 [UninstallDelete]
 ; Python escribe __pycache__ si le falta algún .pyc: que no quede nada en la carpeta.
@@ -205,13 +211,57 @@ begin
   end;
 end;
 
+var
+  { «Iniciar con Windows» tal como estaba antes de una actualización desde la app. }
+  HadRunValue: Boolean;
+  PreviousRunCommand: String;
+
+{ ¿Lo ha lanzado la propia app para actualizarse? (luzeira.actualizar.INSTALLER_ARGS) }
+function IsUpdate: Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 1 to ParamCount do
+    if CompareText(ParamStr(I), '/ACTUALIZAR') = 0 then
+      Result := True;
+end;
+
+{ Al actualizar, la app lanza este instalador y sale enseguida: hay que esperar a que
+  suelte su mutex. Sin esperar, AppMutex aborta en silencio (medido 2026-11-18: rc=1 en
+  0,2 s; esperando aquí, que va antes de la comprobación de AppMutex, instala bien). }
+function InitializeSetup: Boolean;
+var
+  I: Integer;
+begin
+  Result := True;
+  if not IsUpdate then
+    exit;
+  I := 0;
+  while CheckForMutexes('{#MutexName}') and (I < 120) do
+  begin
+    Sleep(500);
+    I := I + 1;
+  end;
+  HadRunValue := RegQueryStringValue(HKCU, '{#RunKey}', '{#RunValue}', PreviousRunCommand);
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ErrorCode: Integer;
 begin
+  { Una actualización desde la app no cambia «Iniciar con Windows»: el usuario pudo
+    cambiarlo en la app después de instalar, y la tarea recordada ya no dice la verdad. }
+  if (CurStep = ssPostInstall) and IsUpdate then
+  begin
+    if HadRunValue then
+      RegWriteStringValue(HKCU, '{#RunKey}', '{#RunValue}', PreviousRunCommand)
+    else
+      RemoveRunValueIfHere;
+  end
   { Al actualizar con «Iniciar con Windows» desmarcado, Inno no toca [Registry] y el valor
     anterior seguiría ahí: se quita aquí (solo si apunta a esta instalación). }
-  if (CurStep = ssPostInstall) and not WizardIsTaskSelected('autoarranque') then
+  else if (CurStep = ssPostInstall) and not WizardIsTaskSelected('autoarranque') then
     RemoveRunValueIfHere;
   if (CurStep = ssPostInstall) and not WizardSilent and not WebView2Installed then
     if MsgBox(CustomMessage('FaltaWebView2'), mbInformation, MB_YESNO) = IDYES then

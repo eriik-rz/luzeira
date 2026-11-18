@@ -30,7 +30,7 @@ from pathlib import Path
 import pystray
 from PIL import Image
 
-from luzeira import __version__
+from luzeira import __version__, actualizar
 from luzeira.config import (
     DEFAULT_THEME,
     AppConfig,
@@ -138,6 +138,26 @@ MSG_ADVANCED = (
 )
 MSG_CHOICE_SAVED = "Listo: Luzeira usará tu {model} en {device}. Lo recordaré."
 MSG_BACK_TO_AUTO = "Vale: Luzeira buscará la pantalla ella sola."
+
+# --- actualizaciones (ADR-006) -------------------------------------------------------------
+MSG_UP_TO_DATE = "Ya tienes la última versión de Luzeira ({version})."
+MSG_UPDATE_AVAILABLE = (
+    "Hay una versión nueva de Luzeira: la {version}. Para instalarla, pulsa «Actualizar» "
+    "en el menú del icono o en «Ajustes» del editor."
+)
+MSG_UPDATE_BUSY = "Ya estoy buscando o descargando una actualización. Espera un momento."
+MSG_UPDATE_NONE = "No hay ninguna versión nueva pendiente. Busca otra vez."
+MSG_UPDATE_DOWNLOADING = "Descargando la versión {version}…"
+MSG_UPDATE_INSTALLING = (
+    "Listo: Luzeira se cierra para instalar la versión {version} y se volverá a abrir "
+    "sola en un momento."
+)
+MSG_UPDATE_FAILED = (
+    "No he podido comprobar si hay versión nueva. Los detalles están en el registro."
+)
+_UPDATE_FIRST_DELAY = 60.0  # s tras arrancar: que la pantalla se encienda primero
+_UPDATE_TICK = 3600.0  # s entre miradas al reloj
+_UPDATE_EVERY = 24 * 3600.0  # s entre comprobaciones automáticas
 _PORTS_TTL = 1.0  # s: reconstruir el menú no enumera los puertos varias veces seguidas
 
 
@@ -260,6 +280,7 @@ class EditorSettings:
             return [{k: v for k, v in o.items() if k != "action"} for o in options]
 
         return {
+            "updates": app.updates_snapshot(),
             "brightness": app.config.brightness,
             "brightness_levels": list(BRIGHTNESS_LEVELS),
             "flip": app.config.flip,
@@ -270,7 +291,14 @@ class EditorSettings:
             "advanced": public(advanced),
         }
 
-    def update(self, *, brightness: int | None, flip: bool | None, autostart: bool | None) -> None:
+    def update(
+        self,
+        *,
+        brightness: int | None,
+        flip: bool | None,
+        autostart: bool | None,
+        updates: bool | None = None,
+    ) -> None:
         app = self._app
         if brightness is not None and brightness not in BRIGHTNESS_LEVELS:
             raise EditorError(400, "Ese brillo no está entre los que se pueden elegir.")
@@ -288,10 +316,24 @@ class EditorSettings:
             changes["brightness"] = brightness
         if flip is not None:
             changes["flip"] = flip
+        if updates is not None:
+            app._post(app._safe(lambda: app._set_updates(updates)))
         if changes:
             app._post(app._safe(lambda: app._change(**changes)))
         else:
             app._post(app.icon.update_menu)  # la marca de «Iniciar con Windows»
+
+    def updates_question(self) -> bool:
+        return self._app.config.updates is None and bool(actualizar.PUBLIC_KEYS)
+
+    def check_updates(self) -> str:
+        return self._app.check_updates(manual=True)
+
+    def install_update(self) -> str:
+        try:
+            return self._app.install_update(delay=2.0)  # que la respuesta llegue al editor
+        except actualizar.UpdateError as exc:
+            raise EditorError(409, str(exc)) from None
 
     def choose_display(self, choice_id: str | None, *, confirmed: bool) -> None:
         app = self._app
@@ -369,6 +411,14 @@ class TrayApp:
         self._trial_from_editor = False  # la elección que se prueba se hizo en el editor
         self._question_waiting: DisplayChoice | None = None  # esperando a otro diálogo
         self._ports_cache: tuple[float, list[PortInfo]] | None = None
+        # Actualizaciones: la versión nueva ya comprobada (firma incluida) que se ofrece, y
+        # si hay una comprobación o descarga en marcha (una cada vez).
+        self._update: actualizar.Manifest | None = None
+        self._update_lock = threading.Lock()
+        self._update_busy = False
+        self._update_notified: str | None = None
+        self._update_wake = threading.Event()
+        self._closing = False
         if not is_theme_valid(config.theme):
             # Un tema que dejó de funcionar no puede dejar la pantalla apagada para siempre.
             self._startup_notice = (
@@ -786,7 +836,156 @@ class TrayApp:
         if not self.editor.window.bring_to_front():
             self._notify("El editor ya está abierto.")
 
+    # --- actualizaciones (ADR-006) -------------------------------------------------------
+
+    def updates_snapshot(self) -> dict:
+        update = self._update
+        return {
+            "can_check": bool(actualizar.PUBLIC_KEYS),
+            "enabled": self.config.updates,
+            "available": update.version if update is not None else None,
+            "busy": self._update_busy,
+            "version": __version__,
+        }
+
+    def _set_updates(self, enabled: bool) -> None:
+        self._save(self.config.model_copy(update={"updates": enabled}))
+        if enabled:
+            self._update_wake.set()  # que mire ya si toca comprobar
+
+    def _claim_update(self) -> bool:
+        with self._update_lock:
+            if self._update_busy:
+                return False
+            self._update_busy = True
+            return True
+
+    def _release_update(self) -> None:
+        with self._update_lock:
+            self._update_busy = False
+        self._post(self.icon.update_menu)
+
+    def check_updates(self, *, manual: bool) -> str:
+        """Busca una versión nueva (bloquea: nunca desde el hilo del icono). Devuelve el
+        texto para el usuario. ``manual``: lo ha pedido el usuario ahora mismo."""
+        if not self._claim_update():
+            return MSG_UPDATE_BUSY
+        try:
+            manifest = actualizar.check(max_seen=self.config.updates_max_seen)
+        except actualizar.UpdateError as exc:
+            log.warning("No se pudo comprobar si hay versión nueva: %s", exc)
+            return str(exc)
+        except Exception:
+            log.exception("Fallo al comprobar si hay versión nueva")
+            return MSG_UPDATE_FAILED
+        finally:
+            self._release_update()
+        checked_at = time.time()
+        self._post(self._safe(lambda: self._update_checked(manifest, checked_at, manual)))
+        if manifest is None:
+            return MSG_UP_TO_DATE.format(version=__version__)
+        return MSG_UPDATE_AVAILABLE.format(version=manifest.version)
+
+    def _update_checked(
+        self, manifest: actualizar.Manifest | None, checked_at: float, manual: bool
+    ) -> None:
+        changes: dict[str, object] = {"updates_last_check": checked_at}
+        if manifest is not None:
+            changes["updates_max_seen"] = manifest.version
+        self._save(self.config.model_copy(update=changes))
+        self._update = manifest
+        if manifest is not None and not manual and manifest.version != self._update_notified:
+            self._update_notified = manifest.version
+            self._notify(MSG_UPDATE_AVAILABLE.format(version=manifest.version))
+
+    def install_update(self, *, delay: float = 0.0) -> str:
+        """Descarga y comprueba la versión ofrecida (bloquea) y después, en el hilo del
+        icono, lanza su instalador y cierra Luzeira. Lanza ``UpdateError``."""
+        manifest = self._update
+        if manifest is None:
+            raise actualizar.UpdateError(MSG_UPDATE_NONE)
+        if not self._claim_update():
+            raise actualizar.UpdateError(MSG_UPDATE_BUSY)
+        try:
+            installer = actualizar.download(manifest)
+        except actualizar.UpdateError:
+            raise
+        except Exception:
+            log.exception("Fallo al descargar la versión nueva")
+            raise actualizar.UpdateError(
+                "No he podido descargar la versión nueva. Los detalles están en el registro."
+            ) from None
+        finally:
+            self._release_update()
+
+        def launch() -> None:
+            self._post(self._safe(lambda: self._launch_update(installer, manifest)))
+
+        if delay > 0:
+            threading.Timer(delay, launch).start()
+        else:
+            launch()
+        return MSG_UPDATE_INSTALLING.format(version=manifest.version)
+
+    def _launch_update(self, installer: Path, manifest: actualizar.Manifest) -> None:
+        try:
+            actualizar.launch(installer, manifest, default_log_dir() / "actualizacion.log")
+        except actualizar.UpdateError as exc:
+            log.warning("No se abre el instalador de la versión nueva: %s", exc)
+            self._notify(str(exc))
+            return
+        except OSError:
+            log.exception("No se pudo abrir el instalador de la versión nueva")
+            self._notify("No he podido abrir el instalador de la versión nueva.")
+            return
+        log.info("Instalando la versión %s: Luzeira se cierra.", manifest.version)
+        self.quit()
+
+    def _update_label(self) -> str:
+        update = self._update
+        return f"Actualizar a la versión {update.version}" if update else "Actualizar"
+
+    def _check_from_menu(self) -> None:
+        def run() -> None:
+            text = self.check_updates(manual=True)
+            self._post(lambda: self._notify(text))
+
+        threading.Thread(target=run, name="actualizar", daemon=True).start()
+
+    def _install_from_menu(self) -> None:
+        update = self._update
+        if update is None:
+            return
+        self._notify(MSG_UPDATE_DOWNLOADING.format(version=update.version))
+
+        def run() -> None:
+            try:
+                self.install_update()
+            except actualizar.UpdateError as exc:
+                text = str(exc)
+                self._post(lambda: self._notify(text))
+
+        threading.Thread(target=run, name="actualizar", daemon=True).start()
+
+    def _update_due(self) -> bool:
+        last = self.config.updates_last_check
+        return last is None or not 0 <= time.time() - last < _UPDATE_EVERY
+
+    def _updates_loop(self) -> None:
+        """Hilo «actualizaciones»: con el «sí» del usuario, comprueba una vez al día."""
+        delay = _UPDATE_FIRST_DELAY
+        while True:
+            self._update_wake.wait(delay)
+            self._update_wake.clear()
+            if self._closing:
+                return
+            if self.config.updates is True and actualizar.PUBLIC_KEYS and self._update_due():
+                self.check_updates(manual=False)
+            delay = _UPDATE_TICK
+
     def quit(self) -> None:
+        self._closing = True
+        self._update_wake.set()
         self.editor.close()
         self.service.stop()
         self.icon.stop()
@@ -920,6 +1119,25 @@ class TrayApp:
             ),
             Item("Abrir carpeta de temas", self._safe(self._open_themes_folder)),
             Menu.SEPARATOR,
+            Item(
+                lambda _item: self._update_label(),
+                self._safe(self._install_from_menu),
+                visible=lambda _item: self._update is not None,
+                enabled=lambda _item: not self._update_busy,
+            ),
+            Item(
+                "Buscar actualizaciones ahora",
+                self._safe(self._check_from_menu),
+                visible=lambda _item: bool(actualizar.PUBLIC_KEYS),
+                enabled=lambda _item: not self._update_busy,
+            ),
+            Item(
+                "Avisarme de versiones nuevas",
+                self._safe(lambda: self._set_updates(self.config.updates is not True)),
+                checked=lambda _item: self.config.updates is True,
+                visible=lambda _item: bool(actualizar.PUBLIC_KEYS),
+            ),
+            Menu.SEPARATOR,
             Item("Salir", lambda: self.quit()),
         )
 
@@ -938,6 +1156,7 @@ class TrayApp:
         if self._startup_notice:
             self._notify(self._startup_notice)
         self._start_service()
+        threading.Thread(target=self._updates_loop, name="actualizaciones", daemon=True).start()
         if self._open_editor_on_start:
             self._safe(self._open_editor)()
         self._drain()
@@ -994,6 +1213,7 @@ def main(open_editor: bool = False) -> int:
         migrate_old_name()  # «Visoria» → «Luzeira» (D-14)
         config_dir().mkdir(parents=True, exist_ok=True)
         clean_import_leftovers()
+        actualizar.clean_downloads()  # lo que quedó de una actualización ya instalada
         TrayApp(load_config(), open_editor=open_editor).run()
     return 0
 

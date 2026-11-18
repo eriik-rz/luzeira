@@ -164,3 +164,33 @@ def test_broken_display_is_forgotten_without_losing_the_rest(tmp_path, display):
     path.write_text(f'{{"brightness": 35, "display": {display}}}', encoding="utf-8")
     assert load_config(path) == AppConfig(brightness=35, display=None)
     assert not (tmp_path / "config.json.danado").exists()  # no se aparta como dañada
+
+
+def test_updates_start_unasked_and_roundtrip(tmp_path):
+    path = tmp_path / "config.json"
+    assert AppConfig().updates is None  # sin preguntar: sin red
+    config = AppConfig(updates=True, updates_max_seen="0.3.0", updates_last_check=1.5)
+    save_config(config, path)
+    assert load_config(path) == config
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        '"updates": "sí"',
+        '"updates_max_seen": "../0.3"',
+        '"updates_max_seen": 3',
+        '"updates_last_check": "ayer"',
+    ],
+)
+def test_broken_updates_are_forgotten_without_losing_the_rest(tmp_path, field):
+    path = tmp_path / "config.json"
+    path.write_text(f'{{"brightness": 35, {field}}}', encoding="utf-8")
+    config = load_config(path)
+    assert config.brightness == 35
+    assert (config.updates, config.updates_max_seen, config.updates_last_check) == (
+        None,
+        None,
+        None,
+    )
+    assert not (tmp_path / "config.json.danado").exists()

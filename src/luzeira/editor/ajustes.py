@@ -1,7 +1,8 @@
 """Ajustes de la app desde el editor (ventana «Ajustes»).
 
 Lo mismo que el menú del icono (brillo, girar, pantalla, inicio con Windows, acceso
-directo, importar tema, carpeta de temas), pero desde la ventana del editor. Quien lo
+directo, importar tema, carpeta de temas, actualizaciones), pero desde la ventana del
+editor. Quien lo
 implementa de verdad es la bandeja (:class:`luzeira.bandeja.TrayApp`); el servidor solo
 conoce este contrato y valida lo que llega por HTTP antes de pasárselo.
 
@@ -23,8 +24,26 @@ class SettingsBackend(Protocol):
     def snapshot(self) -> dict: ...
 
     def update(
-        self, *, brightness: int | None, flip: bool | None, autostart: bool | None
+        self,
+        *,
+        brightness: int | None,
+        flip: bool | None,
+        autostart: bool | None,
+        updates: bool | None = None,
     ) -> None: ...
+
+    def updates_question(self) -> bool:
+        """¿Hay que preguntar una vez si avisar de versiones nuevas? (ADR-006)"""
+        ...
+
+    def check_updates(self) -> str:
+        """Busca una versión nueva ahora (bloquea); devuelve el texto para el usuario."""
+        ...
+
+    def install_update(self) -> str:
+        """Descarga, comprueba e instala la versión ofrecida (Luzeira se cierra después).
+        Lanza :class:`EditorError` si no se puede."""
+        ...
 
     def choose_display(self, choice_id: str | None, *, confirmed: bool) -> None:
         """``None``: volver a detectarla sola. Lanza :class:`EditorError` si no vale."""
@@ -58,13 +77,16 @@ def _optional(body: dict, key: str, kind: type) -> object:
 
 
 def parse_update(body: object) -> dict:
-    """``{brightness?, flip?, autostart?}`` → argumentos de :meth:`SettingsBackend.update`."""
-    if not isinstance(body, dict) or not body or set(body) - {"brightness", "flip", "autostart"}:
+    """``{brightness?, flip?, autostart?, updates?}`` → argumentos de
+    :meth:`SettingsBackend.update`."""
+    allowed = {"brightness", "flip", "autostart", "updates"}
+    if not isinstance(body, dict) or not body or set(body) - allowed:
         raise EditorError(400, "Algún ajuste no es válido.")
     return {
         "brightness": _optional(body, "brightness", int),
         "flip": _optional(body, "flip", bool),
         "autostart": _optional(body, "autostart", bool),
+        "updates": _optional(body, "updates", bool),
     }
 
 

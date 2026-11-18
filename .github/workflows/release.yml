@@ -1,7 +1,8 @@
-# Publica una versión al subir una etiqueta vX.Y.Z (la crea quien mantiene el proyecto: git tag v0.1.0 && git push
+# Prepara una versión al subir una etiqueta vX.Y.Z (la crea quien mantiene el proyecto: git tag v0.1.0 && git push
 # origin v0.1.0). Construye igual que en local (scripts/empaquetar.py), firma la procedencia
-# con artifact attestations y publica una release inmutable: primero borrador, luego se
-# publica (con releases inmutables, los ficheros ya no cambian una vez publicada).
+# con artifact attestations y deja la release EN BORRADOR. Quien mantiene el proyecto la
+# firma a mano (scripts/firmar.py: manifest.json + .sig con su clave, que no está en
+# GitHub, ADR-006) y la publica. Con releases inmutables, ya no cambia una vez publicada.
 #
 # Seguridad (skill seguridad-luzeira):
 # - Permisos mínimos por job; ninguno por defecto.
@@ -74,6 +75,7 @@ jobs:
           subject-path: |
             dist/*.exe
             dist/*.zip
+            dist/SHA256SUMS
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -86,7 +88,7 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    environment: release # aprobación manual antes de publicar
+    environment: release # aprobación manual antes de crear el borrador
     permissions:
       contents: write
     steps:
@@ -94,11 +96,10 @@ jobs:
         with:
           name: dist
           path: dist
-      - name: Release en borrador, subir y publicar
+      - name: Release en borrador (se publica tras firmarla, scripts/firmar.py)
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
           gh release create "$TAG" --draft --verify-tag --generate-notes --title "Luzeira ${TAG#v}" -R "$GITHUB_REPOSITORY"
           gh release upload "$TAG" dist/*.exe dist/*.zip dist/SHA256SUMS -R "$GITHUB_REPOSITORY"
-          gh release edit "$TAG" --draft=false -R "$GITHUB_REPOSITORY"

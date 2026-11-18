@@ -1,5 +1,6 @@
 // Ventana «Ajustes»: lo mismo que el menú del icono de Luzeira (brillo, girar, pantalla,
-// inicio con Windows, acceso directo, importar tema, carpeta de temas), pero a la vista.
+// inicio con Windows, acceso directo, importar tema, carpeta de temas, actualizaciones),
+// pero a la vista.
 // Cada cambio se aplica al momento; no hay botón de guardar.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -52,11 +53,22 @@ export function SettingsDialog({ api, onDisplayChosen, onClose, onImported, toas
     return () => window.clearInterval(timer)
   }, [reload])
 
-  const change = async (c: SettingsChange) => {
+  // `updates` va aparte (setUpdates): aquí se mezcla en plano y pisaría el objeto entero.
+  const change = async (c: Omit<SettingsChange, 'updates'>) => {
     // Se ve al momento; si Luzeira no lo acepta, se vuelve a leer lo que de verdad hay.
     setSettings((s) => (s ? { ...s, ...c } : s))
     try {
       await api.updateSettings(c)
+    } catch (e) {
+      toast(errorMessage(e), 'error')
+      void reload()
+    }
+  }
+
+  const setUpdates = async (enabled: boolean) => {
+    setSettings((s) => (s ? { ...s, updates: { ...s.updates, enabled } } : s))
+    try {
+      await api.updateSettings({ updates: enabled })
     } catch (e) {
       toast(errorMessage(e), 'error')
       void reload()
@@ -206,6 +218,48 @@ export function SettingsDialog({ api, onDisplayChosen, onClose, onImported, toas
                 }}
               />
             </section>
+
+            {settings.updates.can_check && (
+              <section className="settings-section" aria-labelledby="ajustes-actualizaciones">
+                <h3 id="ajustes-actualizaciones">Actualizaciones</h3>
+                <p className="settings-status" role="status">
+                  {settings.updates.available
+                    ? `Tienes la ${settings.updates.version}. Hay una versión nueva: la ${settings.updates.available}.`
+                    : `Tienes la versión ${settings.updates.version}.`}
+                </p>
+                <Toggle
+                  label="Avisarme de versiones nuevas"
+                  checked={settings.updates.enabled === true}
+                  onChange={(v) => void setUpdates(v)}
+                  hint="Una vez al día mira en GitHub si hay versión nueva. No envía nada tuyo y nunca instala sin que pulses «Actualizar»."
+                />
+                <div className="settings-row">
+                  {settings.updates.available && (
+                    <button
+                      type="button"
+                      className="btn primary"
+                      disabled={busy || settings.updates.busy}
+                      onClick={() => void run(async () => toast(await api.installUpdate(), 'ok'))}
+                    >
+                      Actualizar a la {settings.updates.available}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={busy || settings.updates.busy}
+                    onClick={() =>
+                      void run(async () => {
+                        toast(await api.checkUpdates(), 'info')
+                        await reload()
+                      })
+                    }
+                  >
+                    Buscar ahora
+                  </button>
+                </div>
+              </section>
+            )}
           </>
         )}
       </Dialog>

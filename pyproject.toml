@@ -9,6 +9,7 @@ license-files = ["LICENSE"]
 authors = [{ name = "Luzeira contributors" }]
 requires-python = ">=3.12"
 dependencies = [
+    "cryptography>=50.0.2",
     "nvidia-ml-py>=13.615.71",
     "pillow>=13.0.0",
     "psutil>=7.2.2",

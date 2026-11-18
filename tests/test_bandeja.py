@@ -816,3 +816,147 @@ def test_question_from_the_editor_with_the_editor_closed_uses_windows(
     editor_open(monkeypatch, app, False)
     editor_trial(app, monkeypatch, settings)
     assert len(answers.asked) == 1 and settings.question() is None
+
+
+# --- actualizaciones (ADR-006) ------------------------------------------------------------
+
+
+def a_manifest(version="0.9.0"):
+    return bandeja.actualizar.Manifest(
+        app="luzeira",
+        version=version,
+        file=f"Luzeira-{version}-instalador.exe",
+        size=1,
+        sha256="0" * 64,
+    )
+
+
+@pytest.fixture
+def with_keys(monkeypatch):
+    monkeypatch.setattr(bandeja.actualizar, "PUBLIC_KEYS", ("clave",))
+
+
+def menu_texts(app):
+    return [i.text for i in walk(app.icon.menu) if i.visible]
+
+
+def test_without_keys_there_is_no_update_menu_nor_question(app, settings):
+    assert not any("actualiza" in t.lower() for t in menu_texts(app))
+    assert settings.updates_question() is False
+    assert settings.snapshot()["updates"]["can_check"] is False
+
+
+def test_the_question_is_asked_only_until_answered(app, settings, with_keys):
+    assert app.config.updates is None and settings.updates_question() is True
+    settings.update(brightness=None, flip=None, autostart=None, updates=False)
+    app._drain()
+    assert app.saved[-1].updates is False and settings.updates_question() is False
+
+
+def one_loop_turn(app, monkeypatch) -> list:
+    """Una vuelta del hilo «actualizaciones» (sin esperar de verdad) y fuera."""
+    calls = []
+    monkeypatch.setattr(bandeja.actualizar, "check", lambda **kw: calls.append(kw))
+    waits = []
+
+    def wait(timeout=None):
+        waits.append(timeout)
+        app._closing = len(waits) > 1
+        return True
+
+    monkeypatch.setattr(app._update_wake, "wait", wait)
+    app._updates_loop()
+    app._drain()
+    return calls
+
+
+@pytest.mark.parametrize("answer", [None, False])
+def test_no_automatic_check_without_a_yes(app, with_keys, monkeypatch, answer):
+    app.config = app.config.model_copy(update={"updates": answer})
+    assert one_loop_turn(app, monkeypatch) == []
+
+
+def test_automatic_check_with_a_yes_only_when_due(app, with_keys, monkeypatch):
+    app.config = app.config.model_copy(update={"updates": True})
+    assert len(one_loop_turn(app, monkeypatch)) == 1
+    app.config = app.config.model_copy(update={"updates_last_check": bandeja.time.time()})
+    assert one_loop_turn(app, monkeypatch) == []  # ya se miró hoy
+
+
+def test_automatic_check_with_a_yes_notifies_once(app, with_keys, monkeypatch):
+    app.config = app.config.model_copy(update={"updates": True})
+    monkeypatch.setattr(bandeja.actualizar, "check", lambda **kw: a_manifest())
+    assert "0.9.0" in app.check_updates(manual=False)
+    app._drain()
+    app.check_updates(manual=False)
+    app._drain()
+    assert app.notes == [bandeja.MSG_UPDATE_AVAILABLE.format(version="0.9.0")]
+    assert app.saved[-1].updates_max_seen == "0.9.0" and app.saved[-1].updates_last_check
+    assert "Actualizar a la versión 0.9.0" in menu_texts(app)
+    assert app.updates_snapshot()["available"] == "0.9.0"
+
+
+def test_check_passes_the_highest_version_seen(app, with_keys, monkeypatch):
+    seen = []
+    app.config = app.config.model_copy(update={"updates_max_seen": "0.5.0"})
+    monkeypatch.setattr(bandeja.actualizar, "check", lambda **kw: seen.append(kw) or None)
+    assert app.check_updates(manual=True) == bandeja.MSG_UP_TO_DATE.format(
+        version=bandeja.__version__
+    )
+    assert seen == [{"max_seen": "0.5.0"}]
+
+
+def test_a_failed_check_says_why_and_changes_nothing(app, with_keys, monkeypatch):
+    def fail(**kw):
+        raise bandeja.actualizar.UpdateError("No he podido conectar con GitHub.")
+
+    monkeypatch.setattr(bandeja.actualizar, "check", fail)
+    assert app.check_updates(manual=True) == "No he podido conectar con GitHub."
+    app._drain()
+    assert app.saved == [] and app._update is None and not app._update_busy
+
+
+def test_only_one_check_or_download_at_a_time(app, with_keys):
+    assert app._claim_update()
+    assert app.check_updates(manual=True) == bandeja.MSG_UPDATE_BUSY
+    app._update = a_manifest()
+    with pytest.raises(bandeja.actualizar.UpdateError, match="Espera"):
+        app.install_update()
+
+
+def test_install_downloads_then_launches_and_quits(app, with_keys, monkeypatch, tmp_path):
+    app._update = a_manifest()
+    order = []
+    exe = tmp_path / "Luzeira-0.9.0-instalador.exe"
+    monkeypatch.setattr(
+        bandeja.actualizar, "download", lambda m: order.append(("download", m.version)) or exe
+    )
+    monkeypatch.setattr(
+        bandeja.actualizar, "launch", lambda path, m, log: order.append(("launch", path))
+    )
+    monkeypatch.setattr(app, "quit", lambda: order.append(("quit",)))
+    text = app.install_update()
+    assert "0.9.0" in text and order == [("download", "0.9.0")]  # lanzar va por la cola
+    app._drain()
+    assert order == [("download", "0.9.0"), ("launch", exe), ("quit",)]
+
+
+def test_install_that_fails_to_verify_does_not_quit(app, with_keys, monkeypatch, tmp_path):
+    app._update = a_manifest()
+    monkeypatch.setattr(bandeja.actualizar, "download", lambda m: tmp_path / "x.exe")
+
+    def bad(path, m, log):
+        raise bandeja.actualizar.UpdateError("El instalador descargado no coincide.")
+
+    monkeypatch.setattr(bandeja.actualizar, "launch", bad)
+    quits = []
+    monkeypatch.setattr(app, "quit", lambda: quits.append(1))
+    app.install_update()
+    app._drain()
+    assert quits == [] and app.notes == ["El instalador descargado no coincide."]
+
+
+def test_editor_install_without_an_update_is_409(settings, with_keys):
+    with pytest.raises(bandeja.EditorError) as exc:
+        settings.install_update()
+    assert exc.value.status == 409

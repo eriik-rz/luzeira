@@ -52,6 +52,15 @@ def test_release_has_no_cache_and_needs_approval():
     assert re.search(r"^permissions: \{\}", text, re.MULTILINE)
 
 
+def test_release_stays_a_draft_until_signed():
+    # ADR-006: quien mantiene el proyecto firma manifest.json fuera de GitHub y publica
+    # a mano. Si el workflow publicara solo, saldría una versión sin firma.
+    text = _text(ROOT / ".github" / "workflows" / "release.yml")
+    assert "--draft " in text
+    assert "--draft=false" not in text
+    assert "dist/SHA256SUMS" in text.split("actions/attest@", 1)[1].split("upload-artifact", 1)[0]
+
+
 def test_release_uses_the_same_tool_versions_as_the_build_script():
     import importlib.util
 

@@ -119,6 +119,8 @@ export class SimulatedApi implements EditorApi {
       active_theme: this.applied,
       simulated: true,
       question: this.question,
+      // En la demo de la web no se pregunta nada al entrar: se ve en «Ajustes».
+      updates_question: false,
     }
   }
 
@@ -202,6 +204,7 @@ export class SimulatedApi implements EditorApi {
   }
 
   private appSettings: AppSettings = {
+    updates: { can_check: true, enabled: null, available: null, busy: false, version: '0.0.0-simulado' },
     brightness: 50,
     brightness_levels: [25, 50, 75, 100],
     flip: false,
@@ -239,7 +242,19 @@ export class SimulatedApi implements EditorApi {
     if (change.brightness !== undefined && !this.appSettings.brightness_levels.includes(change.brightness)) {
       throw new ApiError('Ese brillo no está entre los que se pueden elegir.', 400)
     }
-    this.appSettings = { ...this.appSettings, ...change }
+    const { updates, ...rest } = change
+    this.appSettings = { ...this.appSettings, ...rest }
+    if (updates !== undefined) this.appSettings.updates = { ...this.appSettings.updates, enabled: updates }
+  }
+
+  async checkUpdates(): Promise<string> {
+    await wait(400)
+    return 'Ya tienes la última versión de Luzeira. (simulado: no se ha conectado a nada)'
+  }
+
+  async installUpdate(): Promise<string> {
+    await wait(80)
+    throw new ApiError('No hay ninguna versión nueva pendiente. Busca otra vez.', 409)
   }
 
   async chooseDisplay(id: string | null, confirmed: boolean): Promise<void> {

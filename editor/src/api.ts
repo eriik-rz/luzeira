@@ -31,6 +31,8 @@ export interface Info {
   simulated?: boolean
   /** «¿Se ve bien?» de una pantalla elegida en «Ajustes», esperando respuesta. */
   question?: { title: string; text: string } | null
+  /** Hay que preguntar una vez si avisar de versiones nuevas (ADR-006). */
+  updates_question?: boolean
 }
 
 export interface ThemeSummary {
@@ -68,8 +70,20 @@ export interface DisplayOption {
   warning: string | null
 }
 
+/** Actualizaciones: si se avisa, y la versión nueva ya comprobada (firma incluida). */
+export interface UpdatesState {
+  /** Esta copia sabe comprobar firmas (lleva claves públicas). */
+  can_check: boolean
+  /** `null`: aún no se ha preguntado (y no se conecta a nada). */
+  enabled: boolean | null
+  available: string | null
+  busy: boolean
+  version: string
+}
+
 /** Ajustes de la app (lo mismo que el menú del icono). */
 export interface AppSettings {
+  updates: UpdatesState
   brightness: number
   brightness_levels: number[]
   flip: boolean
@@ -81,7 +95,9 @@ export interface AppSettings {
   advanced: DisplayOption[]
 }
 
-export type SettingsChange = Partial<Pick<AppSettings, 'brightness' | 'flip' | 'autostart'>>
+export type SettingsChange = Partial<
+  Pick<AppSettings, 'brightness' | 'flip' | 'autostart'> & { updates: boolean }
+>
 
 /** Un elemento con letras que su fuente no tiene (se verían como cuadros). */
 export interface MissingGlyphs {
@@ -153,6 +169,10 @@ export interface EditorApi {
   openThemesFolder(): Promise<void>
   /** Importa un tema `.zip`; devuelve el nombre del tema nuevo. */
   importTheme(file: File): Promise<string>
+  /** Busca una versión nueva ahora; devuelve el texto para el usuario. */
+  checkUpdates(): Promise<string>
+  /** Descarga e instala la versión nueva; Luzeira se cierra y se vuelve a abrir. */
+  installUpdate(): Promise<string>
 }
 
 // --- Token ---------------------------------------------------------------------------
@@ -340,6 +360,14 @@ class HttpApi implements EditorApi {
     })
     const data = (await res.json()) as { name: string }
     return data.name
+  }
+  async checkUpdates() {
+    const r = await this.json<{ message: string }>('POST', '/api/actualizaciones/buscar', {})
+    return r.message
+  }
+  async installUpdate() {
+    const r = await this.json<{ message: string }>('POST', '/api/actualizaciones/instalar', {})
+    return r.message
   }
 }
 

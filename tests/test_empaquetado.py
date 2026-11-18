@@ -133,6 +133,25 @@ def test_launch_after_install_is_optional_and_not_in_silent_mode():
     assert "skipifsilent" in run
 
 
+def test_update_from_the_app_waits_keeps_autostart_and_reopens():
+    # ADR-006. Medido el 2026-11-18 con la prueba de punta a punta del scratchpad.
+    from luzeira import actualizar
+
+    assert "/ACTUALIZAR" in actualizar.INSTALLER_ARGS
+    code = _section("Code")
+    assert "CompareText(ParamStr(I), '/ACTUALIZAR') = 0" in code
+    # Esperar al mutex solo al actualizar: una instalación normal sigue negándose.
+    init = code[code.index("function InitializeSetup") :]
+    assert init.index("if not IsUpdate then") < init.index("CheckForMutexes('{#MutexName}')")
+    # Lo que se reabre: la app sin el editor, solo al actualizar y aunque sea en silencio.
+    assert _define("ReopenParams") == "-m luzeira"
+    line = next(x for x in _section("Run").splitlines() if "Check: IsUpdate" in x)
+    assert 'Parameters: "{#ReopenParams}"' in line
+    assert "skipifsilent" not in line and "postinstall" not in line
+    # «Iniciar con Windows»: lo que hubiera antes, no la tarea recordada.
+    assert "RegWriteStringValue(HKCU, '{#RunKey}', '{#RunValue}', PreviousRunCommand)" in code
+
+
 def test_shortcuts_launch_pythonw_with_the_package_icon():
     assert _define("PythonW") == r"{app}\python\pythonw.exe"
     icons = _section("Icons")

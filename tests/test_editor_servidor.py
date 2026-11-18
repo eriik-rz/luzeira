@@ -23,6 +23,7 @@ from PIL import Image
 
 from luzeira import config as luzeira_config
 from luzeira.editor import EditorServer
+from luzeira.editor.almacen import EditorError
 from luzeira.sensores.base import Reading, SensorInfo
 from luzeira.temas import cargar
 
@@ -1339,6 +1340,17 @@ class FakeSettings:
     def answer(self, looks_right: bool) -> str:
         raise AssertionError("sin pregunta pendiente")
 
+    def updates_question(self) -> bool:
+        return False
+
+    def check_updates(self) -> str:
+        self.calls.append(("check",))
+        return "Ya tienes la última versión."
+
+    def install_update(self) -> str:
+        self.calls.append(("install",))
+        raise EditorError(409, "No hay ninguna versión nueva pendiente.")
+
 
 @pytest.fixture
 def with_settings(env):
@@ -1384,12 +1396,29 @@ def test_settings_read_and_update(with_settings):
     assert client.json("GET", "/api/ajustes") == (200, {"brightness": 50, "choices": []})
     status, _ = client.json("PUT", "/api/ajustes", {"brightness": 75, "autostart": True})
     assert status == 200
-    assert fake.calls == [("update", {"brightness": 75, "flip": None, "autostart": True})]
+    assert fake.calls == [
+        ("update", {"brightness": 75, "flip": None, "autostart": True, "updates": None})
+    ]
+    assert client.json("PUT", "/api/ajustes", {"updates": False})[0] == 200
+    assert fake.calls[-1] == (
+        "update",
+        {"brightness": None, "flip": None, "autostart": None, "updates": False},
+    )
 
 
 @pytest.mark.parametrize(
     "body",
-    [{}, {"brightness": True}, {"brightness": "75"}, {"flip": 1}, {"otra": 1}, [], b'"x"'],
+    [
+        {},
+        {"brightness": True},
+        {"brightness": "75"},
+        {"flip": 1},
+        {"updates": "sí"},
+        {"updates": 1},
+        {"otra": 1},
+        [],
+        b'"x"',
+    ],
 )
 def test_settings_update_rejects_bad_values(with_settings, body):
     client, fake, _ = with_settings
@@ -1460,7 +1489,26 @@ def test_question_is_in_info_and_is_answered(with_settings):
 
 def test_info_without_tray_has_no_question(env):
     _, client, *_ = env
-    assert client.json("GET", "/api/info")[1]["question"] is None
+    info = client.json("GET", "/api/info")[1]
+    assert info["question"] is None and info["updates_question"] is False
+
+
+def test_update_routes(with_settings):
+    client, fake, _ = with_settings
+    fake.updates_question = lambda: True
+    assert client.json("GET", "/api/info")[1]["updates_question"] is True
+    assert client.json("POST", "/api/actualizaciones/buscar") == (
+        200,
+        {"message": "Ya tienes la última versión."},
+    )
+    status, body = client.json("POST", "/api/actualizaciones/instalar")
+    assert status == 409 and body["error"] == "No hay ninguna versión nueva pendiente."
+    assert fake.calls == [("check",), ("install",)]
+    for path in ("/api/actualizaciones/buscar", "/api/actualizaciones/instalar"):
+        assert client.json("POST", path, token=None)[0] == 403
+        assert client.json("POST", path, origin="http://evil.com")[0] == 403
+        assert client.json("GET", path)[0] == 404
+    assert fake.calls == [("check",), ("install",)]
 
 
 # --- C-17: letras que faltan en la fuente ------------------------------------------------

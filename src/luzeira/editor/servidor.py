@@ -24,7 +24,8 @@ nombre sugerido en la cabecera ``X-Luzeira-Filename``, codificado como en una UR
 (``encodeURIComponent``). En la query no se admite.
 
 Ajustes de la app (``/api/ajustes``, ``/api/pantalla``, ``/api/acceso-escritorio``,
-``/api/carpeta-temas``, ``/api/importar-tema``): los mismos filtros; los implementa la
+``/api/carpeta-temas``, ``/api/importar-tema``, ``/api/actualizaciones/buscar`` e
+``/api/actualizaciones/instalar``): los mismos filtros; los implementa la
 bandeja (ver ``ajustes.py``). Importar sube el ``.zip`` como cuerpo, con su nombre en
 ``X-Luzeira-Filename``.
 
@@ -385,6 +386,10 @@ class EditorServer:
             # «¿Se ve bien?» de una pantalla elegida en el editor: la interfaz la muestra
             # en cuanto la ve aquí (pregunta por /api/info cada pocos segundos).
             "question": self._settings.question() if self._settings is not None else None,
+            # «¿Avisarte de versiones nuevas?»: se pregunta una vez (ADR-006).
+            "updates_question": (
+                self._settings.updates_question() if self._settings is not None else False
+            ),
         }
 
     def sensor_rows(self) -> list[dict]:
@@ -485,7 +490,7 @@ def _route_label(path: str) -> str:
         known = {
             "info", "temas", "sensores", "vista-previa", "copiar", "aplicar", "recursos",
             "ajustes", "pantalla", "respuesta", "acceso-escritorio", "carpeta-temas",
-            "importar-tema",
+            "importar-tema", "actualizaciones", "buscar", "instalar",
         }  # fmt: skip
         return "/" + "/".join(p if p in known or p == "api" else "*" for p in parts[1:6])
     return "/(estático)"
@@ -706,6 +711,10 @@ class _Handler(BaseHTTPRequestHandler):
             case ("POST", "pantalla", "respuesta"):
                 looks_right = parse_answer(self._json_body())
                 return self._json(200, {"message": editor.settings().answer(looks_right)})
+            case ("POST", "actualizaciones", "buscar"):
+                return self._json(200, {"message": editor.settings().check_updates()})
+            case ("POST", "actualizaciones", "instalar"):
+                return self._json(200, {"message": editor.settings().install_update()})
             case ("POST", "acceso-escritorio"):
                 return self._json(200, {"message": editor.settings().create_shortcut()})
             case ("POST", "carpeta-temas"):
