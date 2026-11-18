@@ -10,9 +10,10 @@ Sustituye al bucle provisional de ``app.py`` (fase 3). Cumple:
   ``on_status`` con un mensaje en español para el usuario.
 
 🔑 Un solo hilo toca la pantalla y los sensores: el que ejecuta :meth:`DisplayService.run`.
-Los demás métodos (``stop``, ``suspend``, ``resume``, ``apply``, ``confirm_port``) solo
-dejan una orden y despiertan a ese hilo. Así nunca hay dos hilos escribiendo en el puerto
-a la vez (p. ej. la callback de energía cerrándolo en mitad de un ``draw_image``).
+Los demás métodos (``stop``, ``suspend``, ``resume``, ``apply``, ``confirm_port``,
+``choose_display``) solo dejan una orden y despiertan a ese hilo. Así nunca hay dos
+hilos escribiendo en el puerto a la vez (p. ej. la callback de energía cerrándolo en
+mitad de un ``draw_image``).
 """
 
 from __future__ import annotations
@@ -30,12 +31,16 @@ from typing import Protocol
 from PIL import Image
 
 from luzeira.pantallas import (
+    ChosenDisplayMissing,
     ConfirmationNeeded,
     DisplayBusy,
+    DisplayChoice,
     DisplayError,
     Orientation,
     TuringRevA,
+    WrongModel,
 )
+from luzeira.pantallas.apertura import open_auto, open_chosen
 from luzeira.render import Renderer
 from luzeira.sensores import default_hub
 from luzeira.sensores.base import Reading
@@ -114,7 +119,16 @@ class Hub(Protocol):
 
 
 OpenDisplay = Callable[[str | None], Display]
+OpenChoice = Callable[[DisplayChoice], Display]
 StatusCallback = Callable[[Status, str], None]
+
+
+@dataclass(frozen=True)
+class DisplayInfo:
+    """Qué pantalla está abierta ahora (para el menú «Pantalla» de la bandeja)."""
+
+    model_key: str  # clave de ``pantallas.modelos`` ("" si el driver no la dice)
+    device: str | None
 
 
 def open_once(port: str | None) -> Display:
@@ -123,8 +137,14 @@ def open_once(port: str | None) -> Display:
     ``TuringRevA.open`` reintenta 10 veces con ``time.sleep(1)``: ~10 s bloqueado sin
     poder atender a ``stop()`` ni a ``suspend()``. Aquí los reintentos los hace el
     servicio con esperas interrumpibles.
+
+    ``port`` = el usuario ha confirmado que ahí hay una rev A. Sin él, detección sin
+    enviar bytes (``pantallas.apertura.open_auto``): la rev A con su serie se abre igual
+    que siempre; las demás, solo si su serie las identifica sin duda.
     """
-    return TuringRevA.open(port, retries=1)
+    if port is not None:
+        return TuringRevA.open(port, retries=1)
+    return open_auto()
 
 
 # --- mensajes para el usuario -----------------------------------------------------------
@@ -167,12 +187,15 @@ class DisplayService:
         settings: Settings,
         *,
         open_display: OpenDisplay = open_once,
+        choice: DisplayChoice | None = None,
+        open_choice: OpenChoice = open_chosen,
         make_hub: Callable[[], Hub] = default_hub,
         monotonic: Callable[[], float] = time.monotonic,
         on_status: StatusCallback = lambda status, message: None,
         timings: Timings = Timings(),
     ) -> None:
         self._open_display = open_display
+        self._open_choice = open_choice
         self._make_hub = make_hub
         self._monotonic = monotonic
         self._on_status = on_status
@@ -195,9 +218,13 @@ class DisplayService:
         self._status = Status.STARTING
         self._message = MSG_STARTING
         self._pending_device: str | None = None
+        self._pending_choice: DisplayChoice | None = None  # propuesta que espera un «sí»
+        self._new_choice: tuple[DisplayChoice | None] | None = None  # de choose_display()
+        self._info: DisplayInfo | None = None
 
         # --- solo del hilo del servicio ---
         self._settings = settings
+        self._choice = choice  # pantalla elegida por el usuario (None: detección sola)
         self._hub: Hub | None = None
         self._display: Display | None = None
         self._renderer: Renderer | None = None
@@ -229,6 +256,19 @@ class DisplayService:
         None en cualquier otro estado. Se confirma con :meth:`confirm_port`."""
         with self._cond:
             return self._pending_device
+
+    @property
+    def pending_choice(self) -> DisplayChoice | None:
+        """Modelo y puerto propuestos que esperan un «sí» del usuario (una pantalla beta
+        reconocida solo por su USB). Se aceptan con :meth:`choose_display`."""
+        with self._cond:
+            return self._pending_choice
+
+    @property
+    def display_info(self) -> DisplayInfo | None:
+        """La pantalla abierta ahora, o None."""
+        with self._cond:
+            return self._info
 
     def stop(self) -> None:
         """Pide parar. ``run()`` apaga la pantalla, suelta puerto y sensores y termina
@@ -294,6 +334,16 @@ class DisplayService:
             self._kick = True
             self._bump()
 
+    def choose_display(self, choice: DisplayChoice | None) -> None:
+        """Usar esta pantalla (modelo + puerto) en vez de la que haya; ``None``: volver a
+        la detección sola. Se suelta la pantalla actual y se prueba la elegida con el
+        saludo de su modelo; si no contesta como tal, el estado pasa a NEEDS_CONFIRMATION
+        con el aviso y no se prueba ningún otro modelo."""
+        with self._cond:
+            self._new_choice = (choice,)  # en tupla: «elegir None» también es una orden
+            self._kick = True
+            self._bump()
+
     def _bump(self) -> int:
         """(Bajo _cond) registra una orden y despierta a quien espere."""
         self._version += 1
@@ -346,8 +396,12 @@ class DisplayService:
                 reload, self._pending_reload = self._pending_reload, False
                 kick, self._kick = self._kick, False
                 resumed, self._resumed = self._resumed, False
+                new_choice, self._new_choice = self._new_choice, None
             if stop:
                 return
+            if new_choice is not None:
+                self._disconnect(screen_off=True)  # soltar la que hubiera antes de probar
+                self._choice = new_choice[0]
             if resumed and not want_suspend:
                 # Sin SCREEN_OFF: la pantalla puede no responder tras el reposo.
                 self._disconnect(screen_off=False)
@@ -394,13 +448,27 @@ class DisplayService:
         except ConfirmationNeeded as exc:
             # Podría ser otro modelo: no se reintenta hasta que el usuario responda.
             self._retry_at = math.inf
-            self._set(Status.NEEDS_CONFIRMATION, str(exc), device=exc.device)
+            self._set(Status.NEEDS_CONFIRMATION, str(exc), device=exc.device, choice=exc.choice)
+            return
+        except WrongModel as exc:
+            # La elegida no contesta como ese modelo y el driver ya cerró el puerto. Ni se
+            # reintenta ni se prueba otro modelo. Con la próxima orden se vuelve a la
+            # detección sola, que no manda nada a lo que no reconoce.
+            self._choice = None
+            with self._cond:
+                self._confirmed.discard(exc.device)  # un «sí» que resultó no ser: se olvida
+            self._retry_at = math.inf
+            self._set(Status.NEEDS_CONFIRMATION, str(exc))
             return
         except DisplayError as exc:
             self._schedule_retry()
             self._set(Status.NO_DISPLAY, _no_display_message(exc))
             return
         self._display = display
+        with self._cond:
+            self._info = DisplayInfo(
+                getattr(display, "model_key", ""), getattr(display, "device", None)
+            )
         try:
             display.screen_on()
             display.set_brightness(self._settings.brightness)
@@ -414,6 +482,11 @@ class DisplayService:
         self._set(Status.STARTING, MSG_CONNECTING)
 
     def _open(self) -> Display:
+        if self._choice is not None:
+            try:
+                return self._open_choice(self._choice)
+            except ChosenDisplayMissing:
+                pass  # la elegida no está (o su USB ya no coincide): detección sola
         try:
             return self._open_display(None)
         except ConfirmationNeeded as exc:
@@ -421,6 +494,8 @@ class DisplayService:
                 confirmed = exc.device in self._confirmed
             if not confirmed:
                 raise
+            if exc.choice is not None:  # una propuesta beta confirmada: con su driver
+                return self._open_choice(exc.choice)
             return self._open_display(exc.device)
 
     def _schedule_retry(self) -> None:
@@ -472,6 +547,8 @@ class DisplayService:
     def _disconnect(self, *, screen_off: bool) -> None:
         display, self._display = self._display, None
         self._needs_full = False
+        with self._cond:
+            self._info = None
         if display is None:
             return
         try:
@@ -574,13 +651,23 @@ class DisplayService:
 
     # --- estado --------------------------------------------------------------------
 
-    def _set(self, status: Status, message: str, *, device: str | None = None) -> None:
+    def _set(
+        self,
+        status: Status,
+        message: str,
+        *,
+        device: str | None = None,
+        choice: DisplayChoice | None = None,
+    ) -> None:
         """Cambia el estado y avisa solo si ha cambiado algo (nada de avisos en bucle).
         La callback se llama fuera del candado para que pueda llamar al servicio.
-        ``device``: el puerto que espera confirmación (solo con NEEDS_CONFIRMATION)."""
+        ``device``: el puerto que espera confirmación (solo con NEEDS_CONFIRMATION);
+        ``choice``: el modelo propuesto para él, si no es la rev A."""
         with self._cond:
             # Antes de avisar: quien reciba on_status puede leer pending_device ya.
-            self._pending_device = device if status == Status.NEEDS_CONFIRMATION else None
+            asking = status == Status.NEEDS_CONFIRMATION
+            self._pending_device = device if asking else None
+            self._pending_choice = choice if asking else None
             if (status, message) == (self._status, self._message):
                 return
             self._status, self._message = status, message

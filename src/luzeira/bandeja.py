@@ -22,6 +22,7 @@ import os
 import queue
 import sys
 import threading
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -32,6 +33,7 @@ from luzeira import __version__
 from luzeira.config import (
     DEFAULT_THEME,
     AppConfig,
+    DisplaySetting,
     clean_import_leftovers,
     config_dir,
     list_themes,
@@ -44,6 +46,17 @@ from luzeira.config import (
 from luzeira.editor.conexion import EditorLink
 from luzeira.editor.ventana import EXIT_NO_WEBVIEW2
 from luzeira.marca import STAR, draw_mark
+from luzeira.pantallas.modelos import (
+    REV_C,
+    SUPPORTED,
+    DisplayChoice,
+    DisplayModel,
+    PortInfo,
+    compatible_models,
+    identify,
+    list_ports,
+    model_by_key,
+)
 from luzeira.servicio import DisplayService, Settings, Status
 from luzeira.sistema import autoarranque
 from luzeira.sistema.energia import PowerListener
@@ -80,6 +93,46 @@ MSG_NO_WEBVIEW2 = (
     "Para el editor hace falta Microsoft Edge WebView2 Runtime (gratuito de Microsoft). "
     "Instálalo y vuelve a abrir el editor."
 )
+
+# --- elegir pantalla (C-44) ---------------------------------------------------------------
+TITLE_BETA = "Luzeira: probar un modelo en beta"
+MSG_BETA = (
+    "Vas a probar Luzeira con una {model} en {device}.\n\n"
+    "Este modelo está en beta: todavía no se ha probado con una pantalla de verdad.\n\n"
+    "Luzeira solo le mandará primero un saludo. Si no contesta como debe, cerrará el "
+    "puerto y te avisará, sin probar nada más.\n\n¿Quieres probarlo?"
+)
+TITLE_ADVANCED = "Luzeira: modo avanzado"
+MSG_ADVANCED = (
+    "Cuidado: vas a mandar datos de pantalla a {device} como si fuera una {model}, "
+    "aunque Luzeira no puede comprobar que lo sea.\n\n"
+    "Si en ese puerto hay otra cosa (un módem, un Bluetooth, una placa…), recibirá datos "
+    "que no entiende y podría comportarse de forma rara hasta que la desconectes.\n\n"
+    "Úsalo solo si sabes qué hay conectado en ese puerto. ¿Seguro que quieres probar?"
+)
+MSG_CHOICE_SAVED = "Listo: Luzeira usará tu {model} en {device}. Lo recordaré."
+MSG_BACK_TO_AUTO = "Vale: Luzeira buscará la pantalla ella sola."
+_PORTS_TTL = 1.0  # s: reconstruir el menú no enumera los puertos varias veces seguidas
+
+
+def choice_from_setting(setting: DisplaySetting | None) -> DisplayChoice | None:
+    return DisplayChoice(**setting.model_dump()) if setting is not None else None
+
+
+def setting_from_choice(choice: DisplayChoice) -> DisplaySetting:
+    return DisplaySetting(
+        model=choice.model,
+        device=choice.device,
+        vid=choice.vid,
+        pid=choice.pid,
+        serial=choice.serial,
+        advanced=choice.advanced,
+    )
+
+
+def model_label(key: str) -> str:
+    model = model_by_key(key)
+    return model.menu_label if model is not None else "pantalla"
 
 
 def clip(text: str, limit: int) -> str:
@@ -125,6 +178,9 @@ class TrayApp:
         self._last_notified: tuple[Status, str] | None = None
         self._importing = False
         self._startup_notice: str | None = None
+        # Pantalla elegida a mano que se está probando: se guarda solo si funciona.
+        self._trial: DisplayChoice | None = None
+        self._ports_cache: tuple[float, list[PortInfo]] | None = None
         if not is_theme_valid(config.theme):
             # Un tema que dejó de funcionar no puede dejar la pantalla apagada para siempre.
             self._startup_notice = (
@@ -190,7 +246,11 @@ class TrayApp:
         )
 
     def _new_service(self) -> DisplayService:
-        return DisplayService(self._settings(), on_status=self._on_status)
+        return DisplayService(
+            self._settings(),
+            choice=choice_from_setting(self.config.display),
+            on_status=self._on_status,
+        )
 
     def _start_service(self) -> None:
         self._worker = threading.Thread(target=self._run_service, name="pantalla", daemon=True)
@@ -219,10 +279,29 @@ class TrayApp:
     def _show_status(self, status: Status, message: str) -> None:
         self.icon.icon = make_icon(_COLORS.get(status, _RED))
         self.icon.title = clip(f"Luzeira — {message}", _MAX_TIP)
+        self._settle_trial(status)
         self.icon.update_menu()
         if status in _NOTIFY and (status, message) != self._last_notified:
             self._notify(message)
         self._last_notified = (status, message)
+
+    def _settle_trial(self, status: Status) -> None:
+        """¿Ha funcionado la pantalla elegida a mano? Si se ve imagen, se recuerda; si
+        no contestó como ese modelo, se olvida (el aviso ya lo da el servicio)."""
+        trial = self._trial
+        if trial is None:
+            return
+        if status in (Status.NEEDS_CONFIRMATION, Status.ERROR, Status.STOPPED):
+            self._trial = None
+            return
+        info = self.service.display_info
+        if status is not Status.RUNNING or info is None:
+            return
+        if (info.model_key, info.device) != (trial.model, trial.device):
+            return
+        self._trial = None
+        self._save(self.config.model_copy(update={"display": setting_from_choice(trial)}))
+        self._notify(MSG_CHOICE_SAVED.format(model=model_label(trial.model), device=trial.device))
 
     # --- acciones del menú (todas en el hilo del icono) -----------------------------
 
@@ -247,6 +326,9 @@ class TrayApp:
             self._notify(f"El tema «{new.theme}» tiene un error y no se puede usar.")
             return  # ni se guarda ni se aplica: el menú sigue diciendo la verdad
         self.service.apply(Settings(theme_path(new.theme), new.brightness, new.flip), reload=reload)
+        self._save(new)
+
+    def _save(self, new: AppConfig) -> None:
         self.config = new
         try:
             save_config(new)
@@ -257,10 +339,70 @@ class TrayApp:
     def _pending(self) -> str | None:
         return self.service.pending_device
 
+    def _confirm_label(self) -> str:
+        choice = self.service.pending_choice
+        if choice is not None:
+            return f"Sí, es mi {model_label(choice.model)} ({choice.device}): probarla"
+        return f"Sí, es mi pantalla Turing / UsbPCMonitor ({self._pending()})"
+
     def _confirm(self) -> None:
+        choice = self.service.pending_choice
+        if choice is not None:
+            self._try_choice(choice)  # una propuesta beta: se prueba y, si va, se recuerda
+            return
         device = self._pending()
         if device is not None:
             self.service.confirm_port(device)
+
+    # --- elegir pantalla (C-44) -------------------------------------------------------
+
+    def _ports(self) -> list[PortInfo]:
+        """Los puertos COM según Windows (sin abrir ninguno), con una caché corta."""
+        now = time.monotonic()
+        if self._ports_cache is None or now - self._ports_cache[0] > _PORTS_TTL:
+            try:
+                ports = list_ports()
+            except Exception:
+                log.exception("No se pudo leer la lista de puertos")
+                ports = []
+            self._ports_cache = (now, ports)
+        return self._ports_cache[1]
+
+    def _display_text(self) -> str:
+        info = self.service.display_info
+        if info is None:
+            return "Ninguna pantalla conectada"
+        where = f" en {info.device}" if info.device else ""
+        return f"Conectada: {model_label(info.model_key)}{where}"
+
+    def _is_current(self, model: DisplayModel, port: PortInfo) -> bool:
+        info = self.service.display_info
+        return info is not None and (info.model_key, info.device) == (model.key, port.device)
+
+    def _try_choice(self, choice: DisplayChoice) -> None:
+        self._trial = choice
+        self.service.choose_display(choice)
+
+    def _pick(self, model: DisplayModel, port: PortInfo, *, advanced: bool) -> None:
+        """El usuario ha elegido modelo y puerto en el menú. Beta → se explica y se
+        pregunta; modo avanzado → advertencia y «No» por defecto."""
+        from luzeira.sistema.dialogos import confirm
+
+        if advanced:
+            text = MSG_ADVANCED.format(device=port.device, model=model.menu_label)
+            if not confirm(TITLE_ADVANCED, text, warning=True):
+                return
+        elif model.beta:
+            text = MSG_BETA.format(device=port.device, model=model.label)
+            if not confirm(TITLE_BETA, text):
+                return
+        self._try_choice(DisplayChoice.for_port(model, port, advanced=advanced))
+
+    def _back_to_auto(self) -> None:
+        self._trial = None
+        self._save(self.config.model_copy(update={"display": None}))
+        self.service.choose_display(None)
+        self._notify(MSG_BACK_TO_AUTO)
 
     def _autostart_enabled(self) -> bool:
         try:
@@ -400,6 +542,57 @@ class TrayApp:
                     radio=True,
                 )
 
+        def pick(model, port, advanced):
+            return self._safe(lambda: self._pick(model, port, advanced=advanced))
+
+        def is_current(model, port):
+            return lambda _item: self._is_current(model, port)
+
+        def choice_items():
+            # Lista cerrada: solo modelos con driver cuyo USB coincide con el del puerto.
+            # Un puerto sin USB (Bluetooth, módem…) no sale aquí; solo en «Modo avanzado».
+            offered = False
+            for port in self._ports():
+                for model in compatible_models(port):
+                    offered = True
+                    yield Item(
+                        f"{port.device}: {model.menu_label}",
+                        pick(model, port, False),
+                        checked=is_current(model, port),
+                    )
+                found = identify(port)
+                if found is not None and found.model is REV_C:
+                    offered = True
+                    yield Item(
+                        f"{port.device}: {REV_C.label} — todavía no compatible",
+                        None,
+                        enabled=False,
+                    )
+            if not offered:
+                yield Item("No veo ninguna pantalla compatible conectada", None, enabled=False)
+
+        def advanced_models(port):
+            return Menu(*[Item(m.menu_label, pick(m, port, True)) for m in SUPPORTED])
+
+        def advanced_items():
+            ports = self._ports()
+            if not ports:
+                yield Item("No hay ningún puerto COM", None, enabled=False)
+            for port in ports:
+                yield Item(port.label, advanced_models(port))
+
+        display_menu = Menu(
+            Item(lambda _item: self._display_text(), None, enabled=False),
+            Menu.SEPARATOR,
+            Item("Elegir modelo y puerto", Menu(choice_items)),
+            Item("Modo avanzado (cualquier puerto)", Menu(advanced_items)),
+            Item(
+                "Volver a detectarla sola",
+                self._safe(self._back_to_auto),
+                visible=lambda _item: self.config.display is not None or self._trial is not None,
+            ),
+        )
+
         return Menu(
             # default=True: también se abre con un clic en el icono.
             Item("Abrir editor", self._safe(self._open_editor), default=True),
@@ -407,8 +600,9 @@ class TrayApp:
             Item(lambda _item: self.service.message or "Arrancando…", None, enabled=False),
             # Solo cuando hay una pantalla con el USB de la rev A pero sin su número de serie:
             # podría ser otro modelo, así que no se le envía nada hasta que el usuario diga.
+            # Kipye: igual, pero el modelo propuesto viene en ``pending_choice``.
             Item(
-                lambda _item: f"Sí, es mi pantalla Turing / UsbPCMonitor ({self._pending()})",
+                lambda _item: self._confirm_label(),
                 self._safe(self._confirm),
                 visible=lambda _item: self._pending() is not None,
             ),
@@ -418,6 +612,7 @@ class TrayApp:
                 visible=lambda _item: self.service.status is Status.ERROR,
             ),
             Menu.SEPARATOR,
+            Item("Pantalla", display_menu),
             Item("Tema", Menu(theme_items)),
             Item(
                 "Importar tema (.zip)…",

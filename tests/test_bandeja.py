@@ -1,12 +1,15 @@
 """Bandeja: lo que se puede probar sin abrir el icono ni la pantalla."""
 
+from types import SimpleNamespace
+
 import pystray
 import pytest
 
 from luzeira import bandeja
 from luzeira.bandeja import WM_QUERYENDSESSION, allow_shutdown, clip, make_icon
-from luzeira.config import DEFAULT_THEME, AppConfig
-from luzeira.servicio import Status
+from luzeira.config import DEFAULT_THEME, AppConfig, DisplaySetting
+from luzeira.pantallas.modelos import DisplayChoice, PortInfo
+from luzeira.servicio import DisplayInfo, Status
 
 
 @pytest.fixture(autouse=True)
@@ -30,14 +33,25 @@ def free_tray_window_classes(monkeypatch):
             icon._unregister_class(icon._atom)
 
 
+# Puertos falsos para el menú «Pantalla» (nunca se lee el equipo de verdad en los tests).
+REV_A_PORT = PortInfo("COM3", 0x1A86, 0x5722, "USB35INCHIPSV2", "Dispositivo serie USB (COM3)")
+BT_PORT = PortInfo("COM4", description="Serie estándar sobre el vínculo Bluetooth (COM4)")
+KIPYE_PORT = PortInfo("COM8", 0x454D, 0x4E41, "", "Dispositivo serie USB (COM8)")
+REV_C_PORT = PortInfo("COM11", 0x1A86, 0xCA21, "CT21INCH", "")
+PORTS = [REV_A_PORT, BT_PORT, KIPYE_PORT, REV_C_PORT]
+
+
 @pytest.fixture
 def app(monkeypatch):
-    monkeypatch.setattr(bandeja, "save_config", lambda _c: None)
+    saved = []
+    monkeypatch.setattr(bandeja, "save_config", saved.append)
     monkeypatch.setattr(bandeja.autoarranque, "is_enabled", lambda: False)
+    monkeypatch.setattr(bandeja, "list_ports", lambda: list(PORTS))
     tray = bandeja.TrayApp(AppConfig())
     notes = []
     monkeypatch.setattr(tray, "_notify", lambda text, title="Luzeira": notes.append(text))
     tray.notes = notes
+    tray.saved = saved
     return tray
 
 
@@ -275,3 +289,178 @@ def test_editor_opens_on_start_only_when_asked(monkeypatch, open_editor):
     monkeypatch.setattr(tray.icon, "update_menu", lambda: None)
     tray._setup(type("FakeIcon", (), {"visible": False})())
     assert opened == ([True] if open_editor else [])
+
+
+# --- menú «Pantalla» (C-44) -----------------------------------------------------------
+
+
+def submenu(app, *path):
+    menu = app.icon.menu
+    for title in path:
+        menu = next(i for i in menu.items if i.text == title).submenu
+    return list(menu.items)
+
+
+@pytest.fixture
+def chosen(app, monkeypatch):
+    calls = []
+    monkeypatch.setattr(app.service, "choose_display", calls.append)
+    return calls
+
+
+@pytest.fixture
+def answers(monkeypatch):
+    """Respuestas del diálogo Sí/No; apunta cada pregunta (sin abrir nada de verdad)."""
+    from luzeira.sistema import dialogos
+
+    asked = []
+    replies = []
+
+    def confirm(title, text, *, warning=False):
+        asked.append((title, text, warning))
+        return replies.pop(0) if replies else False
+
+    monkeypatch.setattr(dialogos, "confirm", confirm)
+    return SimpleNamespace(asked=asked, replies=replies)
+
+
+def set_info(monkeypatch, app, info):
+    monkeypatch.setattr(type(app.service), "display_info", property(lambda _s: info))
+
+
+def test_display_menu_lists_only_compatible_models_per_port(app):
+    labels = [i.text for i in submenu(app, "Pantalla", "Elegir modelo y puerto")]
+    assert labels == [
+        'COM3: Turing / UsbPCMonitor 3,5"',
+        'COM3: XuanFang 3,5" (también «flagship») (beta)',
+        'COM8: Kipye Qiye 3,5" (beta)',
+        'COM11: Turing de 2,1", 5" u 8,8" (revisión C) — todavía no compatible',
+    ]  # el Bluetooth (COM4) no sale: no tiene USB
+    rev_c = submenu(app, "Pantalla", "Elegir modelo y puerto")[-1]
+    assert not rev_c.enabled
+
+
+def test_advanced_mode_offers_every_port_and_every_model(app):
+    ports = submenu(app, "Pantalla", "Modo avanzado (cualquier puerto)")
+    assert [p.text for p in ports] == [
+        "Dispositivo serie USB (COM3)",
+        "Serie estándar sobre el vínculo Bluetooth (COM4)",
+        "Dispositivo serie USB (COM8)",
+        "COM11",
+    ]
+    models = [m.text for m in ports[1].submenu.items]
+    assert len(models) == 3 and all("revisión C" not in m for m in models)
+
+
+def test_display_menu_says_what_is_connected(app, monkeypatch):
+    [status] = [i.text for i in submenu(app, "Pantalla")[:1]]
+    assert status == "Ninguna pantalla conectada"
+    set_info(monkeypatch, app, DisplayInfo("xuanfang-rev-b", "COM6"))
+    assert (
+        submenu(app, "Pantalla")[0].text
+        == 'Conectada: XuanFang 3,5" (también «flagship») (beta) en COM6'
+    )
+
+
+def test_rev_a_from_the_list_is_tried_without_a_dialog(app, chosen, answers):
+    rev_a = submenu(app, "Pantalla", "Elegir modelo y puerto")[0]
+    rev_a(app.icon)
+    assert answers.asked == []
+    assert chosen == [DisplayChoice("turing-rev-a", "COM3", 0x1A86, 0x5722, "USB35INCHIPSV2")]
+
+
+def test_beta_model_asks_first_and_no_means_nothing(app, chosen, answers):
+    rev_b = submenu(app, "Pantalla", "Elegir modelo y puerto")[1]
+    rev_b(app.icon)  # responde «No»
+    assert chosen == [] and len(answers.asked) == 1
+    title, text, warning = answers.asked[0]
+    assert "beta" in title and "beta" in text and "COM3" in text and not warning
+    answers.replies.append(True)
+    rev_b(app.icon)
+    assert [c.model for c in chosen] == ["xuanfang-rev-b"] and not chosen[0].advanced
+
+
+def test_advanced_mode_warns_and_marks_the_choice(app, chosen, answers):
+    bt_rev_a = submenu(app, "Pantalla", "Modo avanzado (cualquier puerto)")[1].submenu.items[0]
+    bt_rev_a(app.icon)  # «No» (también es lo que pasa si se pulsa Intro)
+    assert chosen == []
+    title, text, warning = answers.asked[0]
+    assert warning and "avanzado" in title.lower() and "COM4" in text and "Cuidado" in text
+    answers.replies.append(True)
+    bt_rev_a(app.icon)
+    assert chosen == [DisplayChoice("turing-rev-a", "COM4", None, None, "", advanced=True)]
+
+
+def test_choice_is_remembered_only_once_it_shows_the_theme(app, chosen, monkeypatch):
+    choice = DisplayChoice("kipye-rev-d", "COM8", 0x454D, 0x4E41)
+    app._try_choice(choice)
+    set_info(monkeypatch, app, None)
+    app._show_status(Status.STARTING, "Pantalla encontrada…")
+    assert app.saved == []
+    set_info(monkeypatch, app, DisplayInfo("kipye-rev-d", "COM8"))
+    app._show_status(Status.RUNNING, "Mostrando el tema «Esencial».")
+    assert app.config.display == DisplaySetting(
+        model="kipye-rev-d", device="COM8", vid=0x454D, pid=0x4E41
+    )
+    assert app.saved[-1].display == app.config.display
+    assert any("Lo recordaré" in n for n in app.notes)
+    app._show_status(Status.RUNNING, "otra vez")
+    assert len(app.saved) == 1  # se guarda una vez, no en cada estado
+
+
+def test_failed_choice_is_not_remembered(app, chosen, monkeypatch):
+    app._try_choice(DisplayChoice("xuanfang-rev-b", "COM3", 0x1A86, 0x5722, "x"))
+    app._show_status(Status.NEEDS_CONFIRMATION, "no parece ser ese modelo")
+    set_info(monkeypatch, app, DisplayInfo("xuanfang-rev-b", "COM3"))
+    app._show_status(Status.RUNNING, "Mostrando…")  # p. ej. otra cosa más tarde
+    assert app.saved == [] and app.config.display is None
+
+
+def test_running_with_another_display_does_not_save_the_trial(app, chosen, monkeypatch):
+    app._try_choice(DisplayChoice("xuanfang-rev-b", "COM3", 0x1A86, 0x5722, "x"))
+    set_info(monkeypatch, app, DisplayInfo("turing-rev-a", "COM3"))  # aún la de antes
+    app._show_status(Status.RUNNING, "Mostrando…")
+    assert app.saved == []
+
+
+def test_proposed_beta_model_is_confirmed_with_its_own_label(app, chosen, monkeypatch):
+    kipye = DisplayChoice("kipye-rev-d", "COM8", 0x454D, 0x4E41)
+    monkeypatch.setattr(type(app.service), "pending_device", property(lambda _s: "COM8"))
+    monkeypatch.setattr(type(app.service), "pending_choice", property(lambda _s: kipye))
+    [item] = [i for i in walk(app.icon.menu) if i.text.startswith("Sí, es mi")]
+    assert item.text == 'Sí, es mi Kipye Qiye 3,5" (beta) (COM8): probarla'
+    item(app.icon)
+    assert chosen == [kipye] and app._trial == kipye
+
+
+def test_plain_confirmation_still_confirms_rev_a(app, monkeypatch):
+    confirmed = []
+    monkeypatch.setattr(type(app.service), "pending_device", property(lambda _s: "COM9"))
+    monkeypatch.setattr(app.service, "confirm_port", confirmed.append)
+    [item] = [i for i in walk(app.icon.menu) if i.text.startswith("Sí, es mi")]
+    assert item.text == "Sí, es mi pantalla Turing / UsbPCMonitor (COM9)"
+    item(app.icon)
+    assert confirmed == ["COM9"]
+
+
+def test_saved_choice_reaches_the_service(monkeypatch):
+    monkeypatch.setattr(bandeja.autoarranque, "is_enabled", lambda: False)
+    monkeypatch.setattr(bandeja, "list_ports", lambda: list(PORTS))
+    setting = DisplaySetting(
+        model="xuanfang-rev-b", device="COM6", vid=0x1A86, pid=0x5722, serial="2017-2-25"
+    )
+    tray = bandeja.TrayApp(AppConfig(display=setting))
+    assert tray.service._choice == DisplayChoice(
+        "xuanfang-rev-b", "COM6", 0x1A86, 0x5722, "2017-2-25"
+    )
+
+
+def test_back_to_auto_forgets_the_choice(app, chosen):
+    back = next(i for i in submenu(app, "Pantalla") if i.text == "Volver a detectarla sola")
+    assert not back.visible
+    app.config = app.config.model_copy(
+        update={"display": DisplaySetting(model="kipye-rev-d", device="COM8")}
+    )
+    assert back.visible
+    back(app.icon)
+    assert chosen == [None] and app.config.display is None and app.saved[-1].display is None

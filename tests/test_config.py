@@ -8,6 +8,7 @@ from luzeira.config import (
     BUILTIN_THEMES,
     DEFAULT_THEME,
     AppConfig,
+    DisplaySetting,
     clean_import_leftovers,
     list_themes,
     load_config,
@@ -129,3 +130,37 @@ def test_no_old_data_no_migration(tmp_path):
 
     assert migrate_old_name(tmp_path / "Luzeira", tmp_path / "Visoria") is False
     assert not (tmp_path / "Luzeira").exists()
+
+
+# --- pantalla elegida a mano (C-44) ---------------------------------------------------
+
+
+def test_display_choice_roundtrip(tmp_path):
+    path = tmp_path / "config.json"
+    display = DisplaySetting(
+        model="xuanfang-rev-b", device="COM6", vid=0x1A86, pid=0x5722, serial="2017-2-25"
+    )
+    save_config(AppConfig(brightness=40, display=display), path)
+    assert load_config(path) == AppConfig(brightness=40, display=display)
+
+
+def test_old_config_without_display_still_loads(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text('{"theme": "esencial", "brightness": 70, "flip": false}', encoding="utf-8")
+    assert load_config(path) == AppConfig(brightness=70, display=None)
+
+
+@pytest.mark.parametrize(
+    "display",
+    [
+        '{"model": "../../x", "device": "COM3"}',
+        '{"model": "kipye-rev-d", "device": "COM3", "vid": 70000}',
+        '{"model": "kipye-rev-d"}',
+        '"COM3"',
+    ],
+)
+def test_broken_display_is_forgotten_without_losing_the_rest(tmp_path, display):
+    path = tmp_path / "config.json"
+    path.write_text(f'{{"brightness": 35, "display": {display}}}', encoding="utf-8")
+    assert load_config(path) == AppConfig(brightness=35, display=None)
+    assert not (tmp_path / "config.json.danado").exists()  # no se aparta como dañada

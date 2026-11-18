@@ -1,4 +1,5 @@
-"""Diálogo nativo de Windows para elegir un fichero (``GetOpenFileNameW`` de comdlg32).
+"""Diálogos nativos de Windows: elegir un fichero (``GetOpenFileNameW`` de comdlg32) y
+confirmar Sí/No (``MessageBoxW`` de user32).
 
 Sustituye a ``tkinter.filedialog`` (C-30): tkinter arrastra Tcl/Tk (~12 MB) y el Python
 embebible con el que se distribuirá Luzeira no lo trae. Este es el diálogo de siempre de
@@ -70,3 +71,42 @@ def ask_open_file(title: str, description: str, patterns: str) -> str | None:
     if not comdlg32.GetOpenFileNameW(ctypes.byref(ofn)):
         return None  # cancelado (o error del diálogo: CommDlgExtendedError lo diría)
     return buffer.value or None
+
+
+# --- confirmar (MessageBoxW) -------------------------------------------------------------
+# Referencia: https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-messageboxw
+
+MB_YESNO = 0x00000004
+MB_ICONWARNING = 0x00000030
+MB_ICONQUESTION = 0x00000020
+MB_DEFBUTTON2 = 0x00000100  # el botón por defecto (Intro) es «No»
+MB_SETFOREGROUND = 0x00010000  # que no se quede detrás de otras ventanas
+MB_TOPMOST = 0x00040000
+IDYES = 6
+
+
+def _message_box():
+    """``MessageBoxW`` de user32, o None fuera de Windows. Aparte para poder sustituirlo
+    en los tests (que nunca abren un diálogo de verdad)."""
+    try:
+        return ctypes.windll.user32.MessageBoxW
+    except (AttributeError, OSError):
+        return None
+
+
+def confirm_flags(*, warning: bool) -> int:
+    """Botones Sí/No. Con ``warning``: icono de advertencia y «No» por defecto, para que
+    un Intro despistado no acepte algo arriesgado."""
+    flags = MB_YESNO | MB_SETFOREGROUND | MB_TOPMOST
+    if warning:
+        return flags | MB_ICONWARNING | MB_DEFBUTTON2
+    return flags | MB_ICONQUESTION
+
+
+def confirm(title: str, text: str, *, warning: bool = False) -> bool:
+    """Pregunta Sí/No con el diálogo de Windows. True solo si el usuario pulsa «Sí»
+    (cerrar el diálogo o no estar en Windows cuenta como «No»)."""
+    box = _message_box()
+    if box is None:
+        return False
+    return box(None, text, title, confirm_flags(warning=warning)) == IDYES

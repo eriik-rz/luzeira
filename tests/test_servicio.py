@@ -10,7 +10,16 @@ from pathlib import Path
 import pytest
 
 import luzeira
-from luzeira.pantallas import ConfirmationNeeded, DisplayBusy, DisplayError, Orientation
+from luzeira.pantallas import (
+    ChosenDisplayMissing,
+    ConfirmationNeeded,
+    DisplayBusy,
+    DisplayChoice,
+    DisplayError,
+    ModelToConfirm,
+    Orientation,
+    WrongModel,
+)
 from luzeira.sensores.base import Reading
 from luzeira.servicio import DisplayService, Settings, Status, Timings
 
@@ -490,3 +499,104 @@ def test_reapplying_the_same_folder_with_reload_repaints_the_new_theme(tmp_path)
         h.service.apply(Settings(folder), reload=True)
         h.wait_for(lambda: len(display.full_pixels) == 2)
         assert display.full_pixels[-1] == (255, 0, 0)
+
+
+# --- elegir modelo y puerto (C-44) ----------------------------------------------------
+
+REV_B_CHOICE = DisplayChoice("xuanfang-rev-b", "COM6", 0x1A86, 0x5722, "2017-2-25")
+
+
+class ChoiceOpener:
+    """``open_choice`` falso: ``plan`` como en ``Opener``; luego, pantallas falsas."""
+
+    def __init__(self, log: list, plan=()) -> None:
+        self.plan = list(plan)
+        self.calls: list[DisplayChoice] = []
+        self.log = log
+        self.displays: list[FakeDisplay] = []
+
+    def __call__(self, choice: DisplayChoice) -> FakeDisplay:
+        self.calls.append(choice)
+        if self.plan:
+            outcome = self.plan.pop(0)
+            if outcome is not None:
+                raise outcome
+        display = FakeDisplay(self.log)
+        display.model_key, display.device = choice.model, choice.device
+        self.displays.append(display)
+        return display
+
+
+def test_saved_choice_is_used_and_auto_detection_is_not():
+    opener = Opener()
+    chooser = ChoiceOpener(opener.log)
+    with Harness(opener=opener, choice=REV_B_CHOICE, open_choice=chooser) as h:
+        h.wait_status(Status.RUNNING)
+        assert h.service.display_info.model_key == "xuanfang-rev-b"
+        assert h.service.display_info.device == "COM6"
+    assert chooser.calls == [REV_B_CHOICE] and opener.calls == []
+    assert h.service.display_info is None  # al parar ya no hay nada abierto
+
+
+def test_saved_choice_that_is_not_connected_falls_back_to_auto():
+    opener = Opener()
+    chooser = ChoiceOpener(opener.log, plan=[ChosenDisplayMissing()])
+    with Harness(opener=opener, choice=REV_B_CHOICE, open_choice=chooser) as h:
+        h.wait_status(Status.RUNNING)
+    assert chooser.calls == [REV_B_CHOICE] and opener.calls == [None]
+
+
+def test_wrong_model_stops_asks_and_never_tries_another_model():
+    opener = Opener()
+    wrong = WrongModel("COM6", 'XuanFang 3,5"')
+    chooser = ChoiceOpener(opener.log, plan=[wrong])
+    with Harness(opener=opener, choice=REV_B_CHOICE, open_choice=chooser) as h:
+        h.wait_status(Status.NEEDS_CONFIRMATION)
+        assert "no parece ser ese modelo" in h.service.message
+        assert h.service.pending_device is None  # nada que confirmar: elegir otro
+        time.sleep(0.2)
+        assert chooser.calls == [REV_B_CHOICE] and opener.calls == []  # ni reintento ni otro
+        # Con la siguiente orden se vuelve a la detección sola (la elegida se olvida).
+        h.service.apply(Settings(THEME, brightness=30))
+        h.wait_status(Status.RUNNING)
+    assert chooser.calls == [REV_B_CHOICE] and opener.calls == [None]
+
+
+def test_choose_display_releases_the_current_one_and_probes_the_new_one():
+    opener = Opener()
+    chooser = ChoiceOpener(opener.log)
+    with Harness(opener=opener, open_choice=chooser) as h:
+        h.wait_status(Status.RUNNING)
+        h.service.choose_display(REV_B_CHOICE)
+        h.wait_for(lambda: chooser.displays)
+        h.wait_status(Status.RUNNING)
+        first = opener.calls_of(opener.displays[0])
+        assert first[-2:] == [("off",), ("close",)]  # la anterior, apagada y soltada
+        assert h.service.display_info.model_key == "xuanfang-rev-b"
+        # Volver a la detección sola.
+        h.service.choose_display(None)
+        h.wait_for(lambda: len(opener.displays) == 2)
+        h.wait_status(Status.RUNNING)
+    assert chooser.calls == [REV_B_CHOICE]
+
+
+def test_proposed_beta_model_is_offered_and_confirming_uses_its_driver():
+    kipye = DisplayChoice("kipye-rev-d", "COM8", 0x454D, 0x4E41)
+    opener = Opener(plan=[ModelToConfirm(kipye, 'Kipye Qiye 3,5"')] * 2)
+    chooser = ChoiceOpener(opener.log)
+    with Harness(opener=opener, open_choice=chooser) as h:
+        h.wait_status(Status.NEEDS_CONFIRMATION)
+        assert h.service.pending_device == "COM8"
+        assert h.service.pending_choice == kipye
+        assert "beta" in h.service.message
+        h.service.confirm_port("COM8")
+        h.wait_status(Status.RUNNING)
+        assert h.service.pending_choice is None
+    assert chooser.calls == [kipye]
+
+
+def test_plain_rev_a_confirmation_has_no_proposed_model():
+    opener = Opener(plan=[ConfirmationNeeded("COM7")])
+    with Harness(opener=opener) as h:
+        h.wait_status(Status.NEEDS_CONFIRMATION)
+        assert h.service.pending_choice is None

@@ -18,7 +18,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 log = logging.getLogger(__name__)
 
@@ -65,12 +65,43 @@ def migrate_old_name(new: Path | None = None, old: Path | None = None) -> bool:
     return True
 
 
+class DisplaySetting(BaseModel):
+    """La pantalla que el usuario eligió a mano (C-44): modelo + el USB de su puerto.
+
+    Se revalida en cada arranque contra lo que dice Windows (``pantallas.modelos.
+    match_choice``). El COM se guarda solo para desempatar (o, en modo avanzado, para un
+    puerto sin USB): el número de COM puede cambiar. El serie es el del aparato USB
+    (p. ej. ``USB35INCHIPSV2``), no un dato de la persona.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    model: str = Field(pattern=r"^[a-z0-9][a-z0-9\-]{0,39}$")
+    device: str = Field(min_length=1, max_length=32, pattern=r"^[A-Za-z0-9_.\\:/-]+$")
+    vid: int | None = Field(default=None, ge=0, le=0xFFFF)
+    pid: int | None = Field(default=None, ge=0, le=0xFFFF)
+    serial: str = Field(default="", max_length=128)
+    advanced: bool = False
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")  # campos de versiones futuras: se ignoran
 
     theme: str = Field(default=DEFAULT_THEME, pattern=_THEME_NAME.pattern)
     brightness: int = Field(default=60, ge=0, le=100)
     flip: bool = False
+    display: DisplaySetting | None = None  # None: detección sola
+
+    @field_validator("display", mode="wrap")
+    @classmethod
+    def _forget_broken_display(cls, value: object, handler):
+        """Una elección de pantalla dañada se olvida (se vuelve a detectar sola) sin
+        tirar el resto de la configuración por «dañada»."""
+        try:
+            return handler(value)
+        except ValidationError:
+            log.warning("La pantalla guardada en la configuración no es válida; se olvida.")
+            return None
 
 
 def load_config(path: Path | None = None) -> AppConfig:

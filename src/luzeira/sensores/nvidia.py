@@ -108,6 +108,11 @@ class NvidiaSource:
     def sensors(self) -> list[SensorInfo]:
         return list(self._sensors)
 
+    @property
+    def has_gpu(self) -> bool:
+        """Si NVML funciona y tiene la GPU (tras el último ``read_all``)."""
+        return self._handle is not None
+
     def read_all(self) -> dict[str, Reading]:
         if self._handle is None:
             now = self._clock()

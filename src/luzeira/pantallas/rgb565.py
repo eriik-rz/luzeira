@@ -1,7 +1,8 @@
-"""Conversión de imágenes al formato de píxel de la pantalla: RGB565 little-endian.
+"""Conversión de imágenes al formato de píxel de la pantalla: RGB565.
 
 Cada píxel ocupa 2 bytes: 5 bits de rojo, 6 de verde y 5 de azul
-(``RRRRRGGG GGGBBBBB``), y se envía primero el byte bajo.
+(``RRRRRGGG GGGBBBBB``). La rev A envía primero el byte bajo (little-endian); la rev B
+y la Kipye, primero el alto (big-endian).
 
 La conversión se hace con tablas de consulta de Pillow (en C), no con un bucle de
 Python: con 153.600 píxeles por pantalla, el bucle es el doble de lento.
@@ -26,6 +27,19 @@ def to_rgb565_le(image: Image.Image) -> bytes:
     high = ImageChops.add(r.point(_HIGH_FROM_R), g.point(_HIGH_FROM_G))
     # "LA" intercala dos bytes por píxel: primero L (bajo) y luego A (alto).
     return Image.merge("LA", (low, high)).tobytes()
+
+
+def _low_high(image: Image.Image) -> tuple[Image.Image, Image.Image]:
+    r, g, b = image.convert("RGB").split()
+    low = ImageChops.add(g.point(_LOW_FROM_G), b.point(_LOW_FROM_B))
+    high = ImageChops.add(r.point(_HIGH_FROM_R), g.point(_HIGH_FROM_G))
+    return low, high
+
+
+def to_rgb565_be(image: Image.Image) -> bytes:
+    """Devuelve los píxeles de ``image`` en RGB565 big-endian (byte alto primero)."""
+    low, high = _low_high(image)
+    return Image.merge("LA", (high, low)).tobytes()
 
 
 def pixel_to_rgb565_le(r: int, g: int, b: int) -> bytes:

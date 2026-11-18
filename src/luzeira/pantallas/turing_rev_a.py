@@ -17,21 +17,38 @@ import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Protocol
 
 from PIL import Image
 
+from luzeira.pantallas.comun import (
+    BAUDRATE,
+    WRITE_TIMEOUT,
+    ConfirmationNeeded,
+    DisplayBusy,
+    DisplayError,
+    Orientation,
+    Transport,
+)
+from luzeira.pantallas.comun import is_access_denied as _is_access_denied
 from luzeira.pantallas.rgb565 import to_rgb565_le
+
+__all__ = [  # lo que otros módulos importan de aquí (parte vive ya en ``comun``)
+    "BAUDRATE",
+    "WRITE_TIMEOUT",
+    "ConfirmationNeeded",
+    "DisplayBusy",
+    "DisplayError",
+    "Orientation",
+    "PortMatch",
+    "Transport",
+    "TuringRevA",
+    "find_port",
+]
 
 USB_VID = 0x1A86
 USB_PID = 0x5722
 USB_SERIAL = "USB35INCHIPSV2"
 USB_SERIAL_PREFIX = "USB35INCHIPS"
-BAUDRATE = 115200
-# Sin límite, una escritura con CTS bajo (pantalla colgada) se bloquea para siempre y el
-# puerto nunca se cierra (revisor de la fase 3). 5 s sobra: un trozo de 2560 bytes tarda
-# ~11 ms a los ~230 KB/s medidos.
-WRITE_TIMEOUT = 5.0
 
 
 class Command(IntEnum):
@@ -48,17 +65,6 @@ class Command(IntEnum):
     HELLO = 69
 
 
-class Orientation(IntEnum):
-    PORTRAIT = 0
-    REVERSE_PORTRAIT = 1
-    LANDSCAPE = 2
-    REVERSE_LANDSCAPE = 3
-
-    @property
-    def is_landscape(self) -> bool:
-        return self in (Orientation.LANDSCAPE, Orientation.REVERSE_LANDSCAPE)
-
-
 @dataclass(frozen=True)
 class Model:
     name: str
@@ -73,43 +79,6 @@ USBMONITOR_7 = Model('UsbPCMonitor 7"', 600, 1024)
 
 # Respuesta a HELLO (6 bytes iguales) -> modelo. El Turing oficial no responde.
 _HELLO_ANSWERS = {0x01: USBMONITOR_3_5, 0x02: USBMONITOR_5, 0x03: USBMONITOR_7}
-
-
-class DisplayError(Exception):
-    """Error al hablar con la pantalla, con un mensaje que se puede enseñar al usuario."""
-
-
-class DisplayBusy(DisplayError):
-    """El puerto existe pero no se puede abrir: casi siempre otro programa lo tiene abierto
-    (UsbPCMonitor, Libre Panel, otra Luzeira). La causa original va en ``__cause__``."""
-
-    def __init__(self, device: str) -> None:
-        self.device = device
-        super().__init__(
-            f"La pantalla ({device}) está en uso por otro programa, como UsbPCMonitor. "
-            "Ciérralo para que Luzeira pueda usarla."
-        )
-
-
-class ConfirmationNeeded(DisplayError):
-    """Hay una pantalla con el USB de la rev A pero sin su número de serie: puede ser
-    otro modelo con otro protocolo. No se le envía nada hasta que el usuario confirme."""
-
-    def __init__(self, device: str) -> None:
-        self.device = device
-        super().__init__(
-            f"He encontrado una pantalla en {device}, pero no puedo asegurar qué modelo es. "
-            'Confirma que es una Turing / UsbPCMonitor de 3,5" (revisión A) para continuar.'
-        )
-
-
-class Transport(Protocol):
-    """Lo mínimo que el driver necesita de un puerto serie (pyserial lo cumple)."""
-
-    def write(self, data: bytes, /) -> int | None: ...
-    def read(self, size: int = 1, /) -> bytes: ...
-    def reset_input_buffer(self) -> None: ...
-    def close(self) -> None: ...
 
 
 def pack_command(command: int, x: int = 0, y: int = 0, ex: int = 0, ey: int = 0) -> bytes:
@@ -198,23 +167,16 @@ def find_port(ports: Iterable | None = None) -> PortMatch | None:
     return fallback
 
 
-def _is_access_denied(exc: BaseException) -> bool:
-    """¿El puerto está en uso por otro programa?
-
-    pyserial en Windows no lanza ``PermissionError``: lanza ``SerialException`` con el
-    error de Windows solo en el texto y sin encadenar, p. ej.
-    «could not open port 'COM3': PermissionError(13, 'Acceso denegado.', None, 5)»
-    (medido 2026-11-17 con COM3 abierto por otro proceso).
-    """
-    return isinstance(exc, PermissionError) or "PermissionError(" in str(exc)
-
-
 class TuringRevA:
     """Pantalla de revisión A. Se crea con :meth:`open` o pasándole un transporte."""
+
+    model_key = "turing-rev-a"  # clave del catálogo (``pantallas.modelos``)
 
     def __init__(self, transport: Transport, model: Model = TURING_3_5) -> None:
         self._transport = transport
         self.model = model
+        self.device: str | None = None  # puerto, si se abrió con :meth:`open`
+        self.hello_answer = b""  # respuesta cruda al último HELLO (para validar a mano)
         self.orientation = Orientation.PORTRAIT
         self._reset_shadow()
 
@@ -268,6 +230,7 @@ class TuringRevA:
                 try:
                     transport = serial_factory(device)
                     display = cls(transport)
+                    display.device = device
                     display.model = display.hello()
                     display._reset_shadow()  # el tamaño depende del modelo
                     return display
@@ -320,6 +283,7 @@ class TuringRevA:
         self._write(bytes([Command.HELLO] * 6))
         answer = self._transport.read(6)
         self._transport.reset_input_buffer()
+        self.hello_answer = bytes(answer)
         if len(answer) == 6 and len(set(answer)) == 1:
             return _HELLO_ANSWERS.get(answer[0], TURING_3_5)
         return TURING_3_5
