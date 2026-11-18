@@ -7,7 +7,7 @@
 # Habla del mantenedor, su equipo y sus decisiones: nunca va al repo público (ADR-003).
 docs/
 
-# Secretos. Nunca, bajo ningún concepto. Ver SECURITY.md y la skill seguridad-visoria.
+# Secretos. Nunca, bajo ningún concepto. Ver SECURITY.md y la skill seguridad-luzeira.
 .env
 .env.*
 !.env.example
@@ -46,4 +46,4 @@ desktop.ini
 .DS_Store
 
 # Editor compilado: se genera con «npm run build» en editor/ (y en la publicación).
-src/visoria/editor/web/
+src/luzeira/editor/web/
