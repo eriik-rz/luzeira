@@ -1,17 +1,17 @@
 {
   "format": "visoria-theme/1",
-  "name": "Cyberpunk",
+  "name": "Glitch",
   "author": "Visoria",
   "orientation": "landscape",
   "background": {"color": "#08080e", "image": "fondo.png"},
   "widgets": [
-    {"type": "clock", "format": "HH:MM", "box": {"x": 14, "y": 4, "width": 236, "height": 74}, "style": {"size": 64, "bold": true, "color": "#fae614", "align": "left"}},
+    {"type": "clock", "format": "HH:MM", "box": {"x": 14, "y": 4, "width": 236, "height": 74}, "style": {"size": 64, "bold": true, "color": "#c6ff00", "align": "left"}},
     {"type": "clock", "format": "weekday", "box": {"x": 280, "y": 18, "width": 176, "height": 22}, "style": {"size": 16, "bold": true, "color": "#00e1f0", "align": "left"}},
     {"type": "clock", "format": "date-short", "box": {"x": 280, "y": 42, "width": 176, "height": 32}, "style": {"size": 26, "bold": true, "color": "#ffffff", "align": "left"}},
 
     {"type": "text", "text": "CPU", "box": {"x": 22, "y": 92, "width": 52, "height": 22}, "style": {"size": 15, "bold": true, "color": "#0b0b10", "align": "center"}},
     {"type": "sensor", "sensor": "cpu.usage", "box": {"x": 24, "y": 120, "width": 198, "height": 58}, "style": {"size": 50, "bold": true, "color": "#ffffff", "align": "left"}},
-    {"type": "bar", "sensor": "cpu.usage", "fill": "#fae614", "track": "#3a3510", "box": {"x": 24, "y": 184, "width": 198, "height": 10}},
+    {"type": "bar", "sensor": "cpu.usage", "fill": "#c6ff00", "track": "#2c3a06", "box": {"x": 24, "y": 184, "width": 198, "height": 10}},
     {"type": "image", "file": "segmentos.png", "box": {"x": 24, "y": 184, "width": 198, "height": 10}},
 
     {"type": "text", "text": "GPU", "box": {"x": 256, "y": 92, "width": 52, "height": 22}, "style": {"size": 15, "bold": true, "color": "#0b0b10", "align": "center"}},
@@ -28,6 +28,6 @@
 
     {"type": "text", "text": "RED", "box": {"x": 256, "y": 224, "width": 52, "height": 22}, "style": {"size": 15, "bold": true, "color": "#0b0b10", "align": "center"}},
     {"type": "sensor", "sensor": "network.download", "decimals": 1, "prefix": "↓ ", "box": {"x": 258, "y": 250, "width": 198, "height": 28}, "style": {"size": 20, "bold": true, "color": "#ffffff", "align": "left"}},
-    {"type": "sensor", "sensor": "network.upload", "decimals": 1, "prefix": "↑ ", "box": {"x": 258, "y": 278, "width": 198, "height": 24}, "style": {"size": 18, "color": "#fae614", "align": "left"}}
+    {"type": "sensor", "sensor": "network.upload", "decimals": 1, "prefix": "↑ ", "box": {"x": 258, "y": 278, "width": 198, "height": 24}, "style": {"size": 18, "color": "#c6ff00", "align": "left"}}
   ]
 }

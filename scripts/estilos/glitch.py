@@ -1,9 +1,9 @@
-"""Estilo Cyberpunk: amarillo eléctrico, magenta y cian sobre negro, esquinas cortadas en
+"""Estilo Glitch: lima eléctrica, magenta y cian sobre negro, esquinas cortadas en
 diagonal, marcas de interfaz técnica y un toque de «glitch».
 
 Estilo de género, pintado a mano aquí: nada sacado de un juego, película o marca concreta.
 Las cajas de paneles, pestañas y barras son las mismas que usan los ``theme.json`` de
-``cyberpunk/`` y ``cyberpunk-vertical/``: si se mueve una, hay que mover la otra.
+``glitch/`` y ``glitch-vertical/``: si se mueve una, hay que mover la otra.
 """
 
 from __future__ import annotations
@@ -17,7 +17,9 @@ from PIL import Image, ImageDraw, ImageFilter
 RGB = tuple[int, int, int]
 Box = tuple[int, int, int, int]
 
-YELLOW = (250, 230, 20)  # #fae614
+# Nombre y color cambiados el 2026-11-18: «Cyberpunk» es marca registrada en la UE y el
+# amarillo #fae614 recordaba a la paleta de un juego concreto.
+LIME = (198, 255, 0)  # #c6ff00, lima eléctrica
 MAGENTA = (255, 45, 120)  # #ff2d78
 CYAN = (0, 225, 240)  # #00e1f0
 PANEL = (14, 13, 22)  # relleno liso de los paneles: los números cambian sobre él
@@ -92,7 +94,7 @@ def _artifacts(img: Image.Image, area: Box, rng: random.Random, count: int) -> N
     for _ in range(count):
         w, h = rng.randrange(6, 34), rng.randrange(2, 5)
         x, y = rng.randrange(x0, x1 - w), rng.randrange(y0, y1 - h)
-        d.rectangle((x, y, x + w, y + h), fill=(*rng.choice((MAGENTA, CYAN, YELLOW)), 200))
+        d.rectangle((x, y, x + w, y + h), fill=(*rng.choice((MAGENTA, CYAN, LIME)), 200))
 
 
 def _base(size: tuple[int, int]) -> Image.Image:
@@ -131,22 +133,22 @@ def segments(size: tuple[int, int]) -> Image.Image:
 
 H_DATE = (262, 12, 468, 80)
 H_PANELS = [
-    ((10, 92, 236, 214), YELLOW),  # CPU
+    ((10, 92, 236, 214), LIME),  # CPU
     ((244, 92, 470, 214), MAGENTA),  # GPU
     ((10, 224, 236, 310), CYAN),  # RAM
-    ((244, 224, 470, 310), YELLOW),  # RED
+    ((244, 224, 470, 310), LIME),  # RED
 ]
 H_BAR = (198, 10)  # barras de CPU, GPU y RAM
 
 
-def cyberpunk() -> Image.Image:
+def glitch() -> Image.Image:
     rng = random.Random(2077)  # noqa: S311 (decoración, no criptografía)
     img = _base((W, H))
     # Raya de advertencia bajo el reloj y marcas de cabecera.
     _hatch(img, (16, 80, 150, 85), (90, 82, 10))
     d = ImageDraw.Draw(img)
-    d.line((156, 82, 248, 82), fill=(*YELLOW, 255), width=2)
-    d.rectangle((250, 79, 254, 85), fill=(*YELLOW, 255))
+    d.line((156, 82, 248, 82), fill=(*LIME, 255), width=2)
+    d.rectangle((250, 79, 254, 85), fill=(*LIME, 255))
     # Panel de la fecha: solo contorno cian, cortado por el glitch.
     poly = _chamfer(H_DATE, 12)
     _halo(img, [(poly, CYAN)], 5)
@@ -160,7 +162,7 @@ def cyberpunk() -> Image.Image:
     return img.convert("RGB")
 
 
-def cyberpunk_segmentos() -> Image.Image:
+def glitch_segmentos() -> Image.Image:
     return segments(H_BAR)
 
 
@@ -168,22 +170,22 @@ def cyberpunk_segmentos() -> Image.Image:
 
 V_DATE = (12, 92, 308, 120)
 V_PANELS = [
-    ((10, 132, 310, 222), YELLOW),  # CPU
+    ((10, 132, 310, 222), LIME),  # CPU
     ((10, 232, 310, 322), MAGENTA),  # GPU
     ((10, 332, 310, 412), CYAN),  # RAM
-    ((10, 422, 310, 470), YELLOW),  # RED
+    ((10, 422, 310, 470), LIME),  # RED
 ]
 V_BAR = (130, 12)
 V_BAR_Y = {132: 50, 232: 50, 332: 44}  # altura de la barra dentro de cada panel
 
 
-def cyberpunk_vertical() -> Image.Image:
+def glitch_vertical() -> Image.Image:
     rng = random.Random(2078)  # noqa: S311 (decoración)
     img = _base((VW, VH))
     _hatch(img, (12, 6, 120, 10), (90, 82, 10))
     d = ImageDraw.Draw(img)
-    d.line((126, 8, 300, 8), fill=(*YELLOW, 255), width=2)
-    d.rectangle((302, 5, 308, 11), fill=(*YELLOW, 255))
+    d.line((126, 8, 300, 8), fill=(*LIME, 255), width=2)
+    d.rectangle((302, 5, 308, 11), fill=(*LIME, 255))
     poly = _chamfer(V_DATE, 10)
     _halo(img, [(poly, CYAN)], 5)
     ImageDraw.Draw(img).polygon(poly, fill=(*PANEL, 255), outline=(*CYAN, 255), width=2)
@@ -196,13 +198,13 @@ def cyberpunk_vertical() -> Image.Image:
     return img.convert("RGB")
 
 
-def cyberpunk_vertical_segmentos() -> Image.Image:
+def glitch_vertical_segmentos() -> Image.Image:
     return segments(V_BAR)
 
 
 FONDOS: list[tuple[str, str, Callable[[], Image.Image]]] = [
-    ("cyberpunk", "fondo.png", cyberpunk),
-    ("cyberpunk", "segmentos.png", cyberpunk_segmentos),
-    ("cyberpunk-vertical", "fondo.png", cyberpunk_vertical),
-    ("cyberpunk-vertical", "segmentos.png", cyberpunk_vertical_segmentos),
+    ("glitch", "fondo.png", glitch),
+    ("glitch", "segmentos.png", glitch_segmentos),
+    ("glitch-vertical", "fondo.png", glitch_vertical),
+    ("glitch-vertical", "segmentos.png", glitch_vertical_segmentos),
 ]
