@@ -88,7 +88,19 @@ main { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
 .rejilla p { margin: 0; color: var(--text-2); font-size: 16px; }
 
 .captura { margin: 32px 0 0; }
-.captura.foto img { max-width: 640px; margin: 0 auto; }
+.en-vivo {
+  display: grid; grid-template-columns: 1fr minmax(0, 340px); gap: 40px; align-items: center;
+  margin-top: 32px; padding: 32px 40px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel);
+}
+.en-vivo-texto h3 { font-size: clamp(28px, 4vw, 40px); line-height: 1.1; margin: 0 0 14px; letter-spacing: -0.02em; }
+.en-vivo-texto h3::after { content: ""; display: block; width: 64px; height: 4px; border-radius: 2px; background: var(--accent); margin-top: 16px; }
+.en-vivo-texto p { color: var(--text-2); margin: 0; max-width: 420px; font-size: 18px; }
+.en-vivo-texto .etiqueta { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 14px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }
+.en-vivo img { width: 100%; max-width: 340px; border-radius: var(--radius); border: 1px solid var(--line); display: block; }
+@media (max-width: 640px) {
+  .en-vivo { grid-template-columns: 1fr; padding: 20px; }
+  .en-vivo img { margin: 0 auto; }
+}
 .captura img { border-radius: var(--radius); border: 1px solid var(--line); display: block; }
 .captura figcaption { color: var(--text-2); font-size: 14px; margin-top: 8px; text-align: center; }
 
