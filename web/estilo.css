@@ -88,6 +88,7 @@ main { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
 .rejilla p { margin: 0; color: var(--text-2); font-size: 16px; }
 
 .captura { margin: 32px 0 0; }
+.captura.foto img { max-width: 640px; margin: 0 auto; }
 .captura img { border-radius: var(--radius); border: 1px solid var(--line); display: block; }
 .captura figcaption { color: var(--text-2); font-size: 14px; margin-top: 8px; text-align: center; }
 
