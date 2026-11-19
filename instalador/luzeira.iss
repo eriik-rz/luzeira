@@ -62,6 +62,10 @@
 #ifndef ReopenParams
   #define ReopenParams "-m luzeira"
 #endif
+; Medios segundos que una actualización espera a que la app suelte su mutex (60 s).
+#ifndef UpdateWaitSteps
+  #define UpdateWaitSteps "120"
+#endif
 #ifndef UserLogsDir
   #define UserLogsDir "{localappdata}\Luzeira"
 #endif
@@ -215,6 +219,9 @@ var
   { «Iniciar con Windows» tal como estaba antes de una actualización desde la app. }
   HadRunValue: Boolean;
   PreviousRunCommand: String;
+  { Se llegó a instalar (ssPostInstall). Si una actualización aborta antes, se reabre la
+    Luzeira que ya había: la app se cerró para dejar paso a este instalador (C-58). }
+  Installed: Boolean;
 
 { ¿Lo ha lanzado la propia app para actualizarse? (luzeira.actualizar.INSTALLER_ARGS) }
 function IsUpdate: Boolean;
@@ -238,7 +245,7 @@ begin
   if not IsUpdate then
     exit;
   I := 0;
-  while CheckForMutexes('{#MutexName}') and (I < 120) do
+  while CheckForMutexes('{#MutexName}') and (I < {#UpdateWaitSteps}) do
   begin
     Sleep(500);
     I := I + 1;
@@ -250,6 +257,8 @@ procedure CurStepChanged(CurStep: TSetupStep);
 var
   ErrorCode: Integer;
 begin
+  if CurStep = ssPostInstall then
+    Installed := True;
   { Una actualización desde la app no cambia «Iniciar con Windows»: el usuario pudo
     cambiarlo en la app después de instalar, y la tarea recordada ya no dice la verdad. }
   if (CurStep = ssPostInstall) and IsUpdate then
@@ -266,6 +275,29 @@ begin
   if (CurStep = ssPostInstall) and not WizardSilent and not WebView2Installed then
     if MsgBox(CustomMessage('FaltaWebView2'), mbInformation, MB_YESNO) = IDYES then
       ShellExec('open', WebView2Url, '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
+end;
+
+{ Una actualización que aborta (otro instalador abierto, Luzeira sin cerrar a tiempo,
+  disco lleno…) con /SUPPRESSMSGBOXES no avisa a nadie, y la app ya se había cerrado:
+  sin esto, el usuario se quedaría sin Luzeira ni pantalla (revisor de ADR-006, C-58).
+  Inno llama a DeinitializeSetup también al abortar (medido 2026-11-18). La carpeta sale
+  del registro de desinstalación: la constante app puede no estar lista todavía. Si sigue
+  abierta otra Luzeira (su mutex), no se abre otra. }
+procedure DeinitializeSetup;
+var
+  Dir: String;
+  Code: Integer;
+begin
+  if not IsUpdate or Installed or CheckForMutexes('{#MutexName}') then
+    exit;
+  if not RegQueryStringValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{' + '{#AppGuid}' + '}_is1', 'InstallLocation', Dir) then
+    exit;
+  Dir := AddBackslash(Dir);
+  if FileExists(Dir + 'python\pythonw.exe') then
+  begin
+    Log('La actualización no se ha instalado: se vuelve a abrir la Luzeira que había.');
+    Exec(Dir + 'python\pythonw.exe', '{#ReopenParams}', ExpandConstant('{%USERPROFILE}'), SW_SHOWNORMAL, ewNoWait, Code);
+  end;
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);

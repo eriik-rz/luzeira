@@ -150,6 +150,22 @@ def test_update_from_the_app_waits_keeps_autostart_and_reopens():
     assert "skipifsilent" not in line and "postinstall" not in line
     # «Iniciar con Windows»: lo que hubiera antes, no la tarea recordada.
     assert "RegWriteStringValue(HKCU, '{#RunKey}', '{#RunValue}', PreviousRunCommand)" in code
+    assert _define("UpdateWaitSteps") == "120"  # 60 s; las pruebas lo acortan
+
+
+def test_an_aborted_update_reopens_the_app_it_closed():
+    # C-58: si la actualización aborta, la app ya se había cerrado. Medido de punta a
+    # punta el 2026-11-19 (otro instalador abierto → aborta y reabre; app sin cerrar →
+    # aborta y no abre una segunda).
+    code = _section("Code")
+    deinit = code[code.index("procedure DeinitializeSetup") :]
+    guard = deinit[: deinit.index("exit;")]
+    assert "not IsUpdate" in guard and "Installed" in guard
+    assert "CheckForMutexes('{#MutexName}')" in guard  # si sigue abierta, no otra
+    assert "Uninstall\\{' + '{#AppGuid}' + '}_is1', 'InstallLocation'" in deinit
+    assert "'{#ReopenParams}'" in deinit
+    changed = code[code.index("procedure CurStepChanged") :]
+    assert changed.index("Installed := True") < changed.index("end;")
 
 
 def test_shortcuts_launch_pythonw_with_the_package_icon():
