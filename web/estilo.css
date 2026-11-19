@@ -80,6 +80,7 @@ main { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
 .bloque { padding: 56px 0; border-top: 1px solid var(--line); }
 .bloque h2 { font-size: clamp(26px, 4vw, 34px); margin: 0 0 12px; letter-spacing: -0.01em; }
 .bloque > p { max-width: 760px; }
+.bloque .acciones { justify-content: flex-start; margin: 20px 0 12px; }
 
 .rejilla { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 24px; }
 .rejilla article { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 22px; }
