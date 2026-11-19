@@ -121,6 +121,7 @@ export class SimulatedApi implements EditorApi {
       question: this.question,
       // En la demo de la web no se pregunta nada al entrar: se ve en «Ajustes».
       updates_question: false,
+      update_available: null,
     }
   }
 

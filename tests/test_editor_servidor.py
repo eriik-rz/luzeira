@@ -1343,6 +1343,9 @@ class FakeSettings:
     def updates_question(self) -> bool:
         return False
 
+    def update_available(self) -> str | None:
+        return None
+
     def check_updates(self) -> str:
         self.calls.append(("check",))
         return "Ya tienes la última versión."
@@ -1491,12 +1494,15 @@ def test_info_without_tray_has_no_question(env):
     _, client, *_ = env
     info = client.json("GET", "/api/info")[1]
     assert info["question"] is None and info["updates_question"] is False
+    assert info["update_available"] is None
 
 
 def test_update_routes(with_settings):
     client, fake, _ = with_settings
     fake.updates_question = lambda: True
-    assert client.json("GET", "/api/info")[1]["updates_question"] is True
+    fake.update_available = lambda: "0.9.0"
+    info = client.json("GET", "/api/info")[1]
+    assert info["updates_question"] is True and info["update_available"] == "0.9.0"
     assert client.json("POST", "/api/actualizaciones/buscar") == (
         200,
         {"message": "Ya tienes la última versión."},

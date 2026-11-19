@@ -36,6 +36,11 @@ class SettingsBackend(Protocol):
         """¿Hay que preguntar una vez si avisar de versiones nuevas? (ADR-006)"""
         ...
 
+    def update_available(self) -> str | None:
+        """La versión nueva ya comprobada que se puede instalar, si hay (y no se está
+        descargando). El editor la ofrece en una ventana."""
+        ...
+
     def check_updates(self) -> str:
         """Busca una versión nueva ahora (bloquea); devuelve el texto para el usuario."""
         ...

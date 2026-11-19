@@ -83,6 +83,10 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
   const [answering, setAnswering] = useState(false)
   // «¿Avisarte de versiones nuevas?» cerrada sin contestar: no se repite en esta sesión.
   const [updatesAsked, setUpdatesAsked] = useState(false)
+  // Versión nueva que el usuario dejó «para más tarde» en esta apertura del editor: no
+  // se vuelve a ofrecer hasta la próxima (sigue en Ajustes y en el menú del icono).
+  const [updateLater, setUpdateLater] = useState<string | null>(null)
+  const [installing, setInstalling] = useState(false)
   const [state, dispatch] = useReducer(reducer, undefined, () => initialState())
   const [themes, setThemes] = useState(initialThemes)
   const [current, setCurrent] = useState<Current | null>(null)
@@ -457,6 +461,31 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
     }
   }
 
+  const installUpdate = async () => {
+    setInstalling(true)
+    // Luzeira se cierra al instalar: lo que no se pueda guardar solo se perdería.
+    const saved = await flush()
+    if (saved.pending !== 'none') {
+      setInstalling(false)
+      setUpdateLater(info?.update_available ?? null)
+      toast(
+        saved.pending === 'builtin'
+          ? 'Antes de actualizar, guarda tus cambios con «Guardar como…»: estás editando un tema incluido.'
+          : 'Antes de actualizar, corrige los campos marcados en rojo para que se pueda guardar el tema.',
+        'error',
+      )
+      return
+    }
+    try {
+      // Luzeira se cierra enseguida (y con ella esta ventana): el mensaje lo explica.
+      toast(await api.installUpdate(), 'ok')
+    } catch (e) {
+      toast(errorMessage(e), 'error')
+      setInstalling(false)
+      refreshInfo()
+    }
+  }
+
   const selectTheme = async (name: string) => {
     if (!current || name === current.name) return
     if (current.builtin && theme !== savedRef.current) {
@@ -812,7 +841,31 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
           <p className="settings-confirm">{info.question.text}</p>
         </Dialog>
       )}
-      {info?.updates_question && !info.question && !updatesAsked && !dialog && (
+      {info?.update_available && info.update_available !== updateLater && !info.question && !dialog && (
+        <Dialog
+          title="Hay una versión nueva de Luzeira"
+          onClose={() => setUpdateLater(info.update_available ?? null)}
+          actions={
+            <>
+              <button type="button" className="btn" disabled={installing} onClick={() => setUpdateLater(info.update_available ?? null)}>
+                Más tarde
+              </button>
+              <button type="button" className="btn primary" disabled={installing} onClick={() => void installUpdate()}>
+                {installing ? 'Descargando…' : `Actualizar a la ${info.update_available}`}
+              </button>
+            </>
+          }
+        >
+          <p className="settings-confirm">
+            Tienes la {info.version} y ya está lista la <strong>{info.update_available}</strong>, comprobada con la firma de Luzeira.
+          </p>
+          <p className="settings-confirm">
+            Al actualizar, Luzeira se cierra unos segundos (la pantalla se apaga), se instala sola y se vuelve a abrir. Tus temas y tus
+            ajustes se quedan como están, y lo que estés editando se guarda antes.
+          </p>
+        </Dialog>
+      )}
+      {info?.updates_question && !info.question && !info.update_available && !updatesAsked && !dialog && (
         <Dialog
           title="¿Te aviso de las versiones nuevas?"
           onClose={() => setUpdatesAsked(true)}

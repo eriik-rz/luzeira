@@ -33,6 +33,8 @@ export interface Info {
   question?: { title: string; text: string } | null
   /** Hay que preguntar una vez si avisar de versiones nuevas (ADR-006). */
   updates_question?: boolean
+  /** Versión nueva ya comprobada y lista para instalar: se ofrece en una ventana. */
+  update_available?: string | null
 }
 
 export interface ThemeSummary {

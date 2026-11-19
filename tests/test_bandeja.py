@@ -995,3 +995,19 @@ def test_after_a_good_download_nothing_else_until_launch(app, with_keys, monkeyp
     assert app.check_updates(manual=True) == bandeja.MSG_UPDATE_BUSY
     app._drain()  # al lanzar falla: se suelta
     assert not app._update_busy
+
+
+def test_the_editor_offers_an_update_only_when_ready(app, settings, with_keys):
+    assert settings.update_available() is None
+    app._update = a_manifest()
+    assert settings.update_available() == "0.9.0"
+    assert app._claim_update()  # descargando: no se ofrece otra vez
+    assert settings.update_available() is None
+
+
+def test_the_menu_shows_the_installed_version(app):
+    assert f"Luzeira {bandeja.__version__}" in menu_texts(app)
+
+
+def test_the_notice_points_to_the_editor():
+    assert "editor" in bandeja.MSG_UPDATE_AVAILABLE.format(version="0.9.0")

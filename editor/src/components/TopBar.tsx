@@ -58,10 +58,14 @@ export function TopBar(p: Props) {
   const builtins = p.themes.filter((t) => t.builtin)
   return (
     <header className="topbar">
-      <div className="brand">
+      <div className="brand" title={p.info && !p.info.simulated ? `Luzeira ${p.info.version}` : undefined}>
         <BrandMark />
         <span className="brand-text">
-          Luzeira <small>· Editor de temas</small>
+          Luzeira{' '}
+          {p.info && (
+            <span className="brand-version">{p.info.simulated ? 'demo' : p.info.version}</span>
+          )}{' '}
+          <small>· Editor de temas</small>
         </span>
       </div>
 

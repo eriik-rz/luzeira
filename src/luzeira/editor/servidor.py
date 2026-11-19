@@ -390,6 +390,10 @@ class EditorServer:
             "updates_question": (
                 self._settings.updates_question() if self._settings is not None else False
             ),
+            # Versión nueva lista para instalar: el editor la ofrece en una ventana.
+            "update_available": (
+                self._settings.update_available() if self._settings is not None else None
+            ),
         }
 
     def sensor_rows(self) -> list[dict]:

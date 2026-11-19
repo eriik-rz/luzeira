@@ -142,8 +142,8 @@ MSG_BACK_TO_AUTO = "Vale: Luzeira buscará la pantalla ella sola."
 # --- actualizaciones (ADR-006) -------------------------------------------------------------
 MSG_UP_TO_DATE = "Ya tienes la última versión de Luzeira ({version})."
 MSG_UPDATE_AVAILABLE = (
-    "Hay una versión nueva de Luzeira: la {version}. Para instalarla, pulsa «Actualizar» "
-    "en el menú del icono o en «Ajustes» del editor."
+    "Hay una versión nueva de Luzeira: la {version}. Abre el editor para instalarla "
+    "(o «Actualizar» en el menú de este icono)."
 )
 MSG_UPDATE_BUSY = "Ya estoy buscando o descargando una actualización. Espera un momento."
 MSG_UPDATE_NONE = "No hay ninguna versión nueva pendiente. Busca otra vez."
@@ -325,6 +325,11 @@ class EditorSettings:
 
     def updates_question(self) -> bool:
         return self._app.config.updates is None and bool(actualizar.PUBLIC_KEYS)
+
+    def update_available(self) -> str | None:
+        app = self._app
+        update = app._update
+        return update.version if update is not None and not app._update_busy else None
 
     def check_updates(self) -> str:
         return self._app.check_updates(manual=True)
@@ -1150,6 +1155,7 @@ class TrayApp:
                 visible=lambda _item: bool(actualizar.PUBLIC_KEYS),
             ),
             Menu.SEPARATOR,
+            Item(f"Luzeira {__version__}", None, enabled=False),
             Item("Salir", lambda: self.quit()),
         )
 
