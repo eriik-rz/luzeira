@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacidad — Luzeira</title>
+  <meta name="description" content="Política de privacidad de Luzeira: no recoge datos personales, no tiene telemetría ni anuncios, y sin tu permiso no se conecta a internet.">
+  <meta name="color-scheme" content="dark light">
+  <!-- Sin recursos de fuera, como la portada. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'none'; base-uri 'none'; form-action 'none'">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+  <header class="top">
+    <a class="marca" href="./">
+      <img src="icono.png" width="32" height="32" alt="">
+      <span>Luzeira</span>
+    </a>
+    <nav aria-label="Secciones">
+      <a href="./">Inicio</a>
+      <a href="https://github.com/eriik-rz/luzeira">GitHub</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="bloque">
+      <h2>Política de privacidad</h2>
+      <p class="nota">Última actualización: 20 de noviembre de 2026. Se aplica a la app Luzeira para Windows, tanto la de Microsoft Store como la de GitHub.</p>
+
+      <p><strong>En pocas palabras:</strong> Luzeira no recoge, no guarda fuera de tu PC y no envía a nadie ningún dato personal. No tiene cuentas, ni anuncios, ni telemetría, ni analíticas.</p>
+
+      <h3>Qué lee y para qué</h3>
+      <p>Lee los datos de tu PC que muestra en la pantalla USB: uso de CPU, gráfica y memoria, red, disco, temperatura de la gráfica y la hora. Solo los pinta en tu pantalla, a través del cable USB. No salen de tu equipo.</p>
+
+      <h3>Qué guarda en tu PC</h3>
+      <ul class="pasos">
+        <li>Tus ajustes y tus temas, en la carpeta de Luzeira dentro de tus datos de usuario de Windows.</li>
+        <li>Un registro de funcionamiento (log) para encontrar fallos. No lleva tu nombre de usuario ni datos de tu red, y solo lo ves tú.</li>
+      </ul>
+      <p>Al desinstalar puedes borrarlo todo.</p>
+
+      <h3>Cuándo se conecta a internet</h3>
+      <ul class="pasos">
+        <li><strong>Versión de Microsoft Store:</strong> nunca. Las actualizaciones las hace la propia Store.</li>
+        <li><strong>Versión de GitHub:</strong> solo si tú activas «Avisarme de versiones nuevas». Entonces consulta de vez en cuando la página de versiones del proyecto en GitHub. No envía nada sobre ti ni sobre tu PC; GitHub ve tu dirección IP, como en cualquier visita a una web.</li>
+      </ul>
+      <p>El editor visual funciona dentro de tu PC: usa un servidor local que solo escucha en tu propio equipo (127.0.0.1) y no es accesible desde la red.</p>
+
+      <h3>Lo que no depende de Luzeira</h3>
+      <p>Microsoft Store, Windows y el componente WebView2 de Microsoft que usa el editor tienen sus propias políticas de privacidad. Luzeira no controla ni recibe esos datos.</p>
+
+      <h3>Cambios y contacto</h3>
+      <p>Si esta política cambia, se actualizará aquí con su fecha. Luzeira es software libre: puedes revisar su código en <a href="https://github.com/eriik-rz/luzeira">GitHub</a>. Para cualquier duda, abre una consulta en <a href="https://github.com/eriik-rz/luzeira/issues">GitHub Issues</a>.</p>
+    </section>
+  </main>
+
+  <footer class="pie">
+    <p>Luzeira es software libre con licencia <a href="https://github.com/eriik-rz/luzeira/blob/main/LICENSE">GPL-3.0</a>.</p>
+    <p>Esta web no usa cookies, ni analíticas, ni carga nada de otros sitios.</p>
+  </footer>
+</body>
+</html>
