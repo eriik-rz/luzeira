@@ -209,6 +209,7 @@ export class SimulatedApi implements EditorApi {
     brightness: 50,
     brightness_levels: [25, 50, 75, 100],
     flip: false,
+    store: false,
     autostart: true,
     display_text: 'Ninguna pantalla conectada',
     display_auto: true,

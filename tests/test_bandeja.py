@@ -1011,3 +1011,55 @@ def test_the_menu_shows_the_installed_version(app):
 
 def test_the_notice_points_to_the_editor():
     assert "editor" in bandeja.MSG_UPDATE_AVAILABLE.format(version="0.9.0")
+
+
+# --- versión de Microsoft Store (paquete MSIX, C-52) ------------------------------------
+
+
+@pytest.fixture
+def store_app(app):
+    app._store = True
+    return app
+
+
+def test_store_has_no_updater_even_with_keys(store_app, settings, with_keys, monkeypatch):
+    assert not any("actualiza" in t.lower() for t in menu_texts(store_app))
+    assert settings.updates_question() is False
+    assert settings.snapshot()["updates"]["can_check"] is False
+    assert settings.check_updates() == bandeja.MSG_STORE_UPDATES
+    store_app.config = store_app.config.model_copy(update={"updates": True})
+    assert one_loop_turn(store_app, monkeypatch) == []  # nunca se conecta
+
+
+def test_store_autostart_lives_in_windows_settings(store_app, settings, monkeypatch):
+    opened = []
+    monkeypatch.setattr(bandeja.os, "startfile", opened.append, raising=False)
+    monkeypatch.setattr(bandeja.autoarranque, "enable", lambda cmd: pytest.fail("clave Run"))
+    texts = menu_texts(store_app)
+    assert "Iniciar con Windows" not in texts and "Iniciar con Windows…" in texts
+    item = next(i for i in walk(store_app.icon.menu) if i.text == "Iniciar con Windows…")
+    item(store_app.icon)
+    assert opened == ["ms-settings:startupapps"]
+    snap = settings.snapshot()
+    assert snap["store"] is True and snap["autostart"] is False
+    with pytest.raises(bandeja.EditorError) as exc:
+        settings.update(brightness=None, flip=None, autostart=True)
+    assert exc.value.status == 409 and "Configuración" in str(exc.value)
+
+
+def test_store_has_no_desktop_shortcut(store_app, settings, monkeypatch):
+    import luzeira.sistema.accesos as accesos
+
+    monkeypatch.setattr(accesos, "create_shortcut", lambda folder: pytest.fail("acceso"))
+    assert "Crear acceso directo en el escritorio" not in menu_texts(store_app)
+    with pytest.raises(bandeja.EditorError) as exc:
+        settings.create_shortcut()
+    assert exc.value.status == 409
+
+
+def test_the_normal_version_keeps_its_menu(app, settings, with_keys):
+    texts = menu_texts(app)
+    assert "Iniciar con Windows" in texts and "Iniciar con Windows…" not in texts
+    assert "Crear acceso directo en el escritorio" in texts
+    assert "Buscar actualizaciones ahora" in texts
+    assert settings.snapshot()["store"] is False

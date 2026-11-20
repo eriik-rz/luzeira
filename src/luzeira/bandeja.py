@@ -60,7 +60,7 @@ from luzeira.pantallas.modelos import (
     model_by_key,
 )
 from luzeira.servicio import DisplayService, Settings, Status
-from luzeira.sistema import autoarranque
+from luzeira.sistema import autoarranque, paquete
 from luzeira.sistema.energia import PowerListener
 from luzeira.sistema.instancia import APP_MUTEX, EditorRequests, SingleInstance
 from luzeira.sistema.registro import default_log_dir, setup_logging
@@ -147,6 +147,12 @@ MSG_UPDATE_AVAILABLE = (
 )
 MSG_UPDATE_BUSY = "Ya estoy buscando o descargando una actualización. Espera un momento."
 MSG_UPDATE_NONE = "No hay ninguna versión nueva pendiente. Busca otra vez."
+MSG_STORE_UPDATES = "En esta versión, las actualizaciones las hace Microsoft Store."
+MSG_STORE_AUTOSTART = (
+    "En la versión de Microsoft Store, el inicio con Windows se activa en Configuración"
+    " de Windows, en Aplicaciones → Inicio."
+)
+MSG_STORE_SHORTCUT = "En la versión de Microsoft Store, Luzeira ya está en el menú Inicio."
 MSG_UPDATE_DOWNLOADING = "Descargando la versión {version}…"
 MSG_UPDATE_INSTALLING = (
     "Listo: Luzeira se cierra para instalar la versión {version} y se volverá a abrir "
@@ -284,6 +290,7 @@ class EditorSettings:
             "brightness": app.config.brightness,
             "brightness_levels": list(BRIGHTNESS_LEVELS),
             "flip": app.config.flip,
+            "store": app._store,
             "autostart": app._autostart_enabled(),
             "display_text": app._display_text(),
             "display_auto": app.config.display is None and app._trial is None,
@@ -302,6 +309,8 @@ class EditorSettings:
         app = self._app
         if brightness is not None and brightness not in BRIGHTNESS_LEVELS:
             raise EditorError(400, "Ese brillo no está entre los que se pueden elegir.")
+        if autostart is not None and app._store:
+            raise EditorError(409, MSG_STORE_AUTOSTART)
         if autostart is not None:
             try:
                 if autostart:
@@ -324,7 +333,7 @@ class EditorSettings:
             app._post(app.icon.update_menu)  # la marca de «Iniciar con Windows»
 
     def updates_question(self) -> bool:
-        return self._app.config.updates is None and bool(actualizar.PUBLIC_KEYS)
+        return self._app.config.updates is None and self._app._can_update()
 
     def update_available(self) -> str | None:
         app = self._app
@@ -378,6 +387,8 @@ class EditorSettings:
     def create_shortcut(self) -> str:
         from luzeira.sistema.accesos import ShortcutError, create_shortcut
 
+        if self._app._store:
+            raise EditorError(409, MSG_STORE_SHORTCUT)
         try:
             create_shortcut("Desktop")
         except ShortcutError as exc:
@@ -396,10 +407,15 @@ class EditorSettings:
 
 
 class TrayApp:
-    def __init__(self, config: AppConfig, *, open_editor: bool = False) -> None:
+    def __init__(
+        self, config: AppConfig, *, open_editor: bool = False, store: bool | None = None
+    ) -> None:
         # open_editor: abrir también el editor al arrancar (la primera vez, desde el
         # instalador: así el usuario ve qué puede hacer sin buscar el icono del reloj).
         self._open_editor_on_start = open_editor
+        # store: versión de Microsoft Store (paquete MSIX). Sin actualizador propio, sin
+        # acceso del escritorio y con el inicio con Windows en Configuración (C-52).
+        self._store = paquete.is_packaged() if store is None else store
         self._pending_calls: queue.SimpleQueue[Callable[[], None]] = queue.SimpleQueue()
         self._last_notified: tuple[Status, str] | None = None
         self._importing = False
@@ -732,6 +748,8 @@ class TrayApp:
         self._notify(MSG_BACK_TO_AUTO)
 
     def _autostart_enabled(self) -> bool:
+        if self._store:  # la clave Run de dentro del paquete no la ve Windows
+            return False
         try:
             return autoarranque.is_enabled()
         except Exception:
@@ -747,6 +765,9 @@ class TrayApp:
         except (autoarranque.AutostartError, ValueError, OSError):
             log.exception("No se pudo cambiar el inicio con Windows")
             self._notify("No he podido cambiar el inicio con Windows.")
+
+    def _open_startup_settings(self) -> None:
+        os.startfile(paquete.STARTUP_SETTINGS_URI)  # noqa: S606 — página fija de Configuración
 
     def _create_shortcut(self) -> None:
         from luzeira.sistema.accesos import ShortcutError, create_shortcut
@@ -843,10 +864,15 @@ class TrayApp:
 
     # --- actualizaciones (ADR-006) -------------------------------------------------------
 
+    def _can_update(self) -> bool:
+        """Esta copia busca versiones nuevas ella misma: lleva claves para comprobar la
+        firma y no es la de Microsoft Store (esa la actualiza la Store)."""
+        return bool(actualizar.PUBLIC_KEYS) and not self._store
+
     def updates_snapshot(self) -> dict:
         update = self._update
         return {
-            "can_check": bool(actualizar.PUBLIC_KEYS),
+            "can_check": self._can_update(),
             "enabled": self.config.updates,
             "available": update.version if update is not None else None,
             "busy": self._update_busy,
@@ -873,6 +899,8 @@ class TrayApp:
     def check_updates(self, *, manual: bool) -> str:
         """Busca una versión nueva (bloquea: nunca desde el hilo del icono). Devuelve el
         texto para el usuario. ``manual``: lo ha pedido el usuario ahora mismo."""
+        if not self._can_update():
+            return MSG_STORE_UPDATES if self._store else MSG_UPDATE_NONE
         if not self._claim_update():
             return MSG_UPDATE_BUSY
         checked_at = time.time()
@@ -996,7 +1024,7 @@ class TrayApp:
             self._update_wake.clear()
             if self._closing:
                 return
-            if self.config.updates is True and actualizar.PUBLIC_KEYS and self._update_due():
+            if self.config.updates is True and self._can_update() and self._update_due():
                 self.check_updates(manual=False)
             delay = _UPDATE_TICK
 
@@ -1129,10 +1157,17 @@ class TrayApp:
                 "Iniciar con Windows",
                 self._safe(self._toggle_autostart),
                 checked=lambda _item: self._autostart_enabled(),
+                visible=lambda _item: not self._store,
+            ),
+            Item(
+                "Iniciar con Windows…",  # versión de la Store: se activa en Configuración
+                self._safe(self._open_startup_settings),
+                visible=lambda _item: self._store,
             ),
             Item(
                 "Crear acceso directo en el escritorio",
                 self._safe(self._create_shortcut),
+                visible=lambda _item: not self._store,
             ),
             Item("Abrir carpeta de temas", self._safe(self._open_themes_folder)),
             Menu.SEPARATOR,
@@ -1145,14 +1180,14 @@ class TrayApp:
             Item(
                 "Buscar actualizaciones ahora",
                 self._safe(self._check_from_menu),
-                visible=lambda _item: bool(actualizar.PUBLIC_KEYS),
+                visible=lambda _item: self._can_update(),
                 enabled=lambda _item: not self._update_busy,
             ),
             Item(
                 "Avisarme de versiones nuevas",
                 self._safe(lambda: self._set_updates(self.config.updates is not True)),
                 checked=lambda _item: self.config.updates is True,
-                visible=lambda _item: bool(actualizar.PUBLIC_KEYS),
+                visible=lambda _item: self._can_update(),
             ),
             Menu.SEPARATOR,
             Item(f"Luzeira {__version__}", None, enabled=False),

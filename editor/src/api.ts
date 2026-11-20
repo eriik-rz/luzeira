@@ -89,6 +89,8 @@ export interface AppSettings {
   brightness: number
   brightness_levels: number[]
   flip: boolean
+  /** Versión de Microsoft Store: el inicio con Windows va en Configuración y no hay acceso del escritorio. */
+  store: boolean
   autostart: boolean
   display_text: string
   /** Luzeira busca la pantalla ella sola (no hay ninguna elegida a mano). */
