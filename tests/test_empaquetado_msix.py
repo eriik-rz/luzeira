@@ -81,6 +81,16 @@ def test_the_startup_task_opens_only_the_tray_and_is_on_by_default():
     assert task.get("Enabled") == "true"  # como el instalador (autoarranque marcado)
 
 
+def test_the_store_identity_fits_the_manifest():
+    identity = _manifest(
+        name=msix.STORE_NAME,
+        publisher=msix.STORE_PUBLISHER,
+        publisher_name=msix.STORE_PUBLISHER_NAME,
+    ).find("m:Identity", NS)
+    assert identity.get("Name") == "eriik-rz.Luzeira"
+    assert identity.get("Publisher") == "CN=536FC4AD-21B9-4738-9794-F634BF14D2D1"
+
+
 @pytest.mark.parametrize(
     "field,value",
     [

@@ -18,8 +18,8 @@ SHA-512 y se descomprime en una carpeta temporal.
 El ``.msix`` sale **sin firmar**: la Store firma lo que se le sube. Para instalarlo en local
 hay que firmarlo con un certificado de prueba (ver la skill ``empaquetar``).
 
-Identidad: ``--nombre``, ``--publisher`` y ``--publisher-nombre`` los da Partner Center al
-reservar el nombre. Sin ellos se usan unos de prueba, que la Store rechazaría.
+Identidad: con ``--tienda``, la que dio Partner Center al reservar el nombre (para subir).
+Sin él, una de prueba (para instalar en local), que la Store rechazaría.
 """
 
 from __future__ import annotations
@@ -56,6 +56,11 @@ TOOLS_DIR = "bin/10.0.28000.0/x64/"
 TEST_NAME = "LuzeiraPrueba"
 TEST_PUBLISHER = "CN=LuzeiraPrueba"
 TEST_PUBLISHER_NAME = "Luzeira"
+#: Identidad real, de Partner Center (Identidad del producto, 2026-11-20). No es secreta:
+#: va dentro del paquete. Store ID 9MSNPHG5NZ40.
+STORE_NAME = "eriik-rz.Luzeira"
+STORE_PUBLISHER = "CN=536FC4AD-21B9-4738-9794-F634BF14D2D1"
+STORE_PUBLISHER_NAME = "eriik-rz"
 
 #: Reglas del manifiesto (Microsoft Learn, «Identity», consultada 2026-11-20): Name de 3 a
 #: 50 caracteres alfanuméricos, punto o guion. El Publisher es un nombre X.500; aquí solo se
@@ -158,7 +163,16 @@ def main(argv: list[str] | None = None) -> int:
         "--publisher", default=TEST_PUBLISHER, help="Identity Publisher (Partner Center)"
     )
     p.add_argument("--publisher-nombre", default=TEST_PUBLISHER_NAME, help="nombre del editor")
+    p.add_argument(
+        "--tienda", action="store_true", help="la identidad real de Partner Center (para subir)"
+    )
     args = p.parse_args(argv)
+    if args.tienda:
+        args.nombre, args.publisher, args.publisher_nombre = (
+            STORE_NAME,
+            STORE_PUBLISHER,
+            STORE_PUBLISHER_NAME,
+        )
 
     check_tools(args.herramientas)
     version = project_version()

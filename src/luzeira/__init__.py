@@ -1,3 +1,3 @@
 """Luzeira: app libre para pantallas USB de monitorización del PC."""
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
