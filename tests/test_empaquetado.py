@@ -403,14 +403,14 @@ def test_only_the_end_of_install_opens_the_editor():
     run_line = next(x for x in _section("Run").splitlines() if x.startswith("Filename"))
     assert 'Parameters: "-m luzeira --abrir-editor"' in run_line
     assert "postinstall" in run_line and "skipifsilent" in run_line
-    # El autoarranque y el acceso de Inicio abren solo la bandeja; el del escritorio, también
-    # el editor (si Luzeira ya está abierta, se lo pide a la abierta).
+    # El autoarranque abre solo la bandeja; los accesos de Inicio y del escritorio, también
+    # el editor (si Luzeira ya está abierta, se lo piden a la abierta).
     assert "--abrir-editor" not in _section("Registry")
     icons = _section("Icons").splitlines()
     desktop = next(x for x in icons if x.startswith('Name: "{#DesktopDir}'))
     programs = next(x for x in icons if x.startswith('Name: "{#ProgramsDir}'))
     assert 'Parameters: "-m luzeira --abrir-editor"' in desktop
-    assert 'Parameters: "-m luzeira";' in programs
+    assert 'Parameters: "-m luzeira --abrir-editor"' in programs
 
 
 def test_personal_data_check_looks_inside_binaries(tmp_path, monkeypatch):

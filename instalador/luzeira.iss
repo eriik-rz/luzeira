@@ -138,9 +138,10 @@ Type: filesandordirs; Name: "{app}\python"
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Excludes: "Luzeira.cmd"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-; El del escritorio abre también el editor (si Luzeira ya está abierta, se lo pide: bandeja.main).
+; Los dos abren también el editor (si Luzeira ya está abierta, se lo piden: bandeja.main). Quien
+; pulsa el icono quiere ver algo; lo que se ancla a Inicio o a la barra copia estos argumentos.
 ; AppUserModelID = luzeira.sistema.identidad.APP_ID: al anclar la ventana sale «Luzeira», no «pythonw».
-Name: "{#ProgramsDir}\Luzeira"; Filename: "{#PythonW}"; Parameters: "-m luzeira"; WorkingDir: "{%USERPROFILE}"; IconFilename: "{#AppIcon}"; Comment: "{cm:Descripcion}"; AppUserModelID: "Luzeira.Luzeira"
+Name: "{#ProgramsDir}\Luzeira"; Filename: "{#PythonW}"; Parameters: "-m luzeira --abrir-editor"; WorkingDir: "{%USERPROFILE}"; IconFilename: "{#AppIcon}"; Comment: "{cm:Descripcion}"; AppUserModelID: "Luzeira.Luzeira"
 Name: "{#DesktopDir}\Luzeira"; Filename: "{#PythonW}"; Parameters: "-m luzeira --abrir-editor"; WorkingDir: "{%USERPROFILE}"; IconFilename: "{#AppIcon}"; Comment: "{cm:Descripcion}"; AppUserModelID: "Luzeira.Luzeira"; Tasks: escritorio
 
 [Registry]
