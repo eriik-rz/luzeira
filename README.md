@@ -2,7 +2,7 @@
 
 Tu pantalla USB de monitorización del PC, en español y como tú quieras.
 
-### [⬇ Descargar Luzeira para Windows](https://github.com/eriik-rz/luzeira/releases/latest)
+### [⬇ Descargar en Microsoft Store](https://apps.microsoft.com/detail/9MSNPHG5NZ40) · [Instalador (GitHub)](https://github.com/eriik-rz/luzeira/releases/latest)
 
 ¿Quieres verlo antes? [Mira la web de Luzeira](https://eriik-rz.github.io/luzeira/): ahí puedes probar el editor sin instalar nada.
 
@@ -21,6 +21,10 @@ Luzeira es una app libre para las pequeñas pantallas USB que se ponen dentro o 
 - **Segura y limpia**: sin anuncios y sin telemetría. Solo se conecta a internet si le dejas, para avisarte de versiones nuevas, y nunca instala nada sin que pulses «Actualizar». Los temas son datos, nunca programas.
 
 ## Instalar
+
+**Lo más fácil:** desde [Microsoft Store](https://apps.microsoft.com/detail/9MSNPHG5NZ40). Se instala con un clic, sin avisos de Windows, y se actualiza sola.
+
+O con el instalador de GitHub:
 
 1. Descarga `Luzeira-<versión>-instalador.exe` desde [Releases](https://github.com/eriik-rz/luzeira/releases/latest).
 2. Ábrelo. Como Luzeira todavía no va firmada digitalmente, Windows puede mostrar **«Windows protegió su PC»**: pulsa **Más información → Ejecutar de todas formas**. Si quieres comprobar que la descarga es la oficial, mira [cómo verificarla](SECURITY.md#cómo-verificar-que-tu-descarga-es-oficial).
