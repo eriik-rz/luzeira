@@ -2,6 +2,7 @@
 // «Aplicar a la pantalla» y «Ajustes» (lo del menú del icono, a la vista).
 
 import type { Info, ThemeSummary } from '../api.ts'
+import { displayPill } from '../model/contract.ts'
 import { BrandMark, IconRedo, IconSaveAs, IconSend, IconSettings, IconTrash, IconUndo } from './icons.tsx'
 
 export type SaveStatus =
@@ -54,6 +55,7 @@ function statusView(s: SaveStatus): { cls: string; text: string; title: string }
 
 export function TopBar(p: Props) {
   const st = statusView(p.status)
+  const pill = displayPill(p.info && { status: p.info.status, message: p.info.message })
   const mine = p.themes.filter((t) => !t.builtin)
   const builtins = p.themes.filter((t) => t.builtin)
   return (
@@ -75,7 +77,7 @@ export function TopBar(p: Props) {
       <select
         id="theme-select"
         className="input"
-        style={{ width: 230, minWidth: 150, flex: "0 1 230px" }}
+        style={{ width: 230, minWidth: 150, flex: "0 4 230px" }}
         value={p.current}
         title="Tema que estás editando. Cambia para abrir otro."
         onChange={(e) => p.onSelectTheme(e.target.value)}
@@ -134,10 +136,23 @@ export function TopBar(p: Props) {
       )}
 
       <span className="spacer" />
-      {p.info && !p.info.simulated && p.info.message && (
-        <span className="status-pill hide-narrow" title={p.info.message}>
-          {p.info.message}
+      {pill && pill.kind === 'note' && (
+        <span className="status-pill note hide-narrow" title={pill.title}>
+          {pill.text}
         </span>
+      )}
+      {pill && pill.kind !== 'note' && (
+        <button
+          type="button"
+          className={`status-pill display-alert ${pill.kind}`}
+          title={`${pill.title} Pulsa para elegir la pantalla en «Ajustes».`}
+          onClick={p.onSettings}
+          role="status"
+          aria-live="polite"
+        >
+          <span className="dot" aria-hidden="true" />
+          {pill.text}
+        </button>
       )}
       <button
         type="button"
@@ -167,22 +182,24 @@ export function TopBar(p: Props) {
           <button
             type="button"
             className="btn"
+            aria-label="Guardar"
             onClick={p.onSave}
             disabled={p.status.kind === 'saved'}
             title={p.status.kind === 'saved' ? 'Todo está guardado (se guarda solo al cambiar algo).' : 'Guardar ahora'}
           >
-            <IconSaveAs /> Guardar
+            <IconSaveAs /> <span className="btn-label">Guardar</span>
           </button>
         </>
       )}
       <button
         type="button"
-        className={`btn${p.builtin ? '' : ' primary'}`}
+        className={`btn keep-label${p.builtin ? '' : ' primary'}`}
         onClick={p.onApply}
         disabled={p.applying}
+        aria-label="Aplicar a la pantalla"
         title="Mostrar este tema en la pantalla USB ahora y dejarlo puesto"
       >
-        <IconSend /> {p.applying ? 'Aplicando…' : 'Aplicar a la pantalla'}
+        <IconSend /> <span className="btn-label">{p.applying ? 'Aplicando…' : 'Aplicar a la pantalla'}</span>
       </button>
       <button
         type="button"

@@ -18,6 +18,7 @@ import {
   pickInitialTheme,
   deletedMessage,
   applyBlock,
+  displayPill,
 } from '../src/model/contract.ts'
 import { formatClock, formatReading } from '../src/model/format.ts'
 import type { Theme, ThemeJson } from '../src/model/types.ts'
@@ -453,4 +454,15 @@ test('letras que faltan: la cabecera se lee sin romper nunca', () => {
 test('letras que faltan: el aviso nombra la letra y el elemento', () => {
   const msg = missingGlyphsMessage([{ index: 0, chars: '★☃' }, { index: 5, chars: '€' }], ['Texto: "Hola"'])
   assert.equal(msg, '«★» «☃» en «Texto: "Hola"»; «€» en «un elemento»')
+})
+
+test('sin pantalla o con error: aviso que llama la atención; lo demás, nota discreta', () => {
+  const msg = 'No encuentro la pantalla. ¿Está conectada por USB?'
+  assert.deepEqual(displayPill({ status: 'no_display', message: msg }), { kind: 'alert', text: 'Sin pantalla', title: msg })
+  assert.equal(displayPill({ status: 'error', message: 'x' })?.kind, 'error')
+  assert.equal(displayPill({ status: 'theme_error', message: 'x' })?.kind, 'error')
+  assert.equal(displayPill({ status: 'running', message: 'Mostrando «Hielo»' })?.kind, 'note')
+  assert.equal(displayPill({ status: 'simulado', message: 'Modo simulado' }), null)
+  assert.equal(displayPill({ status: 'running', message: '' }), null)
+  assert.equal(displayPill(null), null)
 })

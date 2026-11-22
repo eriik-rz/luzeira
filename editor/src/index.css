@@ -482,3 +482,42 @@ textarea.input { height: auto; min-height: 60px; padding: 6px 8px; resize: verti
   .topbar .btn .btn-label { display: none; }
   .topbar .btn:has(.btn-label) { width: 32px; padding: 0; }
 }
+
+/* Lo que sí puede encoger antes que tapar «Aplicar» y «Ajustes»: el selector de tema (lo
+   primero, ver TopBar) y la nota del estado de la pantalla, cortada con «…» (el texto
+   entero va en su bocadillo). */
+.topbar > .status-pill.note {
+  flex: 0 1 auto; min-width: 0; max-width: 320px; overflow: hidden; text-overflow: ellipsis;
+  display: block; line-height: 18px;
+}
+/* «Aplicar a la pantalla» es la acción principal: conserva su texto hasta que de verdad
+   no cabe (la regla de 1360 px recoge los secundarios primero). */
+@container barra (max-width: 1360px) {
+  .topbar .btn.keep-label .btn-label { display: inline; }
+  .topbar .btn.keep-label:has(.btn-label) { width: auto; padding: 0 12px; }
+}
+@container barra (max-width: 1120px) {
+  .topbar .btn.keep-label .btn-label { display: none; }
+  .topbar .btn.keep-label:has(.btn-label) { width: 32px; padding: 0; }
+}
+
+/* Aviso de «sin pantalla» o de error: se ve siempre, late en color y al pulsarlo abre
+   «Ajustes». Con «reducir movimiento» la regla global de arriba lo deja quieto. */
+.status-pill.display-alert {
+  border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent);
+  font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  animation: llamar 1.6s ease-in-out infinite;
+}
+.status-pill.display-alert .dot { background: var(--accent); }
+.status-pill.display-alert.error { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
+.status-pill.display-alert.error .dot { background: var(--danger); }
+.status-pill.display-alert:hover { filter: brightness(1.15); }
+@keyframes llamar {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 140, 0, 0.55); }
+  50% { box-shadow: 0 0 0 6px rgba(255, 140, 0, 0); }
+}
+.status-pill.display-alert.error { animation-name: llamar-rojo; }
+@keyframes llamar-rojo {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.55); }
+  50% { box-shadow: 0 0 0 6px rgba(255, 107, 107, 0); }
+}

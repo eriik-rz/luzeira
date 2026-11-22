@@ -112,10 +112,15 @@ export class SimulatedApi implements EditorApi {
 
   async info(): Promise<Info> {
     await wait(50)
+    // `?sin-pantalla`: el aviso de la app real cuando no encuentra la pantalla (para verlo
+    // y hacer capturas sin desenchufar nada).
+    const noDisplay = typeof location !== 'undefined' && new URLSearchParams(location.search).has('sin-pantalla')
     return {
       version: '0.0.0-simulado',
-      status: 'simulado',
-      message: 'Modo simulado: no hay pantalla conectada, los datos son inventados.',
+      status: noDisplay ? 'no_display' : 'simulado',
+      message: noDisplay
+        ? 'No encuentro la pantalla. ¿Está conectada por USB? Lo sigo intentando cada pocos segundos.'
+        : 'Modo simulado: no hay pantalla conectada, los datos son inventados.',
       active_theme: this.applied,
       simulated: true,
       question: this.question,

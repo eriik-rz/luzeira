@@ -107,6 +107,32 @@ export function isSupersededPreview(status: number, body?: unknown): boolean {
   return status === 409 && typeof body === 'object' && body !== null && (body as { superseded?: unknown }).superseded === true
 }
 
+/** Cómo se enseña en la barra el estado de la pantalla (`GET /api/info`).
+ *  - `alert`: un problema que el usuario tiene que ver ya (late para llamar la atención y
+ *    nunca se esconde por falta de sitio; el texto largo va en el `title`).
+ *  - `note`: lo demás, discreto y recortable. */
+export interface DisplayPill {
+  kind: 'alert' | 'error' | 'note'
+  text: string
+  title: string
+}
+
+export function displayPill(info: { status: string; message: string } | null): DisplayPill | null {
+  if (!info || !info.message) return null
+  switch (info.status) {
+    case 'no_display':
+      return { kind: 'alert', text: 'Sin pantalla', title: info.message }
+    case 'theme_error':
+      return { kind: 'error', text: 'Error en el tema', title: info.message }
+    case 'error':
+      return { kind: 'error', text: 'Error en la pantalla', title: info.message }
+    case 'simulado':
+      return null // ya sale «Modo simulado»
+    default:
+      return { kind: 'note', text: info.message, title: info.message }
+  }
+}
+
 /** Aviso tras «Aplicar», según el estado que da `GET /api/info` justo después. */
 export function appliedMessage(
   title: string,
