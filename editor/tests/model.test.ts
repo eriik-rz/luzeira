@@ -466,3 +466,23 @@ test('sin pantalla o con error: aviso que llama la atención; lo demás, nota di
   assert.equal(displayPill({ status: 'running', message: '' }), null)
   assert.equal(displayPill(null), null)
 })
+
+test('idiomas: el activo, luego inglés, luego español, y si no la clave; con variables', async () => {
+  const i18n = await import('../src/model/i18n.ts')
+  i18n.registerCatalogs({
+    es: { hola: 'Hola, {n}', solo_es: 'Solo aquí' },
+    en: { hola: 'Hi, {n}' },
+    de: { hola: 'Hallo, {n}' },
+  })
+  assert.deepEqual(i18n.availableLanguages(), ['es', 'en', 'de'])
+  assert.equal(i18n.setLanguage('de'), 'de')
+  assert.equal(i18n.t('hola', { n: 'Ana' }), 'Hallo, Ana')
+  assert.equal(i18n.t('solo_es'), 'Solo aquí')
+  assert.equal(i18n.t('no.existe'), 'no.existe')
+  assert.equal(i18n.t('hola', { otra: 1 }), 'Hallo, {n}')
+  assert.equal(i18n.setLanguage(null, 'en-GB'), 'en') // automático: el del sistema
+  assert.equal(i18n.setLanguage(null, 'ja-JP'), 'en') // uno que no tenemos: inglés
+  assert.equal(i18n.setLanguage('xx', 'de-DE'), 'de')
+  i18n.registerCatalogs({})
+  i18n.setLanguage('es')
+})

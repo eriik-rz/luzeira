@@ -24,6 +24,8 @@ import type { Theme, ThemeJson } from './model/types.ts'
 
 export interface Info {
   version: string
+  /** Idioma activo de Luzeira (C-62): el editor lo sigue. */
+  language?: string
   status: string
   message: string
   /** Tema que está en la pantalla ahora (para abrir el editor con él). */
@@ -94,6 +96,9 @@ export interface AppSettings {
   autostart: boolean
   /** El usuario lo quitó desde Windows: solo se puede volver a activar en Configuración. */
   autostart_blocked: boolean
+  /** `auto` (el de Windows) o un código; y los que hay, con su nombre propio. */
+  language: string
+  languages: { code: string; name: string }[]
   display_text: string
   /** Luzeira busca la pantalla ella sola (no hay ninguna elegida a mano). */
   display_auto: boolean
@@ -102,7 +107,7 @@ export interface AppSettings {
 }
 
 export type SettingsChange = Partial<
-  Pick<AppSettings, 'brightness' | 'flip' | 'autostart'> & { updates: boolean }
+  Pick<AppSettings, 'brightness' | 'flip' | 'autostart' | 'language'> & { updates: boolean }
 >
 
 /** Un elemento con letras que su fuente no tiene (se verían como cuadros). */

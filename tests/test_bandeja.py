@@ -1133,3 +1133,35 @@ def test_the_normal_version_keeps_its_menu(app, settings, with_keys):
     assert "Crear acceso directo en el escritorio" in texts
     assert "Buscar actualizaciones ahora" in texts
     assert settings.snapshot()["store"] is False
+
+
+# --- C-62: idioma ---------------------------------------------------------------------------
+
+
+def test_settings_offer_the_languages_and_change_it_on_the_icon_thread(app, settings, monkeypatch):
+    applied = []
+    monkeypatch.setattr(app.service, "apply", lambda s, reload=False: applied.append(reload))
+    snap = settings.snapshot()
+    assert snap["language"] == "auto"
+    assert {"code": "en", "name": "English"} in snap["languages"]
+    assert "Idioma" in menu_texts(app)
+    settings.update(brightness=None, flip=None, autostart=None, language="en")
+    app._drain()
+    assert idioma_current() == "en" and app.saved[-1].language == "en"
+    assert applied == [True]  # el tema otra vez: fecha y etiquetas en el idioma nuevo
+    assert "Language" in menu_texts(app) and "Idioma" not in menu_texts(app)
+    settings.update(brightness=None, flip=None, autostart=None, language="auto")
+    app._drain()
+    assert app.saved[-1].language is None and idioma_current() == "es"  # el de «Windows»
+
+
+def test_settings_refuse_a_language_that_is_not_there(settings):
+    with pytest.raises(bandeja.EditorError) as exc:
+        settings.update(brightness=None, flip=None, autostart=None, language="xx")
+    assert exc.value.status == 400
+
+
+def idioma_current() -> str:
+    from luzeira import idioma
+
+    return idioma.current()

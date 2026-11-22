@@ -58,7 +58,7 @@ from urllib.parse import unquote, urlsplit
 
 from PIL import Image
 
-from luzeira import __version__
+from luzeira import __version__, idioma
 from luzeira.render.motor import (
     Renderer,
     format_clock,
@@ -379,6 +379,8 @@ class EditorServer:
         active = self._active_theme() if self._active_theme is not None else None
         return {
             "version": __version__,
+            # Idioma activo (C-62): el editor se traduce con él y lo sigue si cambia.
+            "language": idioma.current(),
             "status": str(status),
             "message": message,
             "sizes": sizes,

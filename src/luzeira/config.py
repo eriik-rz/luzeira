@@ -100,6 +100,19 @@ class AppConfig(BaseModel):
         pattern=r"^(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})$",
     )
     updates_last_check: float | None = None  # hora (time.time()) de la última comprobación
+    # Idioma de la app (C-62). None: el de Windows (ver luzeira.idioma.resolve).
+    language: str | None = None
+
+    @field_validator("language", mode="after")
+    @classmethod
+    def _forget_unknown_language(cls, value: str | None) -> str | None:
+        """Un código que no tenemos (o uno raro a mano) se olvida: vuelve al de Windows."""
+        from luzeira import idioma
+
+        if value is not None and value not in idioma.available():
+            log.warning("El idioma guardado no está disponible; se usa el de Windows.")
+            return None
+        return value
 
     @field_validator("display", mode="wrap")
     @classmethod

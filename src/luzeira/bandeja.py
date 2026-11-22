@@ -30,7 +30,7 @@ from pathlib import Path
 import pystray
 from PIL import Image
 
-from luzeira import __version__, actualizar
+from luzeira import __version__, actualizar, idioma
 from luzeira.config import (
     DEFAULT_THEME,
     AppConfig,
@@ -296,6 +296,8 @@ class EditorSettings:
             "store": app._store,
             "autostart": autostart == StartupState.ON,
             "autostart_blocked": autostart == StartupState.BLOCKED,
+            "language": app.config.language or "auto",
+            "languages": [{"code": c, "name": n} for c, n in idioma.available().items()],
             "display_text": app._display_text(),
             "display_auto": app.config.display is None and app._trial is None,
             "choices": public(closed),
@@ -309,8 +311,11 @@ class EditorSettings:
         flip: bool | None,
         autostart: bool | None,
         updates: bool | None = None,
+        language: str | None = None,
     ) -> None:
         app = self._app
+        if language is not None and language != "auto" and language not in idioma.available():
+            raise EditorError(400, idioma.t("idioma.no_valido"))
         if brightness is not None and brightness not in BRIGHTNESS_LEVELS:
             raise EditorError(400, "Ese brillo no está entre los que se pueden elegir.")
         if autostart is not None:
@@ -326,6 +331,9 @@ class EditorSettings:
             changes["flip"] = flip
         if updates is not None:
             app._post(app._safe(lambda: app._set_updates(updates)))
+        if language is not None:
+            code = None if language == "auto" else language
+            app._post(app._safe(lambda: app._set_language(code)))
         if changes:
             app._post(app._safe(lambda: app._change(**changes)))
         else:
@@ -449,6 +457,7 @@ class TrayApp:
             )
             config = config.model_copy(update={"theme": DEFAULT_THEME})
         self.config = config
+        idioma.set_language(config.language)
         self.service = self._new_service()
         self._worker: threading.Thread | None = None
         # Tema que el editor acaba de pedir aplicar y la bandeja aún no ha procesado: el
@@ -665,6 +674,14 @@ class TrayApp:
             return  # ni se guarda ni se aplica: el menú sigue diciendo la verdad
         self.service.apply(Settings(theme_path(new.theme), new.brightness, new.flip), reload=reload)
         self._save(new)
+
+    def _set_language(self, code: str | None) -> None:
+        """Cambia el idioma al momento: menú nuevo y el tema otra vez en la pantalla (la
+        fecha y las etiquetas de los temas también cambian)."""
+        idioma.set_language(code)
+        self._change(reload=True, language=code)
+        self.icon.menu = self._menu()
+        self.icon.update_menu()
 
     def _save(self, new: AppConfig) -> None:
         self.config = new
@@ -1145,6 +1162,24 @@ class TrayApp:
             ),
         )
 
+        language_items = [
+            Item(
+                idioma.t("idioma.automatico"),
+                self._safe(lambda: self._set_language(None)),
+                checked=lambda _item: self.config.language is None,
+                radio=True,
+            ),
+            *(
+                Item(
+                    name,
+                    self._safe(lambda c=code: self._set_language(c)),
+                    checked=lambda _item, c=code: self.config.language == c,
+                    radio=True,
+                )
+                for code, name in idioma.available().items()
+            ),
+        ]
+
         return Menu(
             # default=True: también se abre con un clic en el icono.
             Item("Abrir editor", self._safe(self._open_editor), default=True),
@@ -1177,6 +1212,7 @@ class TrayApp:
                 self._safe(lambda: self._change(flip=not self.config.flip)),
                 checked=lambda _item: self.config.flip,
             ),
+            Item(idioma.t("idioma.menu"), Menu(*language_items)),
             Menu.SEPARATOR,
             Item(
                 "Iniciar con Windows",

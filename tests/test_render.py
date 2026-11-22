@@ -391,3 +391,56 @@ def test_image_widget_requires_validated_file(tmp_path):
         files={"logo.png": img},
     )
     assert r.full_frame().getpixel((10, 10)) == (255, 0, 0)
+
+
+# --- C-62: textos del tema traducidos -------------------------------------------------------
+
+
+def test_prefix_and_suffix_follow_the_language_when_the_theme_translates_them():
+    from luzeira import idioma
+
+    w = sensor_widget(
+        prefix="usada ", prefix_i18n={"en": "used "}, suffix="", suffix_i18n={"en": "!"}
+    )
+    assert format_reading(w, Reading(4.0, "GB")) == "usada 4 GB"
+    idioma.set_language("en")
+    assert format_reading(w, Reading(4.0, "GB")) == "used 4 GB!"
+    idioma.set_language("de")  # sin traducción de ese idioma: el texto de siempre
+    assert format_reading(w, Reading(4.0, "GB")).startswith("usada ")
+
+
+def test_a_text_widget_is_drawn_in_the_active_language(monkeypatch):
+    from luzeira import idioma
+
+    drawn = []
+    monkeypatch.setattr(Renderer, "_draw_text", lambda self, image, text, style: drawn.append(text))
+    widget = {"type": "text", "box": box(), "text": "RED", "text_i18n": {"en": "NET"}}
+    theme = make_theme(widget)
+
+    def render():
+        # Al crearse, el Renderer pinta ya las capas fijas (los textos).
+        Renderer(theme, font_for=font_for, read_sensor=lambda s: Reading(1, ""))
+
+    render()
+    idioma.set_language("en")
+    render()
+    assert drawn == ["RED", "NET"]
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"EN": "x"},
+        {"eng": "x"},
+        {"e": "x"},
+        {"en": "x" * 201},
+        {f"a{c}": "x" for c in "abcdefghijklmnopqrstu"},
+    ],
+)
+def test_theme_translations_are_short_language_codes_and_short_texts(bad):
+    from pydantic import ValidationError
+
+    from luzeira.temas.modelo import TextWidget
+
+    with pytest.raises(ValidationError):
+        TextWidget.model_validate({"type": "text", "box": box(), "text": "RED", "text_i18n": bad})

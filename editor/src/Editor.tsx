@@ -13,6 +13,7 @@ import { validateTheme, widgetIndexOf, type Issue } from './model/validate.ts'
 import { CanvasArea, type ZoomMode } from './components/CanvasArea.tsx'
 import { Dialog, Toasts, type ToastItem } from './components/Dialog.tsx'
 import { SettingsDialog } from './components/SettingsDialog.tsx'
+import { useIdioma } from './i18n/contexto.ts'
 import { LayersPanel } from './components/LayersPanel.tsx'
 import { PropertiesPanel } from './components/PropertiesPanel.tsx'
 import { ThemePanel } from './components/ThemePanel.tsx'
@@ -72,6 +73,10 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
         .catch(() => undefined), // sin respuesta, se deja lo último conocido
     [api],
   )
+  // El idioma lo manda Luzeira: si cambia (desde Ajustes o desde el menú del icono), el
+  // editor se traduce al momento.
+  const { follow } = useIdioma()
+  useEffect(() => follow(info?.language), [follow, info?.language])
   useEffect(() => {
     aliveRef.current = true
     const timer = window.setInterval(refreshInfo, INFO_REFRESH_MS)
@@ -812,6 +817,7 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
             refreshInfo()
             window.setTimeout(refreshInfo, 1500)
           }}
+          onLanguageChanged={() => window.setTimeout(refreshInfo, 300)}
           onClose={() => setDialog(null)}
           onImported={(name) => {
             setDialog(null)

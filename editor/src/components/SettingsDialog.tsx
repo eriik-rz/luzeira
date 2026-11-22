@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, errorMessage, type AppSettings, type DisplayOption, type EditorApi, type SettingsChange } from '../api.ts'
 import { AUTO, displaySelectValue, findOption, needsConfirmation, OTHER } from '../model/settings.ts'
+import { useT } from '../i18n/contexto.ts'
 import { Dialog, type ToastItem } from './Dialog.tsx'
 import { Field, Segmented, Toggle } from './fields.tsx'
 import { IconFolder, IconUpload, IconWarn } from './icons.tsx'
@@ -19,12 +20,15 @@ interface Props {
   api: EditorApi
   /** Se ha elegido pantalla: que el editor mire pronto si hay pregunta «¿se ve bien?». */
   onDisplayChosen: () => void
+  /** Se ha cambiado el idioma: que el editor lo pregunte ya a Luzeira y se traduzca. */
+  onLanguageChanged: () => void
   onClose: () => void
   onImported: (name: string) => void
   toast: (message: string, kind?: ToastItem['kind']) => void
 }
 
-export function SettingsDialog({ api, onDisplayChosen, onClose, onImported, toast }: Props) {
+export function SettingsDialog({ api, onDisplayChosen, onLanguageChanged, onClose, onImported, toast }: Props) {
+  const t = useT()
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<DisplayOption | null>(null)
@@ -59,6 +63,7 @@ export function SettingsDialog({ api, onDisplayChosen, onClose, onImported, toas
     setSettings((s) => (s ? { ...s, ...c } : s))
     try {
       await api.updateSettings(c)
+      if (c.language !== undefined) onLanguageChanged()
     } catch (e) {
       toast(errorMessage(e), 'error')
       void reload()
@@ -181,6 +186,27 @@ export function SettingsDialog({ api, onDisplayChosen, onClose, onImported, toas
                   ))}
                 </select>
               </details>
+            </section>
+
+            <section className="settings-section" aria-labelledby="ajustes-idioma">
+              <h3 id="ajustes-idioma">{t('ajustes.idioma.titulo')}</h3>
+              <select
+                className="input"
+                aria-labelledby="ajustes-idioma"
+                aria-describedby="ajustes-idioma-ayuda"
+                value={settings.language}
+                onChange={(e) => void change({ language: e.target.value })}
+              >
+                <option value="auto">{t('ajustes.idioma.automatico')}</option>
+                {settings.languages.map((l) => (
+                  <option key={l.code} value={l.code} lang={l.code}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+              <p className="hint" id="ajustes-idioma-ayuda">
+                {t('ajustes.idioma.ayuda')}
+              </p>
             </section>
 
             <section className="settings-section" aria-labelledby="ajustes-inicio">

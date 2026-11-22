@@ -3,6 +3,7 @@
 // La vista previa se dibuja aproximada en un <canvas>: NO es la de Python.
 
 import { ApiError, type AppSettings, type EditorApi, type Info, type MissingGlyphs, type Preview, type SettingsChange, type SensorInfo, type ThemeDocument, type ThemeSummary } from '../api.ts'
+import { availableLanguages, NATIVE_NAMES, resolveLanguage } from '../model/i18n.ts'
 import { formatClock, formatReading } from '../model/format.ts'
 import { normalizeTheme } from '../model/theme.ts'
 import { screenSize, type Theme, type ThemeJson } from '../model/types.ts'
@@ -117,6 +118,8 @@ export class SimulatedApi implements EditorApi {
     const noDisplay = typeof location !== 'undefined' && new URLSearchParams(location.search).has('sin-pantalla')
     return {
       version: '0.0.0-simulado',
+      // En la demo, «automático» es el idioma del navegador.
+      language: resolveLanguage(this.appSettings.language, navigator.language),
       status: noDisplay ? 'no_display' : 'simulado',
       message: noDisplay
         ? 'No encuentro la pantalla. ¿Está conectada por USB? Lo sigo intentando cada pocos segundos.'
@@ -217,6 +220,8 @@ export class SimulatedApi implements EditorApi {
     store: false,
     autostart: true,
     autostart_blocked: false,
+    language: 'auto',
+    languages: availableLanguages().map((code) => ({ code, name: NATIVE_NAMES[code] })),
     display_text: 'Ninguna pantalla conectada',
     display_auto: true,
     choices: [

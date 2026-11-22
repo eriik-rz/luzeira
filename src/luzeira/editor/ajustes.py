@@ -30,7 +30,10 @@ class SettingsBackend(Protocol):
         flip: bool | None,
         autostart: bool | None,
         updates: bool | None = None,
-    ) -> None: ...
+        language: str | None = None,
+    ) -> None:
+        """``language``: un código de idioma o ``"auto"`` (el de Windows)."""
+        ...
 
     def updates_question(self) -> bool:
         """¿Hay que preguntar una vez si avisar de versiones nuevas? (ADR-006)"""
@@ -86,9 +89,9 @@ def _optional(body: dict, key: str, kind: type) -> object:
 
 
 def parse_update(body: object) -> dict:
-    """``{brightness?, flip?, autostart?, updates?}`` → argumentos de
+    """``{brightness?, flip?, autostart?, updates?, language?}`` → argumentos de
     :meth:`SettingsBackend.update`."""
-    allowed = {"brightness", "flip", "autostart", "updates"}
+    allowed = {"brightness", "flip", "autostart", "updates", "language"}
     if not isinstance(body, dict) or not body or set(body) - allowed:
         raise EditorError(400, "Algún ajuste no es válido.")
     return {
@@ -96,7 +99,19 @@ def parse_update(body: object) -> dict:
         "flip": _optional(body, "flip", bool),
         "autostart": _optional(body, "autostart", bool),
         "updates": _optional(body, "updates", bool),
+        "language": _language(body),
     }
+
+
+def _language(body: dict) -> str | None:
+    """Código corto (``es``, ``pt``…) o ``auto``; si existe lo decide la bandeja."""
+    value = _optional(body, "language", str)
+    if value is not None and not (
+        value == "auto"
+        or (len(value) == 2 and value.isascii() and value.isalpha() and value.islower())
+    ):
+        raise EditorError(400, "Algún ajuste no es válido.")
+    return value
 
 
 def parse_answer(body: object) -> bool:

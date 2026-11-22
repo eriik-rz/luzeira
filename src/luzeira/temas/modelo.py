@@ -62,6 +62,18 @@ ImagePath = Annotated[RelPath, _with_extensions("png", "jpg", "jpeg", "gif")]
 FontPath = Annotated[RelPath, _with_extensions("ttf", "otf")]
 SensorId = Annotated[str, Field(pattern=r"^[a-z0-9_]+(\.[a-z0-9_]+)+$", max_length=60)]
 ShortText = Annotated[str, Field(max_length=20)]
+#: Traducciones de un texto del tema (C-62): ``{"en": "NET", "de": "NETZ"}``. Solo datos;
+#: si falta el idioma activo se pinta el texto normal. Como mucho 20 idiomas.
+LangCode = Annotated[str, Field(pattern=r"^[a-z]{2}$")]
+TextTranslations = Annotated[
+    dict[LangCode, Annotated[str, Field(max_length=200)]], Field(max_length=20)
+]
+ShortTranslations = Annotated[dict[LangCode, ShortText], Field(max_length=20)]
+
+
+def localized(text: str, translations: dict[str, str] | None, language: str) -> str:
+    """El texto en ``language`` si el tema lo trae traducido; si no, el de siempre."""
+    return (translations or {}).get(language, text)
 
 
 class _Strict(BaseModel):
@@ -95,6 +107,7 @@ class _Widget(_Strict):
 class TextWidget(_Widget):
     type: Literal["text"]
     text: str = Field(max_length=200)
+    text_i18n: TextTranslations | None = None
 
 
 class ClockWidget(_Widget):
@@ -109,6 +122,8 @@ class SensorWidget(_Widget):
     decimals: int = Field(default=0, ge=0, le=3)
     prefix: ShortText = ""
     suffix: ShortText = ""  # se añade tras la unidad si show_unit
+    prefix_i18n: ShortTranslations | None = None
+    suffix_i18n: ShortTranslations | None = None
     show_unit: bool = True
     interval: float = Field(default=1.0, ge=0.5, le=3600)
     # C-12: los sensores de texto (nombre de la GPU…) se recortan a este largo con «…».

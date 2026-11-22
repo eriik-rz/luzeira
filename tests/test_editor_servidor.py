@@ -1403,13 +1403,22 @@ def test_settings_read_and_update(with_settings):
     status, _ = client.json("PUT", "/api/ajustes", {"brightness": 75, "autostart": True})
     assert status == 200
     assert fake.calls == [
-        ("update", {"brightness": 75, "flip": None, "autostart": True, "updates": None})
+        (
+            "update",
+            {"brightness": 75, "flip": None, "autostart": True, "updates": None, "language": None},
+        )
     ]
     assert client.json("PUT", "/api/ajustes", {"updates": False})[0] == 200
     assert fake.calls[-1] == (
         "update",
-        {"brightness": None, "flip": None, "autostart": None, "updates": False},
+        {"brightness": None, "flip": None, "autostart": None, "updates": False, "language": None},
     )
+    assert client.json("PUT", "/api/ajustes", {"language": "en"})[0] == 200
+    assert fake.calls[-1][1]["language"] == "en"
+    assert client.json("PUT", "/api/ajustes", {"language": "auto"})[0] == 200
+    # Solo un código corto o «auto»: nada de rutas ni textos raros hacia los catálogos.
+    for bad in ["../es", "EN", "español", 3, "e"]:
+        assert client.json("PUT", "/api/ajustes", {"language": bad})[0] == 400
 
 
 @pytest.mark.parametrize(

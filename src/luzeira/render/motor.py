@@ -23,6 +23,7 @@ from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps
 
+from luzeira import idioma
 from luzeira.sensores.base import Reading
 from luzeira.temas.cargar import open_validated_image
 from luzeira.temas.modelo import (
@@ -33,6 +34,7 @@ from luzeira.temas.modelo import (
     Style,
     TextWidget,
     Theme,
+    localized,
 )
 
 FontFor = Callable[[Style], ImageFont.FreeTypeFont | ImageFont.ImageFont]
@@ -84,16 +86,19 @@ def format_reading(widget: SensorWidget, reading: Reading, decimal_sep: str = ",
 
     ``decimal_sep``: coma en español (14,1 GB). Configurable cuando haya más idiomas.
     """
+    lang = idioma.current()
+    prefix = localized(widget.prefix, widget.prefix_i18n, lang)
+    suffix = localized(widget.suffix, widget.suffix_i18n, lang)
     if reading.text is not None:  # C-12: sensor de texto
         text = reading.text
         if len(text) > widget.max_chars:
             text = text[: widget.max_chars - 1] + "…"
-        return f"{widget.prefix}{text}{widget.suffix}"
+        return f"{prefix}{text}{suffix}"
     if reading.value is None:
-        return f"{widget.prefix}{NO_VALUE}"
+        return f"{prefix}{NO_VALUE}"
     number = f"{reading.value:.{widget.decimals}f}".replace(".", decimal_sep)
     unit = f" {reading.unit}" if widget.show_unit and reading.unit else ""
-    return f"{widget.prefix}{number}{unit}{widget.suffix}"
+    return f"{prefix}{number}{unit}{suffix}"
 
 
 def _fit_contain(image: Image.Image, size: tuple[int, int]) -> Image.Image:
@@ -210,7 +215,8 @@ class Renderer:
         dynamic = isinstance(widget, ClockWidget | SensorWidget | BarWidget)
         layer = _Layer(widget, _box_of(widget), self._blank(widget), dynamic)
         if isinstance(widget, TextWidget):
-            self._draw_text(layer.image, widget.text, widget.style)
+            text = localized(widget.text, widget.text_i18n, idioma.current())
+            self._draw_text(layer.image, text, widget.style)
         elif isinstance(widget, ImageWidget):
             b = widget.box
             img = self._scaled(widget.file, (b.width, b.height), "contain")
