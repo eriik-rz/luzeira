@@ -10,6 +10,8 @@
   - Tarea de inicio: el inicio con Windows de la Store (la clave Run queda aislada dentro
     del paquete). Activada por defecto, como en el instalador; el usuario la quita en
     Configuración → Aplicaciones → Inicio. Arranca solo la bandeja, sin abrir el editor.
+    Lanza Luzeira.exe y no pythonw.exe: Windows no pasa uap10:Parameters a la tarea de
+    inicio (medido el 2026-11-22), y pythonw sin argumentos se cierra sin hacer nada.
 -->
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
          xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
@@ -36,8 +38,8 @@
                           BackgroundColor="transparent"
                           Square150x150Logo="Assets\Square150.png" Square44x44Logo="Assets\Square44.png" />
       <Extensions>
-        <desktop:Extension Category="windows.startupTask" Executable="python\pythonw.exe"
-                           EntryPoint="Windows.FullTrustApplication" uap10:Parameters="-m luzeira">
+        <desktop:Extension Category="windows.startupTask" Executable="Luzeira.exe"
+                           EntryPoint="Windows.FullTrustApplication">
           <desktop:StartupTask TaskId="LuzeiraInicio" Enabled="true" DisplayName="Luzeira" />
         </desktop:Extension>
       </Extensions>

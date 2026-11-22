@@ -27,6 +27,8 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import importlib.util
+import io
 import re
 import shutil
 import subprocess
@@ -76,6 +78,16 @@ VERSION_RE = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 ASSETS = {"StoreLogo.png": 50, "Square150.png": 150, "Square44.png": 44}
 #: Lo de la carpeta ensamblada que no va al MSIX: el lanzador del zip portable.
 EXCLUDE = {"Luzeira.cmd"}
+
+#: ``Luzeira.exe``: la tarea de inicio de Windows **no pasa** ``uap10:Parameters`` (medido el
+#: 2026-11-22 en Windows 10 22H2: lanzó ``pythonw.exe`` a secas, que se cierra al momento).
+#: Hace falta un ejecutable que arranque Luzeira sin argumentos. Es el lanzador «w64» de
+#: distlib (PSF-2.0, dependencia de desarrollo fijada en ``uv.lock``): un .exe sin consola
+#: que lee el shebang pegado detrás y ejecuta ese Python con el propio .exe como zip, cuyo
+#: ``__main__.py`` arranca ``luzeira``. ``<launcher_dir>`` = la carpeta del .exe.
+LAUNCHER_SHA256 = "7a319ffaba23a017d7b1e18ba726ba6c54c53d6446db55f92af53c279894f8ad"  # 0.4.4
+LAUNCHER_SHEBANG = b"#!<launcher_dir>\\python\\pythonw.exe\r\n"
+LAUNCHER_MAIN = b"import runpy\nrunpy.run_module('luzeira', run_name='__main__', alter_sys=True)\n"
 
 
 def log(msg: str) -> None:
@@ -132,13 +144,44 @@ def render_manifest(*, name: str, publisher: str, publisher_name: str, version: 
     )
 
 
+def distlib_dir() -> Path:
+    spec = importlib.util.find_spec("distlib")
+    if spec is None or not spec.submodule_search_locations:
+        sys.exit("Falta distlib (dependencia de desarrollo): uv sync.")
+    return Path(next(iter(spec.submodule_search_locations)))
+
+
+def build_launcher(w64: bytes) -> bytes:
+    """``Luzeira.exe``: el lanzador, el shebang y un zip con ``__main__.py`` (reproducible)."""
+    if hashlib.sha256(w64).hexdigest() != LAUNCHER_SHA256:
+        sys.exit("w64.exe de distlib con otro SHA-256 del esperado. No se usa.")
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:
+        z.writestr(zipfile.ZipInfo("__main__.py", date_time=(2026, 1, 1, 0, 0, 0)), LAUNCHER_MAIN)
+    return w64 + LAUNCHER_SHEBANG + buf.getvalue()
+
+
+def launcher_notice() -> str:
+    """La licencia de distlib, para ``TERCEROS.txt``: su lanzador va dentro del paquete."""
+    info = next(distlib_dir().parent.glob("distlib-*.dist-info"), None)
+    text = info and next((p for p in info.rglob("LICENSE*") if p.is_file()), None)
+    if not text:
+        sys.exit("No encuentro la licencia de distlib.")
+    return f"\n\n{'=' * 78}\nLuzeira.exe: lanzador de distlib (PSF-2.0)\n{'=' * 78}\n\n" + (
+        text.read_text(encoding="utf-8")
+    )
+
+
 def build_layout(src: Path, layout: Path, manifest: str) -> None:
-    """Copia la carpeta ensamblada, añade los iconos y el manifiesto."""
+    """Copia la carpeta ensamblada, añade el lanzador, los iconos y el manifiesto."""
     from luzeira.marca import draw_mark
 
     if not (src / "python" / "pythonw.exe").is_file():
         sys.exit(f"{src} no parece la carpeta de empaquetar.py (falta python\\pythonw.exe).")
     shutil.copytree(src, layout, ignore=lambda _d, names: [n for n in names if n in EXCLUDE])
+    (layout / "Luzeira.exe").write_bytes(build_launcher((distlib_dir() / "w64.exe").read_bytes()))
+    with (layout / "TERCEROS.txt").open("a", encoding="utf-8", newline="\n") as f:
+        f.write(launcher_notice())
     assets = layout / "Assets"
     assets.mkdir()
     for file_name, size in ASSETS.items():

@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import importlib.util
+import io
 import re
 import xml.etree.ElementTree as ET
 import zipfile
@@ -75,8 +76,10 @@ def test_the_icon_opens_the_editor_like_the_installer_shortcuts():
 
 def test_the_startup_task_opens_only_the_tray_and_is_on_by_default():
     ext = _manifest().find(".//desktop:Extension[@Category='windows.startupTask']", NS)
-    assert ext.get("Executable") == "python\\pythonw.exe"
-    assert ext.get(PARAMS) == "-m luzeira"  # sin editor al encender el PC
+    # Windows no pasa uap10:Parameters a la tarea de inicio: el lanzador arranca sin ellos
+    # (y sin editor al encender el PC).
+    assert ext.get("Executable") == "Luzeira.exe"
+    assert ext.get(PARAMS) is None
     task = ext.find("desktop:StartupTask", NS)
     assert task.get("Enabled") == "true"  # como el instalador (autoarranque marcado)
 
@@ -161,6 +164,8 @@ def test_layout_has_assets_and_manifest_but_not_the_portable_launcher(tmp_path):
     layout = tmp_path / "paquete"
     msix.build_layout(src, layout, "<Package />")
     assert not (layout / "Luzeira.cmd").exists()
+    assert (layout / "Luzeira.exe").read_bytes().startswith(b"MZ")  # el de la tarea de inicio
+    assert "distlib" in (layout / "TERCEROS.txt").read_text(encoding="utf-8")
     assert (layout / "LICENSE").is_file()
     assert (layout / "AppxManifest.xml").read_text(encoding="utf-8") == "<Package />"
     for name, size in msix.ASSETS.items():
@@ -171,3 +176,25 @@ def test_layout_has_assets_and_manifest_but_not_the_portable_launcher(tmp_path):
 def test_layout_refuses_a_folder_that_is_not_the_assembled_one(tmp_path):
     with pytest.raises(SystemExit, match="pythonw"):
         msix.build_layout(tmp_path, tmp_path / "paquete", "<Package />")
+
+
+def test_the_launcher_runs_luzeira_with_the_packaged_python():
+    w64 = (msix.distlib_dir() / "w64.exe").read_bytes()
+    exe = msix.build_launcher(w64)
+    assert exe.startswith(w64)
+    rest = exe[len(w64) :]
+    # Relativo a la carpeta del .exe: el paquete se instala en WindowsApps\<nombre>.
+    assert rest.startswith(b"#!<launcher_dir>\\python\\pythonw.exe\r\n")
+    with zipfile.ZipFile(io.BytesIO(exe)) as z:
+        assert z.namelist() == ["__main__.py"]
+        assert b"run_module('luzeira'" in z.read("__main__.py")
+    assert msix.build_launcher(w64) == exe  # reproducible
+
+
+def test_a_launcher_with_another_hash_is_refused():
+    with pytest.raises(SystemExit, match="SHA-256"):
+        msix.build_launcher(b"MZ otro lanzador")
+
+
+def test_the_launcher_license_goes_to_the_notices():
+    assert "distlib (PSF-2.0)" in msix.launcher_notice()
