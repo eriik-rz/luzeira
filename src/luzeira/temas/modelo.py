@@ -19,6 +19,7 @@ from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
+from luzeira.idioma import t
 from luzeira.temas.rutas import has_reserved_component
 
 FORMAT = "luzeira-theme/1"
@@ -36,14 +37,14 @@ def _not_reserved(path: str) -> str:
     # patrón pero Windows los trata como dispositivos. Se rechazan ya en el esquema para
     # que también lo vea el editor.
     if has_reserved_component(path):
-        raise ValueError("la ruta usa un nombre reservado de Windows (CON, NUL, COM1…)")
+        raise ValueError(t("temas.modelo.reservado"))
     return path
 
 
 def _with_extensions(*allowed: str):
     def check(path: str) -> str:
         if path.rsplit(".", 1)[-1].lower() not in allowed:
-            raise ValueError(f"extensión no permitida (solo {', '.join(allowed)})")
+            raise ValueError(t("temas.modelo.extension", allowed=", ".join(allowed)))
         return path
 
     return AfterValidator(check)
@@ -74,6 +75,20 @@ ShortTranslations = Annotated[dict[LangCode, ShortText], Field(max_length=20)]
 def localized(text: str, translations: dict[str, str] | None, language: str) -> str:
     """El texto en ``language`` si el tema lo trae traducido; si no, el de siempre."""
     return (translations or {}).get(language, text)
+
+
+class RangeError(ValueError):
+    """``max`` no es mayor que ``min`` en una barra. Con clase propia para que el editor
+    lo reconozca sin comparar textos (que cambian con el idioma)."""
+
+
+class WidgetOffScreen(ValueError):
+    """Un widget se sale de la pantalla. Lleva los datos para que el editor lo cuente con
+    sus palabras y lo cuelgue de la caja de ese elemento (``n`` cuenta desde 1)."""
+
+    def __init__(self, n: int, kind: str, width: int, height: int) -> None:
+        super().__init__(t("temas.modelo.fuera", n=n, kind=kind, width=width, height=height))
+        self.n, self.kind, self.width, self.height = n, kind, width, height
 
 
 class _Strict(BaseModel):
@@ -143,7 +158,7 @@ class BarWidget(_Widget):
     @model_validator(mode="after")
     def _range(self) -> BarWidget:
         if self.max <= self.min:
-            raise ValueError("max tiene que ser mayor que min")
+            raise RangeError(t("temas.modelo.max_min"))
         return self
 
 
@@ -189,7 +204,5 @@ class Theme(_Strict):
         for i, widget in enumerate(self.widgets):
             b = widget.box
             if b.x + b.width > width or b.y + b.height > height:
-                raise ValueError(
-                    f"el widget {i + 1} ({widget.type}) se sale de la pantalla {width}x{height}"
-                )
+                raise WidgetOffScreen(i + 1, widget.type, width, height)
         return self

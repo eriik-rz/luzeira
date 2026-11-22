@@ -82,8 +82,19 @@ def test_token_goes_through_stdin_never_the_command_line(monkeypatch):
     assert "secreto-123" not in " ".join(proc.command)
     assert proc.command[-1] == "editor-ventana"
     sent = json.loads(proc.lines()[0])
-    assert sent == {"url": "http://127.0.0.1:5000/", "token": "secreto-123"}
+    # Con el idioma activo, para el título y los avisos de la ventana (C-62).
+    assert sent == {"url": "http://127.0.0.1:5000/", "token": "secreto-123", "language": "es"}
     proc.finish(0)
+
+
+def test_a_language_change_reaches_the_open_window(monkeypatch):
+    launched = _launcher(monkeypatch)
+    window = ventana.EditorWindow()
+    assert not window.set_language("en")  # sin ventana abierta no hay a quién decírselo
+    window.open("http://127.0.0.1:5000/", "t")
+    assert window.set_language("en")
+    assert launched[0].lines()[-1] == "idioma en"
+    launched[0].finish(0)
 
 
 def test_only_one_window_at_a_time(monkeypatch):
@@ -205,6 +216,9 @@ class FakeWindow:
     def show(self):
         self.calls.append(("show",))
 
+    def set_title(self, title):
+        self.calls.append(("title", title))
+
     def restore(self):
         self.calls.append(("restore",))
 
@@ -267,6 +281,18 @@ def test_orders_from_the_tray_show_and_close_through_the_normal_path():
     _wait_for(lambda: window.closed)
 
 
+def test_the_window_follows_a_language_change_from_the_tray():
+    # La orden «idioma» cambia el título y el aviso de cerrar sin guardar (son de Python).
+    window = FakeWindow({"saved": False, "pending": "invalid"}, confirm=False)
+    controller = _controller(window)
+    controller.listen(io.StringIO("idioma en\n"))
+    assert ("title", "Luzeira — Theme editor") in window.calls
+    _wait_for(lambda: window.questions and not controller._checking)
+    assert window.questions[0] == (
+        "There are unsaved changes (there are errors marked in red). Close anyway?"
+    )
+
+
 def _fake_webview(monkeypatch, renderer="edgechromium"):
     created = {}
 
@@ -299,6 +325,7 @@ def test_window_process_gets_token_through_the_bridge_not_the_url(monkeypatch):
         sys, "stdin", io.StringIO('{"url": "http://127.0.0.1:5000/", "token": "secreto"}\n')
     )
     assert ventana.run_window_from_stdin() == 0
+    assert created["args"][0] == "Luzeira — Editor de temas"  # sin «language»: el de Windows
     assert created["args"][1] == "http://127.0.0.1:5000/"
     assert created["kwargs"]["js_api"].token() == "secreto"
     start = dict(created["start"])
@@ -308,6 +335,14 @@ def test_window_process_gets_token_through_the_bridge_not_the_url(monkeypatch):
     assert len(created["window"].events.closing.handlers) == 1
     # Al mostrarse, la ventana dice a Windows cómo anclarla como «Luzeira».
     assert len(created["window"].events.shown.handlers) == 1
+
+
+def test_window_process_takes_the_language_of_the_tray(monkeypatch):
+    created = _fake_webview(monkeypatch)
+    config = '{"url": "http://127.0.0.1:5000/", "token": "t", "language": "en"}\n'
+    monkeypatch.setattr(sys, "stdin", io.StringIO(config))
+    assert ventana.run_window_from_stdin() == 0
+    assert created["args"][0] == "Luzeira — Theme editor"
 
 
 def test_window_process_without_webview2_exits_with_its_own_code(monkeypatch):

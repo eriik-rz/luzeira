@@ -23,7 +23,7 @@
     {"type": "sensor", "sensor": "memory.usage", "box": {"x": 32, "y": 232, "width": 188, "height": 46}, "style": {"size": 38, "bold": true, "color": "#111827", "align": "left"}},
     {"type": "bar", "sensor": "memory.usage", "fill": "#0d9488", "track": "#e5e7eb", "box": {"x": 32, "y": 286, "width": 188, "height": 8}},
 
-    {"type": "text", "text": "RED", "box": {"x": 260, "y": 210, "width": 90, "height": 18}, "style": {"size": 14, "bold": true, "color": "#6b7280", "align": "left"}},
+    {"type": "text", "text": "RED", "text_i18n": { "en": "NET" }, "box": {"x": 260, "y": 210, "width": 90, "height": 18}, "style": {"size": 14, "bold": true, "color": "#6b7280", "align": "left"}},
     {"type": "sensor", "sensor": "network.download", "decimals": 1, "prefix": "↓ ", "box": {"x": 260, "y": 234, "width": 188, "height": 32}, "style": {"size": 24, "bold": true, "color": "#111827", "align": "left"}},
     {"type": "sensor", "sensor": "network.upload", "decimals": 1, "prefix": "↑ ", "box": {"x": 260, "y": 268, "width": 188, "height": 28}, "style": {"size": 18, "color": "#4b5563", "align": "left"}}
   ]

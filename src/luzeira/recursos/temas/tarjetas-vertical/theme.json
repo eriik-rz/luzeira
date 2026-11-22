@@ -30,7 +30,7 @@
     {"type": "sensor", "sensor": "gpu.memory_usage", "box": {"x": 178, "y": 326, "width": 112, "height": 44}, "style": {"size": 34, "bold": true, "color": "#2b2533", "align": "left"}},
     {"type": "bar", "sensor": "gpu.memory_usage", "fill": "#2b2533", "track": "#e6cf7c", "box": {"x": 178, "y": 388, "width": 112, "height": 10}},
 
-    {"type": "text", "text": "ENCENDIDO", "box": {"x": 30, "y": 424, "width": 120, "height": 40}, "style": {"size": 14, "bold": true, "color": "#5c4f68", "align": "left"}},
+    {"type": "text", "text": "ENCENDIDO", "text_i18n": { "en": "UPTIME" }, "box": {"x": 30, "y": 424, "width": 120, "height": 40}, "style": {"size": 14, "bold": true, "color": "#5c4f68", "align": "left"}},
     {"type": "sensor", "sensor": "system.uptime", "decimals": 1, "interval": 60, "box": {"x": 150, "y": 424, "width": 140, "height": 40}, "style": {"size": 18, "bold": true, "color": "#2b2533", "align": "right"}}
   ]
 }

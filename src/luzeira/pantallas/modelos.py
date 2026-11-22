@@ -23,6 +23,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from luzeira.idioma import t
+
 VID_PID_CH552 = (0x1A86, 0x5722)  # rev A, UsbPCMonitor y XuanFang rev B
 VID_PID_KIPYE = (0x454D, 0x4E41)
 REV_A_SERIAL_PREFIX = "USB35INCHIPS"
@@ -38,34 +40,48 @@ REV_C_AWAKE_IDS = frozenset({(0x0525, 0xA4A7), (0x1D6B, 0x0121), (0x1D6B, 0x0106
 @dataclass(frozen=True)
 class DisplayModel:
     key: str  # lo que se guarda en la configuración
-    label: str  # lo que ve el usuario
+    # El nombre del modelo tal cual (los nombres no se traducen). Si lleva palabras
+    # («también», «revisión»), va en ``label_key`` y el nombre de aquí es solo de reserva.
+    name: str
     usb_ids: frozenset[tuple[int, int]]
     beta: bool  # sin probar todavía en una pantalla de verdad
     supported: bool = True  # False: se reconoce, pero no hay driver
     # True: su primera prueba es un saludo con respuesta, así que puede decir «ahí no hay
     # una de estas». False (Kipye): la prueba no puede fallar y no demuestra nada.
     has_hello: bool = True
+    label_key: str | None = None  # clave del catálogo para el nombre, si lleva palabras
+
+    @property
+    def label(self) -> str:
+        """Lo que ve el usuario, en el idioma activo (se traduce al pedirlo, no al
+        importar: así cambia en cuanto se cambia de idioma)."""
+        return t(self.label_key) if self.label_key else self.name
 
     @property
     def menu_label(self) -> str:
-        return f"{self.label} (beta)" if self.beta else self.label
+        return t("pantallas.modelo_beta", model=self.label) if self.beta else self.label
 
 
 REV_A = DisplayModel(
     "turing-rev-a", 'Turing / UsbPCMonitor 3,5"', frozenset({VID_PID_CH552}), beta=False
 )
 REV_B = DisplayModel(
-    "xuanfang-rev-b", 'XuanFang 3,5" (también «flagship»)', frozenset({VID_PID_CH552}), beta=True
+    "xuanfang-rev-b",
+    'XuanFang 3,5"',
+    frozenset({VID_PID_CH552}),
+    beta=True,
+    label_key="pantallas.modelo_xuanfang",
 )
 KIPYE = DisplayModel(
     "kipye-rev-d", 'Kipye Qiye 3,5"', frozenset({VID_PID_KIPYE}), beta=True, has_hello=False
 )
 REV_C = DisplayModel(
     "turing-rev-c",
-    'Turing de 2,1", 5" u 8,8" (revisión C)',
+    'Turing 2,1"/5"/8,8"',
     REV_C_SLEEPING_IDS | REV_C_AWAKE_IDS,
     beta=True,
     supported=False,
+    label_key="pantallas.modelo_rev_c",
 )
 
 MODELS: tuple[DisplayModel, ...] = (REV_A, REV_B, KIPYE, REV_C)

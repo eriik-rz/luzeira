@@ -4,9 +4,10 @@
 import type { Dispatch } from 'react'
 import type { Action } from '../model/editorState.ts'
 import { formatClock, formatReading } from '../model/format.ts'
-import { CLOCK_FORMAT_INFO, WIDGET_TYPE_INFO } from '../model/theme.ts'
-import { LIMITS, screenSize, type Align, type ClockFormat, type Theme, type Widget } from '../model/types.ts'
+import { clockFormatLabel, widgetTypeInfo } from '../model/theme.ts'
+import { LIMITS, screenSize, type Align, type ClockFormat, type Theme, type Translations, type Widget } from '../model/types.ts'
 import { fieldOf, type Issue } from '../model/validate.ts'
+import { useT } from '../i18n/contexto.ts'
 import { ColorField, InfoTip, NumberField, Segmented as SegmentedField, SelectField, TextField, Toggle } from './fields.tsx'
 import { FontPicker, ImagePicker } from './ResourcePicker.tsx'
 import { SensorPicker } from './SensorPicker.tsx'
@@ -26,7 +27,25 @@ interface Props {
 
 const CLOCK_FORMATS: ClockFormat[] = ['HH:MM', 'HH:MM:SS', 'date-short', 'date-long', 'weekday']
 
+/**
+ * Quita las traducciones de un campo (C-62). Se hace al editar ese texto: si no, en otro
+ * idioma seguiría saliendo la traducción vieja del texto de antes.
+ */
+function dropTranslations<W extends Widget>(w: W, key: 'text_i18n' | 'prefix_i18n' | 'suffix_i18n'): W {
+  if (!(key in w)) return w
+  const copy = { ...w } as W & Record<string, unknown>
+  delete copy[key]
+  return copy
+}
+
+/** Los idiomas de unas traducciones, para el aviso («en, de»); null si no hay. */
+function languagesOf(tr: Translations | undefined): string | null {
+  const codes = tr ? Object.keys(tr) : []
+  return codes.length ? codes.join(', ') : null
+}
+
 export function PropertiesPanel({ theme, widget, id, issues, services, dispatch, onDuplicate, onRemove }: Props) {
+  const t = useT()
   const screen = screenSize(theme)
   const err = (field: string) => issues.find((i) => fieldOf(i.path) === field)?.message ?? null
   const general = issues.filter((i) => fieldOf(i.path) === '')
@@ -39,7 +58,17 @@ export function PropertiesPanel({ theme, widget, id, issues, services, dispatch,
   const setStyle = (patch: Partial<Widget['style']>, field: string) =>
     update({ ...widget, style: { ...widget.style, ...patch } } as Widget, `style.${field}`)
 
-  const info = WIDGET_TYPE_INFO[widget.type]
+  /** Aviso bajo un texto que trae traducciones: al cambiarlo se quitan. */
+  const translatedNote = (tr: Translations | undefined, key = 'propiedades.traducido') => {
+    const langs = languagesOf(tr)
+    return langs ? (
+      <p className="hint" style={{ marginTop: -6, marginBottom: 10 }}>
+        {t(key, { idiomas: langs })}
+      </p>
+    ) : null
+  }
+
+  const info = widgetTypeInfo(widget.type)
   const b = widget.box
   const isTextLike = widget.type === 'text' || widget.type === 'clock' || widget.type === 'sensor'
   const sensorInfo = widget.type === 'sensor' ? services.sensors.find((s) => s.id === widget.sensor) : undefined
@@ -57,11 +86,11 @@ export function PropertiesPanel({ theme, widget, id, issues, services, dispatch,
         </div>
       </div>
       <div className="props-actions">
-        <button type="button" className="btn small" onClick={onDuplicate} title="Hacer una copia de este elemento (Ctrl+D)">
-          <IconCopy /> Duplicar
+        <button type="button" className="btn small" onClick={onDuplicate} title={t('propiedades.duplicar.ayuda')}>
+          <IconCopy /> {t('propiedades.duplicar')}
         </button>
-        <button type="button" className="btn small danger" onClick={onRemove} title="Quitar este elemento (Supr)">
-          <IconTrash /> Borrar
+        <button type="button" className="btn small danger" onClick={onRemove} title={t('propiedades.borrar.ayuda')}>
+          <IconTrash /> {t('comun.borrar')}
         </button>
       </div>
 
@@ -74,14 +103,14 @@ export function PropertiesPanel({ theme, widget, id, issues, services, dispatch,
 
         <section className="section">
           <h3>
-            Posición y tamaño
-            <InfoTip text={`En píxeles de la pantalla (${screen.width} × ${screen.height}). También puedes arrastrarlo en el lienzo.`} />
+            {t('propiedades.posicion')}
+            <InfoTip text={t('propiedades.posicion.ayuda', { ancho: screen.width, alto: screen.height })} />
           </h3>
           <div className="row">
-            <NumberField label="Desde la izquierda" affix="X" value={b.x} min={0} max={screen.width - b.width} onChange={(x) => setBox({ x }, 'box.x')} error={err('box.x')} />
-            <NumberField label="Desde arriba" affix="Y" value={b.y} min={0} max={screen.height - b.height} onChange={(y) => setBox({ y }, 'box.y')} error={err('box.y')} />
-            <NumberField label="Ancho" affix="An" value={b.width} min={1} max={screen.width - b.x} onChange={(width) => setBox({ width: Math.min(width, screen.width - b.x) }, 'box.width')} error={err('box.width')} />
-            <NumberField label="Alto" affix="Al" value={b.height} min={1} max={screen.height - b.y} onChange={(height) => setBox({ height: Math.min(height, screen.height - b.y) }, 'box.height')} error={err('box.height')} />
+            <NumberField label={t('propiedades.x')} affix="X" value={b.x} min={0} max={screen.width - b.width} onChange={(x) => setBox({ x }, 'box.x')} error={err('box.x')} />
+            <NumberField label={t('propiedades.y')} affix="Y" value={b.y} min={0} max={screen.height - b.height} onChange={(y) => setBox({ y }, 'box.y')} error={err('box.y')} />
+            <NumberField label={t('propiedades.ancho')} affix={t('propiedades.ancho.corto')} value={b.width} min={1} max={screen.width - b.x} onChange={(width) => setBox({ width: Math.min(width, screen.width - b.x) }, 'box.width')} error={err('box.width')} />
+            <NumberField label={t('propiedades.alto')} affix={t('propiedades.alto.corto')} value={b.height} min={1} max={screen.height - b.y} onChange={(height) => setBox({ height: Math.min(height, screen.height - b.y) }, 'box.height')} error={err('box.height')} />
           </div>
           {/* Errores del recuadro entero («widgets.N.box», p. ej. «se sale de la pantalla»). */}
           {err('box') && (
@@ -90,41 +119,50 @@ export function PropertiesPanel({ theme, widget, id, issues, services, dispatch,
             </p>
           )}
           <div className="row" style={{ marginTop: 8 }}>
-            <button type="button" className="btn small" onClick={() => setBox({ x: Math.round((screen.width - b.width) / 2) }, 'center')} title="Centrar de izquierda a derecha">
-              <IconCenterH /> Centrar
+            <button type="button" className="btn small" onClick={() => setBox({ x: Math.round((screen.width - b.width) / 2) }, 'center')} title={t('propiedades.centrar_h')}>
+              <IconCenterH /> {t('propiedades.centrar')}
             </button>
-            <button type="button" className="btn small" onClick={() => setBox({ y: Math.round((screen.height - b.height) / 2) }, 'center')} title="Centrar de arriba abajo">
-              <IconCenterV /> Centrar
+            <button type="button" className="btn small" onClick={() => setBox({ y: Math.round((screen.height - b.height) / 2) }, 'center')} title={t('propiedades.centrar_v')}>
+              <IconCenterV /> {t('propiedades.centrar')}
             </button>
           </div>
         </section>
 
         {widget.type === 'text' && (
           <section className="section">
-            <h3>Contenido</h3>
-            <TextField label="Texto" multiline value={widget.text} maxLength={LIMITS.textMax} onChange={(text) => update({ ...widget, text }, 'text')} hint="Lo que se verá escrito en la pantalla." error={err('text')} />
+            <h3>{t('propiedades.contenido')}</h3>
+            <TextField
+              label={t('propiedades.texto')}
+              multiline
+              value={widget.text}
+              maxLength={LIMITS.textMax}
+              onChange={(text) => update({ ...dropTranslations(widget, 'text_i18n'), text }, 'text')}
+              hint={t('propiedades.texto.ayuda')}
+              error={err('text') ?? err('text_i18n')}
+            />
+            {translatedNote(widget.text_i18n)}
           </section>
         )}
 
         {widget.type === 'clock' && (
           <section className="section">
-            <h3>Contenido</h3>
+            <h3>{t('propiedades.contenido')}</h3>
             <SelectField
-              label="Qué mostrar"
+              label={t('propiedades.reloj')}
               value={widget.format}
-              options={CLOCK_FORMATS.map((f) => ({ value: f, label: `${CLOCK_FORMAT_INFO[f]} — ${formatClock(f, new Date())}` }))}
+              options={CLOCK_FORMATS.map((f) => ({ value: f, label: `${clockFormatLabel(f)} — ${formatClock(f, new Date())}` }))}
               onChange={(format) => update({ ...widget, format }, 'format')}
-              hint="La hora y la fecha se escriben en español, con el reloj de tu PC."
+              hint={t('propiedades.reloj.ayuda')}
             />
           </section>
         )}
 
         {widget.type === 'sensor' && (
           <section className="section">
-            <h3>Dato</h3>
+            <h3>{t('propiedades.dato')}</h3>
             <SensorPicker
-              label="Sensor"
-              hint="El dato del PC que se enseña. A la derecha ves cuánto vale ahora."
+              label={t('propiedades.sensor')}
+              hint={t('propiedades.sensor.ayuda')}
               value={widget.sensor}
               sensors={services.sensors}
               kinds={['number', 'text']}
@@ -132,34 +170,35 @@ export function PropertiesPanel({ theme, widget, id, issues, services, dispatch,
               error={err('sensor')}
             />
             <p className="hint" style={{ marginTop: -4, marginBottom: 10 }}>
-              Se verá así: <strong className="live">{formatReading(widget, sensorInfo)}</strong>
+              {t('propiedades.se_vera')} <strong className="live">{formatReading(widget, sensorInfo)}</strong>
             </p>
             {!sensorIsText && (
               <div className="row">
-                <NumberField label="Decimales" value={widget.decimals} min={LIMITS.decimalsMin} max={LIMITS.decimalsMax} onChange={(decimals) => update({ ...widget, decimals }, 'decimals')} hint="De 0 a 3." error={err('decimals')} />
+                <NumberField label={t('propiedades.decimales')} value={widget.decimals} min={LIMITS.decimalsMin} max={LIMITS.decimalsMax} onChange={(decimals) => update({ ...widget, decimals }, 'decimals')} hint={t('propiedades.decimales.ayuda')} error={err('decimals')} />
                 <div className="field">
-                  <span className="label">Unidad</span>
-                  <Toggle label={sensorInfo?.unit ? `Mostrar «${sensorInfo.unit}»` : 'Mostrar'} checked={widget.show_unit} onChange={(show_unit) => update({ ...widget, show_unit }, 'show_unit')} />
+                  <span className="label">{t('propiedades.unidad')}</span>
+                  <Toggle label={sensorInfo?.unit ? t('propiedades.unidad.mostrar_cual', { unidad: sensorInfo.unit }) : t('propiedades.unidad.mostrar')} checked={widget.show_unit} onChange={(show_unit) => update({ ...widget, show_unit }, 'show_unit')} />
                 </div>
               </div>
             )}
             {sensorIsText && (
-              <NumberField label="Largo máximo" value={widget.max_chars} min={LIMITS.maxCharsMin} max={LIMITS.maxCharsMax} onChange={(max_chars) => update({ ...widget, max_chars }, 'max_chars')} hint="Si el texto es más largo, se corta con «…»." error={err('max_chars')} />
+              <NumberField label={t('propiedades.largo')} value={widget.max_chars} min={LIMITS.maxCharsMin} max={LIMITS.maxCharsMax} onChange={(max_chars) => update({ ...widget, max_chars }, 'max_chars')} hint={t('propiedades.largo.ayuda')} error={err('max_chars')} />
             )}
             <div className="row">
-              <TextField label="Antes" value={widget.prefix} maxLength={LIMITS.shortTextMax} onChange={(prefix) => update({ ...widget, prefix }, 'prefix')} placeholder="CPU " hint="Texto delante del valor. Deja un espacio al final si quieres separarlo." error={err('prefix')} />
-              <TextField label="Después" value={widget.suffix} maxLength={LIMITS.shortTextMax} onChange={(suffix) => update({ ...widget, suffix }, 'suffix')} placeholder="" hint="Texto detrás del valor (y de la unidad, si se muestra)." error={err('suffix')} />
+              <TextField label={t('propiedades.antes')} value={widget.prefix} maxLength={LIMITS.shortTextMax} onChange={(prefix) => update({ ...dropTranslations(widget, 'prefix_i18n'), prefix }, 'prefix')} placeholder="CPU " hint={t('propiedades.antes.ayuda')} error={err('prefix') ?? err('prefix_i18n')} />
+              <TextField label={t('propiedades.despues')} value={widget.suffix} maxLength={LIMITS.shortTextMax} onChange={(suffix) => update({ ...dropTranslations(widget, 'suffix_i18n'), suffix }, 'suffix')} placeholder="" hint={t('propiedades.despues.ayuda')} error={err('suffix') ?? err('suffix_i18n')} />
             </div>
-            <NumberField label="Actualizar cada (segundos)" integer={false} step={0.5} value={widget.interval} min={LIMITS.intervalMin} max={LIMITS.intervalMax} onChange={(interval) => update({ ...widget, interval }, 'interval')} hint="Menos segundos = más al día, pero algo más de trabajo para el PC." error={err('interval')} />
+            {translatedNote(widget.prefix_i18n || widget.suffix_i18n ? { ...widget.prefix_i18n, ...widget.suffix_i18n } : undefined, 'propiedades.traducido.sensor')}
+            <NumberField label={t('propiedades.intervalo')} integer={false} step={0.5} value={widget.interval} min={LIMITS.intervalMin} max={LIMITS.intervalMax} onChange={(interval) => update({ ...widget, interval }, 'interval')} hint={t('propiedades.intervalo.ayuda')} error={err('interval')} />
           </section>
         )}
 
         {widget.type === 'bar' && (
           <section className="section">
-            <h3>Dato y escala</h3>
+            <h3>{t('propiedades.dato_escala')}</h3>
             <SensorPicker
-              label="Sensor"
-              hint="La barra se llena según este dato. Solo salen los que son números."
+              label={t('propiedades.sensor')}
+              hint={t('propiedades.barra.sensor.ayuda')}
               value={widget.sensor}
               sensors={services.sensors}
               kinds={['number']}
@@ -167,32 +206,32 @@ export function PropertiesPanel({ theme, widget, id, issues, services, dispatch,
               error={err('sensor')}
             />
             <div className="row">
-              <NumberField label="Vacía en" integer={false} value={widget.min} onChange={(min) => update({ ...widget, min }, 'min')} error={err('min')} hint="Valor con la barra vacía." />
-              <NumberField label="Llena en" integer={false} value={widget.max} onChange={(max) => update({ ...widget, max }, 'max')} error={err('max')} hint="Valor con la barra llena." />
+              <NumberField label={t('propiedades.barra.min')} integer={false} value={widget.min} onChange={(min) => update({ ...widget, min }, 'min')} error={err('min')} hint={t('propiedades.barra.min.ayuda')} />
+              <NumberField label={t('propiedades.barra.max')} integer={false} value={widget.max} onChange={(max) => update({ ...widget, max }, 'max')} error={err('max')} hint={t('propiedades.barra.max.ayuda')} />
             </div>
             <SegmentedField
-              label="Dirección"
+              label={t('propiedades.barra.direccion')}
               value={widget.direction}
               options={[
-                { value: 'horizontal', label: 'Horizontal', help: 'Se llena de izquierda a derecha' },
-                { value: 'vertical', label: 'Vertical', help: 'Se llena de abajo arriba' },
+                { value: 'horizontal', label: t('propiedades.barra.horizontal'), help: t('propiedades.barra.horizontal.ayuda') },
+                { value: 'vertical', label: t('propiedades.barra.vertical'), help: t('propiedades.barra.vertical.ayuda') },
               ]}
               onChange={(direction) => update({ ...widget, direction }, 'direction')}
             />
             <div className="row">
-              <ColorField label="Relleno" value={widget.fill} onChange={(fill) => update({ ...widget, fill }, 'fill')} error={err('fill')} />
-              <ColorField label="Fondo de la barra" value={widget.track} onChange={(track) => update({ ...widget, track }, 'track')} error={err('track')} />
+              <ColorField label={t('propiedades.barra.relleno')} value={widget.fill} onChange={(fill) => update({ ...widget, fill }, 'fill')} error={err('fill')} />
+              <ColorField label={t('propiedades.barra.fondo')} value={widget.track} onChange={(track) => update({ ...widget, track }, 'track')} error={err('track')} />
             </div>
-            <NumberField label="Actualizar cada (segundos)" integer={false} step={0.5} value={widget.interval} min={LIMITS.intervalMin} max={LIMITS.intervalMax} onChange={(interval) => update({ ...widget, interval }, 'interval')} error={err('interval')} />
+            <NumberField label={t('propiedades.intervalo')} integer={false} step={0.5} value={widget.interval} min={LIMITS.intervalMin} max={LIMITS.intervalMax} onChange={(interval) => update({ ...widget, interval }, 'interval')} error={err('interval')} />
           </section>
         )}
 
         {widget.type === 'image' && (
           <section className="section">
-            <h3>Imagen</h3>
+            <h3>{t('propiedades.imagen')}</h3>
             <ImagePicker
-              label="Imagen"
-              hint="Se ajusta al recuadro sin deformarse."
+              label={t('propiedades.imagen')}
+              hint={t('propiedades.imagen.ayuda')}
               value={widget.file}
               services={services}
               onChange={(file) => file && update({ ...widget, file }, 'file')}
@@ -203,40 +242,40 @@ export function PropertiesPanel({ theme, widget, id, issues, services, dispatch,
 
         {isTextLike && (
           <section className="section">
-            <h3>Letra</h3>
+            <h3>{t('propiedades.letra')}</h3>
             <div className="row">
-              <NumberField label="Tamaño" value={widget.style.size} min={LIMITS.sizeMin} max={LIMITS.sizeMax} onChange={(size) => setStyle({ size }, 'size')} hint={`De ${LIMITS.sizeMin} a ${LIMITS.sizeMax}.`} error={err('style.size')} />
+              <NumberField label={t('propiedades.tamano')} value={widget.style.size} min={LIMITS.sizeMin} max={LIMITS.sizeMax} onChange={(size) => setStyle({ size }, 'size')} hint={t('propiedades.tamano.ayuda', { min: LIMITS.sizeMin, max: LIMITS.sizeMax })} error={err('style.size')} />
               <div className="field">
-                <span className="label">Grosor</span>
-                <Toggle label="Negrita" checked={widget.style.bold} onChange={(bold) => setStyle({ bold }, 'bold')} />
+                <span className="label">{t('propiedades.grosor')}</span>
+                <Toggle label={t('propiedades.negrita')} checked={widget.style.bold} onChange={(bold) => setStyle({ bold }, 'bold')} />
               </div>
             </div>
-            <ColorField label="Color" value={widget.style.color} onChange={(color) => setStyle({ color }, 'color')} error={err('style.color')} />
+            <ColorField label={t('propiedades.color')} value={widget.style.color} onChange={(color) => setStyle({ color }, 'color')} error={err('style.color')} />
             <SegmentedField<Align>
-              label="Alineación"
+              label={t('propiedades.alineacion')}
               value={widget.style.align}
               options={[
-                { value: 'left', label: 'Izquierda', icon: <IconAlignLeft /> },
-                { value: 'center', label: 'Centro', icon: <IconAlignCenter /> },
-                { value: 'right', label: 'Derecha', icon: <IconAlignRight /> },
+                { value: 'left', label: t('propiedades.izquierda'), icon: <IconAlignLeft /> },
+                { value: 'center', label: t('propiedades.centro'), icon: <IconAlignCenter /> },
+                { value: 'right', label: t('propiedades.derecha'), icon: <IconAlignRight /> },
               ]}
               onChange={(align) => setStyle({ align }, 'align')}
-              hint="Dentro de su recuadro. En vertical siempre va centrado."
+              hint={t('propiedades.alineacion.ayuda')}
             />
             <FontPicker value={widget.style.font} services={services} onChange={(font) => setStyle({ font }, 'font')} error={err('style.font')} />
           </section>
         )}
 
         <section className="section">
-          <h3>Fondo del recuadro</h3>
+          <h3>{t('propiedades.fondo')}</h3>
           <Toggle
-            label="Pintar un fondo propio"
+            label={t('propiedades.fondo.propio')}
             checked={widget.style.background !== null}
             onChange={(on) => setStyle({ background: on ? '#1d2027' : null }, 'background')}
-            hint="Si está apagado, se ve el fondo del tema."
+            hint={t('propiedades.fondo.ayuda')}
           />
           {widget.style.background !== null && (
-            <ColorField label="Color del fondo" value={widget.style.background} onChange={(background) => setStyle({ background }, 'background')} error={err('style.background')} />
+            <ColorField label={t('propiedades.fondo.color')} value={widget.style.background} onChange={(background) => setStyle({ background }, 'background')} error={err('style.background')} />
           )}
         </section>
       </div>

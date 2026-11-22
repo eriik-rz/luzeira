@@ -20,6 +20,7 @@ from enum import IntEnum
 
 from PIL import Image
 
+from luzeira.idioma import t
 from luzeira.pantallas.comun import (
     BAUDRATE,
     WRITE_TIMEOUT,
@@ -28,8 +29,8 @@ from luzeira.pantallas.comun import (
     DisplayError,
     Orientation,
     Transport,
+    open_error,
 )
-from luzeira.pantallas.comun import is_access_denied as _is_access_denied
 from luzeira.pantallas.rgb565 import to_rgb565_le
 
 __all__ = [  # lo que otros módulos importan de aquí (parte vive ya en ``comun``)
@@ -140,7 +141,9 @@ def aligned_rect(
         if best is not None and new_h * w >= best[2] * best[3]:
             break  # más alto ya no puede dar un área menor
     if best is None:  # imposible con pantallas de lados múltiplos de 32
-        raise ValueError(f"no hay rectángulo alineado para una pantalla {screen_w}x{screen_h}")
+        raise ValueError(
+            f"no hay rectángulo alineado para una pantalla {screen_w}x{screen_h}"  # i18n: no
+        )
     return best
 
 
@@ -213,7 +216,7 @@ class TuringRevA:
                     device, BAUDRATE, timeout=1, write_timeout=WRITE_TIMEOUT, rtscts=True
                 )
 
-        last_error = DisplayError("No encuentro la pantalla. ¿Está conectada por USB?")
+        last_error = DisplayError(t("pantallas.no_encuentro"))
         for attempt in range(max(1, retries)):
             if port is not None:
                 device, confirmed = port, True
@@ -222,7 +225,7 @@ class TuringRevA:
                 device = match.device if match else None
                 confirmed = bool(match and match.by_serial)
             if device is None:
-                last_error = DisplayError("No encuentro la pantalla. ¿Está conectada por USB?")
+                last_error = DisplayError(t("pantallas.no_encuentro"))
             elif not confirmed:
                 raise ConfirmationNeeded(device)
             else:
@@ -243,13 +246,9 @@ class TuringRevA:
                     if transport is not None:
                         with contextlib.suppress(Exception):
                             transport.close()
-                    if _is_access_denied(exc):
-                        last_error = DisplayBusy(device)
-                    else:
-                        last_error = DisplayError(
-                            f"No puedo abrir la pantalla ({device}). Lo sigo intentando."
-                        )
-                    last_error.__cause__ = exc  # para el log; el mensaje es para el usuario
+                    # Ocupada por otro programa o el genérico «no puedo abrirla» (con la
+                    # causa en ``__cause__``, para el log): lo mismo que el resto de drivers.
+                    last_error = open_error(device, exc)
             if attempt < retries - 1:
                 sleep(delay)
         raise last_error
@@ -271,9 +270,7 @@ class TuringRevA:
         try:
             self._transport.write(data)
         except OSError as exc:
-            raise DisplayError(
-                "Se ha perdido la conexión con la pantalla. ¿Se ha desenchufado el USB?"
-            ) from exc
+            raise DisplayError(t("pantallas.conexion_perdida")) from exc
 
     def _send(self, command: int, x: int = 0, y: int = 0, ex: int = 0, ey: int = 0) -> None:
         self._write(pack_command(command, x, y, ex, ey))
@@ -334,7 +331,9 @@ class TuringRevA:
         ``ancho_pantalla * 8`` bytes, sin esperar respuesta entre trozos.
         """
         if not (0 <= x < self.width and 0 <= y < self.height):
-            raise ValueError(f"({x}, {y}) está fuera de la pantalla {self.width}x{self.height}")
+            raise ValueError(
+                f"({x}, {y}) está fuera de la pantalla {self.width}x{self.height}"  # i18n: no
+            )
         w = min(image.width, self.width - x)
         h = min(image.height, self.height - y)
         if (w, h) != image.size:

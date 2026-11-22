@@ -44,12 +44,17 @@ MAX_COMMAND_LENGTH = 260
 
 
 class AutostartError(RuntimeError):
-    """No se pudo leer o cambiar el autoarranque (con un mensaje para el usuario)."""
+    """No se pudo leer o cambiar el autoarranque.
+
+    Su mensaje no llega al usuario: la bandeja lo registra y enseña su propio aviso
+    (``bandeja.autoarranque_fallo``). Por eso va en español, como los logs (C-62)."""
 
 
 def _require_winreg() -> None:
     if winreg is None:
-        raise AutostartError("El arranque automático solo está disponible en Windows.")
+        raise AutostartError(
+            "El arranque automático solo está disponible en Windows."  # i18n: no
+        )
 
 
 def registered_command(key_path: str = RUN_KEY_PATH, name: str = VALUE_NAME) -> str | None:
@@ -64,7 +69,9 @@ def registered_command(key_path: str = RUN_KEY_PATH, name: str = VALUE_NAME) -> 
     except FileNotFoundError:  # no existe la clave o no existe el valor
         return None
     except OSError as exc:
-        raise AutostartError(f"No se pudo leer el arranque automático: {exc}") from exc
+        raise AutostartError(
+            f"No se pudo leer el arranque automático: {exc}"  # i18n: no
+        ) from exc
     if kind not in (winreg.REG_SZ, winreg.REG_EXPAND_SZ) or not isinstance(value, str):
         log.warning("El valor de autoarranque tiene un tipo inesperado (%s); se ignora", kind)
         return None
@@ -103,7 +110,9 @@ def blocked_by_user(key_path: str = APPROVED_KEY_PATH, name: str = VALUE_NAME) -
     except FileNotFoundError:
         return False
     except OSError as exc:
-        raise AutostartError(f"No se pudo leer el arranque automático: {exc}") from exc
+        raise AutostartError(
+            f"No se pudo leer el arranque automático: {exc}"  # i18n: no
+        ) from exc
     return kind == winreg.REG_BINARY and isinstance(value, bytes) and value[:1] == b"\x03"
 
 
@@ -115,19 +124,21 @@ def enable(command: str, key_path: str = RUN_KEY_PATH, name: str = VALUE_NAME) -
     """
     _require_winreg()
     if not command.strip():
-        raise ValueError("La orden de autoarranque está vacía.")
+        raise ValueError("La orden de autoarranque está vacía.")  # i18n: no
     if "\n" in command or "\r" in command or "\0" in command:
-        raise ValueError("La orden de autoarranque no puede tener saltos de línea.")
+        raise ValueError("La orden de autoarranque no puede tener saltos de línea.")  # i18n: no
     if len(command) > MAX_COMMAND_LENGTH:
         raise ValueError(
             f"La orden de autoarranque tiene {len(command)} caracteres y Windows admite "
-            f"{MAX_COMMAND_LENGTH} como máximo."
+            f"{MAX_COMMAND_LENGTH} como máximo."  # i18n: no
         )
     try:
         with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE) as key:
             winreg.SetValueEx(key, name, 0, winreg.REG_SZ, command)
     except OSError as exc:
-        raise AutostartError(f"No se pudo activar el arranque automático: {exc}") from exc
+        raise AutostartError(
+            f"No se pudo activar el arranque automático: {exc}"  # i18n: no
+        ) from exc
     log.info("Arranque automático activado")
 
 
@@ -140,7 +151,9 @@ def disable(key_path: str = RUN_KEY_PATH, name: str = VALUE_NAME) -> None:
     except FileNotFoundError:
         return
     except OSError as exc:
-        raise AutostartError(f"No se pudo desactivar el arranque automático: {exc}") from exc
+        raise AutostartError(
+            f"No se pudo desactivar el arranque automático: {exc}"  # i18n: no
+        ) from exc
     log.info("Arranque automático desactivado")
 
 

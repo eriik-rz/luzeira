@@ -412,4 +412,4 @@ class RealWindowsGpuApi:
 def _check(status: int, what: str) -> None:
     """Convierte un código de error de Windows en ``OSError`` (con el código, sin rutas)."""
     if status != 0:
-        raise OSError(f"{what} devolvió 0x{status & 0xFFFFFFFF:08X}")
+        raise OSError(f"{what} devolvió 0x{status & 0xFFFFFFFF:08X}")  # i18n: no

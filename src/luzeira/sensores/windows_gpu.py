@@ -27,17 +27,19 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Protocol
 
-from luzeira.sensores.base import Reading, SensorInfo
+from luzeira.idioma import t
+from luzeira.sensores.base import Reading, SensorInfo, gpu_label_key
 
 log = logging.getLogger(__name__)
 
 _GIB = 1024**3
 
-NOT_READY = "La GPU aún no está lista."
-NOT_FOUND = "No se encontró una tarjeta gráfica (o Windows no deja leerla)."
-NOT_SUPPORTED = "Esta tarjeta gráfica no informa de este dato."
-NO_WATTS = "Windows solo da el consumo de esta tarjeta en porcentaje, no en vatios."
-MEASURING = "Midiendo…"
+# Claves del catálogo (zona ``sensores``): el motivo se traduce al crear cada lectura.
+NOT_READY = "sensores.gpu_no_lista"
+NOT_FOUND = "sensores.gpu_no_encontrada"
+NOT_SUPPORTED = "sensores.gpu_no_informa"
+NO_WATTS = "sensores.gpu_sin_vatios"
+MEASURING = "sensores.midiendo"
 
 # Cada cuánto se reintenta arrancar si falló, y cuántas veces como mucho. Un intento
 # cuesta ~1 s de PDH: no se reintenta para siempre en un equipo sin GPU.
@@ -59,16 +61,6 @@ _UNITS = {
     "power": "W",
     "fan": "%",
     "clock": "MHz",
-}
-_LABELS = {
-    "temperature": "Temperatura de GPU",
-    "usage": "Uso de GPU",
-    "memory_used": "Memoria de GPU usada",
-    "memory_total": "Memoria de GPU total",
-    "memory_usage": "Uso de memoria de GPU",
-    "power": "Consumo de GPU",
-    "fan": "Ventilador de GPU",
-    "clock": "Frecuencia de GPU",
 }
 # Qué sensores salen de PDH (caros) y cuáles de D3DKMT (baratos). Medido en la RTX 4070
 # SUPER, Windows 10 19045, con ``read_some`` de todo: 2,5 ms de reloj por lectura si se
@@ -275,7 +267,7 @@ class WindowsGpuSource:
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
         self._started: _Started | None = None
-        self._failure: str | None = None  # motivo del último arranque fallido
+        self._failure: str | None = None  # clave del motivo del último arranque fallido
         self._attempts = 0
         self._last_attempt: float | None = None
         self._last_reselect = 0.0
@@ -286,8 +278,8 @@ class WindowsGpuSource:
         self._generation = 0
         self._logged_kmt = False
         self._sensors = [
-            *(SensorInfo(self._id(n), _LABELS[n], u, "gpu") for n, u in _UNITS.items()),
-            SensorInfo(self._id("name"), "Nombre de la GPU", "", "gpu", "text"),
+            *(SensorInfo(self._id(n), gpu_label_key(n), u, "gpu") for n, u in _UNITS.items()),
+            SensorInfo(self._id("name"), gpu_label_key("name"), "", "gpu", "text"),
         ]
 
     def _id(self, name: str) -> str:
@@ -444,7 +436,7 @@ class WindowsGpuSource:
             reason = self._failure or NOT_READY
             if self._attempts >= MAX_ATTEMPTS and self._failure is None:
                 reason = NOT_FOUND
-            return self._all_without_value(names, reason)
+            return self._all_without_value(names, t(reason))
 
         out: dict[str, Reading] = {}
         if names & PDH_SENSORS:
@@ -455,11 +447,11 @@ class WindowsGpuSource:
         if names & KMT_SENSORS:
             self._read_kmt(started, out)
         if "power" in names:
-            out[self._id("power")] = Reading(None, "W", reason=NO_WATTS)
+            out[self._id("power")] = Reading(None, "W", reason=t(NO_WATTS))
         if "name" in names:
             name = clean_name(started.adapter.name)
             out[self._id("name")] = (
-                Reading(None, "", text=name) if name else Reading(None, "", reason=NOT_SUPPORTED)
+                Reading(None, "", text=name) if name else Reading(None, "", reason=t(NOT_SUPPORTED))
             )
         return {self._id(n): out[self._id(n)] for n in self._ordered(names) if self._id(n) in out}
 
@@ -478,18 +470,18 @@ class WindowsGpuSource:
         )
         if started.counters is None:
             for sid, unit in ((usage_id, "%"), (used_id, "GB"), (mem_pct_id, "%")):
-                out[sid] = Reading(None, unit, reason=NOT_SUPPORTED)
+                out[sid] = Reading(None, unit, reason=t(NOT_SUPPORTED))
             return
         try:
             sample = started.counters.collect()
         except Exception as exc:
-            bad = f"No se pudo leer ({type(exc).__name__})."
+            bad = t("sensores.no_se_pudo_leer", kind=type(exc).__name__)
             for sid, unit in ((usage_id, "%"), (used_id, "GB"), (mem_pct_id, "%")):
                 out[sid] = Reading(None, unit, reason=bad)
             return
         if sample is None:
             for sid, unit in ((usage_id, "%"), (used_id, "GB"), (mem_pct_id, "%")):
-                out[sid] = Reading(None, unit, reason=MEASURING)
+                out[sid] = Reading(None, unit, reason=t(MEASURING))
             return
         usage = engine_usage(sample.engines)
         memory = dedicated_usage(sample.dedicated)
@@ -498,12 +490,12 @@ class WindowsGpuSource:
             # La tarjeta ya no está en PDH: el controlador se reinició y cambió el LUID.
             self._maybe_reselect(set(memory) | set(usage))
             for sid, unit in ((usage_id, "%"), (used_id, "GB"), (mem_pct_id, "%")):
-                out[sid] = Reading(None, unit, reason=NOT_READY)
+                out[sid] = Reading(None, unit, reason=t(NOT_READY))
             return
         out[usage_id] = (
             Reading(round(usage[luid], 1), "%")
             if luid in usage
-            else Reading(None, "%", reason=NOT_SUPPORTED)
+            else Reading(None, "%", reason=t(NOT_SUPPORTED))
         )
         if luid in memory:
             out[used_id] = Reading(round(memory[luid] / _GIB, 2), "GB")
@@ -511,22 +503,22 @@ class WindowsGpuSource:
             out[mem_pct_id] = (
                 Reading(round(min(memory[luid] / total * 100, 100.0), 1), "%")
                 if total > 0
-                else Reading(None, "%", reason=NOT_SUPPORTED)
+                else Reading(None, "%", reason=t(NOT_SUPPORTED))
             )
         else:
-            out[used_id] = Reading(None, "GB", reason=NOT_SUPPORTED)
-            out[mem_pct_id] = Reading(None, "%", reason=NOT_SUPPORTED)
+            out[used_id] = Reading(None, "GB", reason=t(NOT_SUPPORTED))
+            out[mem_pct_id] = Reading(None, "%", reason=t(NOT_SUPPORTED))
 
     def _put_total(self, started: _Started, out: dict[str, Reading]) -> None:
         total = started.adapter.dedicated_bytes
         out[self._id("memory_total")] = (
             Reading(round(total / _GIB, 2), "GB")
             if total > 0
-            else Reading(None, "GB", reason=NOT_SUPPORTED)
+            else Reading(None, "GB", reason=t(NOT_SUPPORTED))
         )
         # Sin PDH no hay «usada», así que tampoco porcentaje (nunca se mezcla la usada de
         # una fuente con la total de otra).
-        out.setdefault(self._id("memory_usage"), Reading(None, "%", reason=NOT_SUPPORTED))
+        out.setdefault(self._id("memory_usage"), Reading(None, "%", reason=t(NOT_SUPPORTED)))
 
     def _maybe_reselect(self, pdh_luids: set[int]) -> None:
         now = self._clock()
@@ -564,7 +556,7 @@ class WindowsGpuSource:
         kmt = started.kmt
         if kmt is None:
             for sid, unit in ((temp_id, "°C"), (fan_id, "%"), (clock_id, "MHz")):
-                out[sid] = Reading(None, unit, reason=NOT_SUPPORTED)
+                out[sid] = Reading(None, unit, reason=t(NOT_SUPPORTED))
             return
         try:
             perf = kmt.perf_data()
@@ -575,7 +567,7 @@ class WindowsGpuSource:
         if perf is not None and 0 < perf.temperature_dc <= _MAX_TEMPERATURE_DC:
             out[temp_id] = Reading(round(perf.temperature_dc / 10, 1), "°C")
         else:
-            out[temp_id] = Reading(None, "°C", reason=NOT_SUPPORTED)
+            out[temp_id] = Reading(None, "°C", reason=t(NOT_SUPPORTED))
         # Ventilador: Windows da vueltas por minuto; el sensor es en % del máximo que
         # declara la tarjeta. Si no declara máximo, no informa del ventilador. Con máximo,
         # 0 RPM es real: muchas tarjetas paran el ventilador en reposo.
@@ -589,7 +581,7 @@ class WindowsGpuSource:
             pct = min(perf.fan_rpm / caps.max_fan_rpm * 100, 100.0)
             out[fan_id] = Reading(float(round(pct)), "%")
         else:
-            out[fan_id] = Reading(None, "%", reason=NOT_SUPPORTED)
+            out[fan_id] = Reading(None, "%", reason=t(NOT_SUPPORTED))
         try:
             hz = kmt.clock_hz()
         except Exception as exc:
@@ -598,7 +590,7 @@ class WindowsGpuSource:
         out[clock_id] = (
             Reading(float(round(hz / 1_000_000)), "MHz")
             if 0 < hz <= _MAX_CLOCK_HZ
-            else Reading(None, "MHz", reason=NOT_SUPPORTED)
+            else Reading(None, "MHz", reason=t(NOT_SUPPORTED))
         )
 
     def close(self) -> None:

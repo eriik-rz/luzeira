@@ -1,0 +1,6 @@
+{
+  "campos.escribe_numero": "Escribe un número.",
+  "campos.como_mucho": "Como mucho {max}.",
+  "campos.como_poco": "Como poco {min}.",
+  "campos.paleta": "{campo}: elegir en la paleta"
+}

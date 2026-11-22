@@ -1,0 +1,17 @@
+{
+  "capas.titulo": "Layers",
+  "capas.lleno": "A theme can have {max} elements at most",
+  "capas.anadir": "Add",
+  "capas.anadir.ayuda": "Add a new element to the screen",
+  "capas.tipo": "Element type",
+  "capas.pista": "What's on top is shown in front. Drag to change the order.",
+  "capas.vacia": "The screen is empty.",
+  "capas.vacia.pista": "Press “Add” to place the first element.",
+  "capas.con_errores": "(has errors)",
+  "capas.alt": "Alt + ↑/↓ to move the layer up or down",
+  "capas.delante": "Bring forward",
+  "capas.delante.ayuda": "Bring forward (up in the list)",
+  "capas.atras": "Send backward",
+  "capas.atras.ayuda": "Send backward (down in the list)",
+  "capas.cuenta": "{n} of {max} elements"
+}

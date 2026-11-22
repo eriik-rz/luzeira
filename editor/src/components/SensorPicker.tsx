@@ -3,7 +3,8 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { SensorInfo } from '../api.ts'
-import { CATEGORY_LABELS, liveText } from './services.ts'
+import { categoryLabel, liveText } from './services.ts'
+import { useT } from '../i18n/contexto.ts'
 
 interface Props {
   label: string
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export function SensorPicker({ label, hint, value, sensors, kinds, onChange, error }: Props) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
@@ -30,7 +32,7 @@ export function SensorPicker({ label, hint, value, sensors, kinds, onChange, err
     const q = normalize(query)
     return sensors
       .filter((s) => kinds.includes(s.kind))
-      .filter((s) => !q || normalize(`${s.label} ${s.id} ${CATEGORY_LABELS[s.category] ?? ''}`).includes(q))
+      .filter((s) => !q || normalize(`${s.label} ${s.id} ${categoryLabel(s.category)}`).includes(q))
       .sort((a, b) => categoryRank(a.category) - categoryRank(b.category))
   }, [sensors, kinds, query])
 
@@ -70,11 +72,11 @@ export function SensorPicker({ label, hint, value, sensors, kinds, onChange, err
           }}
         >
           <span className="main">
-            <strong>{current ? current.label : value ? 'No disponible en este equipo' : 'Elige un sensor'}</strong>
+            <strong>{current ? current.label : value ? t('recursos.sensor.no_disponible') : t('recursos.sensor.elige')}</strong>
             <span>{value}</span>
           </span>
           <span className={`live${live === null ? ' none' : ''}`} title={current?.reason ?? undefined}>
-            {live ?? (current ? 'sin dato' : '')}
+            {live ?? (current ? t('recursos.sensor.sin_dato') : '')}
           </span>
         </button>
         {open && (
@@ -83,8 +85,8 @@ export function SensorPicker({ label, hint, value, sensors, kinds, onChange, err
               <input
                 ref={searchRef}
                 className="input"
-                placeholder="Buscar: CPU, temperatura, red…"
-                aria-label="Buscar sensor"
+                placeholder={t('recursos.sensor.buscar')}
+                aria-label={t('recursos.sensor.buscar.etiqueta')}
                 role="combobox"
                 aria-expanded="true"
                 aria-controls={listId}
@@ -106,7 +108,7 @@ export function SensorPicker({ label, hint, value, sensors, kinds, onChange, err
               />
             </div>
             <ul className="picker-list" role="listbox" id={listId} aria-labelledby={labelId}>
-              {options.length === 0 && <li className="picker-empty">No hay sensores que encajen.</li>}
+              {options.length === 0 && <li className="picker-empty">{t('recursos.sensor.ninguno')}</li>}
               {options.map((s, i) => {
                 const header = i === 0 || options[i - 1].category !== s.category
                 const text = liveText(s)
@@ -114,7 +116,7 @@ export function SensorPicker({ label, hint, value, sensors, kinds, onChange, err
                   <li key={s.id} role="presentation">
                     {header && (
                       <div className="picker-group" aria-hidden="true">
-                        {CATEGORY_LABELS[s.category] ?? s.category}
+                        {categoryLabel(s.category)}
                       </div>
                     )}
                     <div
@@ -128,8 +130,8 @@ export function SensorPicker({ label, hint, value, sensors, kinds, onChange, err
                       title={s.reason ?? s.id}
                     >
                       <span className="lbl">{s.label}</span>
-                      {s.kind === 'text' && <span className="badge">texto</span>}
-                      <span className={`live${text === null ? ' none' : ''}`}>{text ?? 'sin dato'}</span>
+                      {s.kind === 'text' && <span className="badge">{t('recursos.sensor.texto')}</span>}
+                      <span className={`live${text === null ? ' none' : ''}`}>{text ?? t('recursos.sensor.sin_dato')}</span>
                     </div>
                   </li>
                 )

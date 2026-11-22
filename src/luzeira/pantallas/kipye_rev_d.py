@@ -28,6 +28,7 @@ from collections.abc import Callable
 
 from PIL import Image
 
+from luzeira.idioma import t
 from luzeira.pantallas.comun import (
     DisplayError,
     Orientation,
@@ -110,9 +111,7 @@ class KipyeRevD:
         try:
             self._transport.write(data)
         except OSError as exc:
-            raise DisplayError(
-                "Se ha perdido la conexión con la pantalla. ¿Se ha desenchufado el USB?"
-            ) from exc
+            raise DisplayError(t("pantallas.conexion_perdida")) from exc
 
     def _command(self, data: bytes) -> None:
         """Una orden y, después, tirar la confirmación que manda la pantalla."""
@@ -160,7 +159,9 @@ class KipyeRevD:
         """Pinta ``image`` con su esquina superior izquierda en (x, y); lo que se salga
         se recorta."""
         if not (0 <= x < self.width and 0 <= y < self.height):
-            raise ValueError(f"({x}, {y}) está fuera de la pantalla {self.width}x{self.height}")
+            raise ValueError(
+                f"({x}, {y}) está fuera de la pantalla {self.width}x{self.height}"  # i18n: no
+            )
         w = min(image.width, self.width - x)
         h = min(image.height, self.height - y)
         image = image.convert("RGB")

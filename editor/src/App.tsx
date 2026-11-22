@@ -7,6 +7,7 @@ import { connect, errorMessage, type EditorApi, type Info, type ThemeSummary } f
 import { Editor } from './Editor.tsx'
 import { pickInitialTheme } from './model/contract.ts'
 import { IconWarn } from './components/icons.tsx'
+import { useT } from './i18n/contexto.ts'
 
 type Boot =
   | { kind: 'loading' }
@@ -16,6 +17,7 @@ type Boot =
 export default function App() {
   const [boot, setBoot] = useState<Boot>({ kind: 'loading' })
   const [attempt, setAttempt] = useState(0)
+  const t = useT()
 
   useEffect(() => {
     let alive = true
@@ -38,7 +40,7 @@ export default function App() {
       <div className="fullscreen-msg">
         <div className="card">
           <div className="spinner" />
-          <p style={{ marginTop: 12 }}>Conectando con Luzeira…</p>
+          <p style={{ marginTop: 12 }}>{t('app.conectando')}</p>
         </div>
       </div>
     )
@@ -48,7 +50,7 @@ export default function App() {
       <div className="fullscreen-msg">
         <div className="card">
           <IconWarn />
-          <h1>No se puede abrir el editor</h1>
+          <h1>{t('app.no_abre')}</h1>
           <p>{boot.message}</p>
           <button
             type="button"
@@ -58,7 +60,7 @@ export default function App() {
               setAttempt((a) => a + 1)
             }}
           >
-            Reintentar
+            {t('comun.reintentar')}
           </button>
         </div>
       </div>
@@ -69,8 +71,8 @@ export default function App() {
     return (
       <div className="fullscreen-msg">
         <div className="card">
-          <h1>No hay temas</h1>
-          <p>Luzeira no ha encontrado ningún tema. Reinstalar Luzeira debería arreglarlo.</p>
+          <h1>{t('app.sin_temas')}</h1>
+          <p>{t('app.sin_temas.texto')}</p>
         </div>
       </div>
     )

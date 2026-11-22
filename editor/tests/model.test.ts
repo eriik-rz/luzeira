@@ -3,6 +3,36 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { registerCatalogs, setLanguage, type Catalog } from '../src/model/i18n.ts'
+
+// Los textos se comparan con el español de verdad: se leen del disco los catálogos de
+// `src/i18n/<código>/*.json` (sin Vite, que es quien los junta en la app).
+function readCatalogs(code: string): Catalog {
+  const dir = new URL(`../src/i18n/${code}/`, import.meta.url)
+  const out: Catalog = {}
+  if (!existsSync(dir)) return out
+  for (const f of readdirSync(dir).filter((n) => n.endsWith('.json'))) {
+    Object.assign(out, JSON.parse(readFileSync(new URL(f, dir), 'utf-8')) as Catalog)
+  }
+  return out
+}
+/**
+ * El contrato de `pantalla.json` (lo escribe el agente de Python): días con el 0 en lunes,
+ * meses del 1 al 12, las dos fechas y el separador decimal. Si el fichero ya está, manda él.
+ */
+const PANTALLA_ES: Catalog = {
+  ...Object.fromEntries(['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'].map((d, i) => [`pantalla.dia.${i}`, d])),
+  ...Object.fromEntries(
+    ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'].map((m, i) => [`pantalla.mes.${i + 1}`, m]),
+  ),
+  'pantalla.fecha_larga': '{dia}, {d} de {mes}',
+  'pantalla.fecha_corta': '{dd}/{mm}/{aaaa}',
+  'pantalla.decimal': ',',
+}
+const CATALOGS: Record<string, Catalog> = { es: { ...PANTALLA_ES, ...readCatalogs('es') }, en: readCatalogs('en') }
+registerCatalogs(CATALOGS)
+setLanguage('es')
 
 import { clampBox, moveBox, resizeBox, boxInside, pickBelow } from '../src/model/geometry.ts'
 import { reducer, initialState, gapToIndex, HISTORY_LIMIT, MERGE_WINDOW_MS, type EditorState } from '../src/model/editorState.ts'
@@ -483,6 +513,107 @@ test('idiomas: el activo, luego inglés, luego español, y si no la clave; con v
   assert.equal(i18n.setLanguage(null, 'en-GB'), 'en') // automático: el del sistema
   assert.equal(i18n.setLanguage(null, 'ja-JP'), 'en') // uno que no tenemos: inglés
   assert.equal(i18n.setLanguage('xx', 'de-DE'), 'de')
-  i18n.registerCatalogs({})
+  i18n.registerCatalogs(CATALOGS)
   i18n.setLanguage('es')
+})
+
+// --- C-62: idiomas en la vista previa y traducciones de los temas ----------------------
+
+/** Un `pantalla` inglés de prueba (el de verdad lo escribe el agente de Python). */
+const PANTALLA_EN: Catalog = {
+  ...Object.fromEntries(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((d, i) => [`pantalla.dia.${i}`, d])),
+  ...Object.fromEntries(
+    ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => [`pantalla.mes.${i + 1}`, m]),
+  ),
+  'pantalla.fecha_larga': '{dia}, {mes} {d}',
+  'pantalla.fecha_corta': '{mm}/{dd}/{aaaa}',
+  'pantalla.decimal': '.',
+}
+
+/** Ejecuta `fn` en inglés con el `pantalla` de prueba y vuelve al español. */
+function inEnglish(fn: () => void) {
+  registerCatalogs({ ...CATALOGS, en: { ...CATALOGS.en, ...PANTALLA_EN } })
+  setLanguage('en')
+  try {
+    fn()
+  } finally {
+    registerCatalogs(CATALOGS)
+    setLanguage('es')
+  }
+}
+
+test('reloj: el domingo de JS (0) es el último día del catálogo (0 = lunes)', () => {
+  const sunday = new Date(2026, 10, 22, 12, 0, 0)
+  assert.equal(formatClock('weekday', sunday), 'domingo')
+  assert.equal(formatClock('weekday', new Date(2026, 10, 16)), 'lunes')
+  assert.equal(formatClock('date-short', new Date(2026, 0, 5)), '05/01/2026')
+})
+
+test('reloj y sensor en inglés: días, meses, formato de fecha y punto decimal', () => {
+  inEnglish(() => {
+    const d = new Date(2026, 10, 17, 9, 5, 7) // martes
+    assert.equal(formatClock('date-long', d), 'Tuesday, November 17')
+    assert.equal(formatClock('weekday', new Date(2026, 10, 22)), 'Sunday')
+    assert.equal(formatClock('date-short', d), '11/17/2026')
+    assert.equal(formatClock('HH:MM', d), '09:05')
+    const fields = { decimals: 1, prefix: '↓ ', suffix: '', show_unit: true, max_chars: 5 }
+    assert.equal(formatReading(fields, { value: 2.26, unit: 'MB/s', text: null }), '↓ 2.3 MB/s')
+  })
+  // Y de vuelta en español, la coma.
+  assert.equal(formatReading({ decimals: 1, prefix: '', suffix: '', show_unit: false, max_chars: 5 }, { value: 2.26, unit: '', text: null }), '2,3')
+})
+
+test('sensor: el prefijo y el sufijo salen en el idioma activo si el tema los trae', () => {
+  const fields = { decimals: 0, prefix: 'RED ', suffix: ' ya', prefix_i18n: { en: 'NET ' }, suffix_i18n: { de: ' jetzt' }, show_unit: true, max_chars: 40 }
+  const r = { value: 3, unit: 'MB/s', text: null }
+  assert.equal(formatReading(fields, r), 'RED 3 MB/s ya')
+  inEnglish(() => assert.equal(formatReading(fields, r), 'NET 3 MB/s ya'))
+})
+
+const I18N_THEME: ThemeJson = {
+  format: 'luzeira-theme/1',
+  name: 'Con idiomas',
+  orientation: 'landscape',
+  widgets: [
+    { type: 'text', text: 'RED', text_i18n: { en: 'NET', de: 'NETZ' }, box: { x: 0, y: 0, width: 100, height: 20 } },
+    { type: 'sensor', sensor: 'cpu.usage', prefix: 'Uso ', prefix_i18n: { en: 'Use ' }, suffix_i18n: { en: '!' }, box: { x: 0, y: 30, width: 100, height: 20 } },
+    { type: 'text', text: 'Sin', box: { x: 0, y: 60, width: 100, height: 20 } },
+  ],
+}
+
+test('normalizeTheme conserva las traducciones y las vuelve a escribir tal cual', () => {
+  const t = normalizeTheme(I18N_THEME)
+  const [text, sensor, plain] = t.widgets
+  assert.ok(text.type === 'text' && sensor.type === 'sensor' && plain.type === 'text')
+  assert.deepEqual(text.text_i18n, { en: 'NET', de: 'NETZ' })
+  assert.deepEqual(sensor.prefix_i18n, { en: 'Use ' })
+  assert.deepEqual(sensor.suffix_i18n, { en: '!' })
+  // Un texto sin traducciones se guarda igual que antes: sin el campo.
+  assert.equal('text_i18n' in plain, false)
+  // Lo que se guarda (JSON) lleva las traducciones: «Guardar como…» no las pierde.
+  const saved = JSON.parse(JSON.stringify(t)) as ThemeJson
+  assert.deepEqual(normalizeTheme(saved), t)
+  assert.deepEqual(validateTheme(t), [])
+  // `null` (lo que admite Python) es lo mismo que no traer nada.
+  const nulls = normalizeTheme({ ...I18N_THEME, widgets: [{ type: 'text', text: 'x', text_i18n: null, box: { x: 0, y: 0, width: 10, height: 10 } }] })
+  assert.equal('text_i18n' in nulls.widgets[0], false)
+})
+
+test('validate: códigos de idioma de dos letras, 20 como mucho, 200 y 20 caracteres', () => {
+  const base = normalizeTheme(I18N_THEME)
+  const withText = (text_i18n: Record<string, string>) => ({ ...base, widgets: [{ ...base.widgets[0], text_i18n }] as Theme['widgets'] })
+  const paths = (t: Theme) => validateTheme(t).map((i) => i.path)
+  assert.deepEqual(paths(withText({ EN: 'x' })), ['widgets.0.text_i18n'])
+  assert.deepEqual(paths(withText({ eng: 'x' })), ['widgets.0.text_i18n'])
+  assert.deepEqual(paths(withText({ en: 'x'.repeat(200) })), [])
+  assert.deepEqual(paths(withText({ en: 'x'.repeat(201) })), ['widgets.0.text_i18n'])
+  const many = Object.fromEntries(Array.from({ length: 21 }, (_, i) => [`a${String.fromCharCode(97 + i)}`, 'x']))
+  assert.deepEqual(paths(withText(many)), ['widgets.0.text_i18n'])
+  assert.deepEqual(paths(withText(Object.fromEntries(Object.entries(many).slice(0, 20)))), [])
+  const s = base.widgets[1]
+  assert.ok(s.type === 'sensor')
+  const sensorWith = (prefix_i18n: Record<string, string>) => ({ ...base, widgets: [{ ...s, prefix_i18n }] as Theme['widgets'] })
+  assert.deepEqual(paths(sensorWith({ en: 'x'.repeat(20) })), [])
+  assert.deepEqual(paths(sensorWith({ en: 'x'.repeat(21) })), ['widgets.0.prefix_i18n'])
+  assert.ok(validateTheme(withText({ EN: 'x' }))[0].message.includes('«EN»'))
 })

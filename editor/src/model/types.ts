@@ -14,6 +14,11 @@ export type Align = 'left' | 'center' | 'right'
 export type ClockFormat = 'HH:MM' | 'HH:MM:SS' | 'date-short' | 'date-long' | 'weekday'
 export type BarDirection = 'horizontal' | 'vertical'
 export type WidgetType = 'text' | 'clock' | 'sensor' | 'bar' | 'image'
+/**
+ * Traducciones de un texto del tema (C-62): `{"en": "NET", "de": "NETZ"}`. Solo datos; si
+ * falta el idioma activo se pinta el texto normal (`localized` en format.ts).
+ */
+export type Translations = Record<string, string>
 
 /** Rectángulo en píxeles de la pantalla real. */
 export interface Box {
@@ -49,6 +54,7 @@ interface WidgetBaseJson {
 export interface TextWidgetJson extends WidgetBaseJson {
   type: 'text'
   text: string
+  text_i18n?: Translations | null
 }
 export interface ClockWidgetJson extends WidgetBaseJson {
   type: 'clock'
@@ -60,6 +66,8 @@ export interface SensorWidgetJson extends WidgetBaseJson {
   decimals?: number
   prefix?: string
   suffix?: string
+  prefix_i18n?: Translations | null
+  suffix_i18n?: Translations | null
   show_unit?: boolean
   interval?: number
   max_chars?: number
@@ -109,6 +117,8 @@ interface WidgetBase {
 export interface TextWidget extends WidgetBase {
   type: 'text'
   text: string
+  /** Solo si el tema las trae: se conservan tal cual al guardar (no se rellenan). */
+  text_i18n?: Translations
 }
 export interface ClockWidget extends WidgetBase {
   type: 'clock'
@@ -120,6 +130,8 @@ export interface SensorWidget extends WidgetBase {
   decimals: number
   prefix: string
   suffix: string
+  prefix_i18n?: Translations
+  suffix_i18n?: Translations
   show_unit: boolean
   interval: number
   max_chars: number
@@ -173,7 +185,11 @@ export const LIMITS = {
   maxCharsMax: 200,
   pathMax: 120,
   sensorIdMax: 60,
+  /** Traducciones de un texto: como mucho 20 idiomas, con código de dos letras. */
+  translationsMax: 20,
 } as const
+
+export const LANG_CODE_RE = /^[a-z]{2}$/
 
 export const COLOR_RE = /^#[0-9a-fA-F]{6}$/
 export const SENSOR_ID_RE = /^[a-z0-9_]+(\.[a-z0-9_]+)+$/

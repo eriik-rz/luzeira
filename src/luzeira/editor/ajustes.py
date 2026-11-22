@@ -17,6 +17,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
+from luzeira.idioma import t
+
 from .almacen import EditorError
 
 
@@ -85,7 +87,7 @@ def _optional(body: dict, key: str, kind: type) -> object:
     # bool es un int en Python: un «true» no puede colarse como brillo.
     if value is None or (type(value) is kind):
         return value
-    raise EditorError(400, "Algún ajuste no es válido.")
+    raise EditorError(400, t("servidor.ajuste_no_valido"))
 
 
 def parse_update(body: object) -> dict:
@@ -93,7 +95,7 @@ def parse_update(body: object) -> dict:
     :meth:`SettingsBackend.update`."""
     allowed = {"brightness", "flip", "autostart", "updates", "language"}
     if not isinstance(body, dict) or not body or set(body) - allowed:
-        raise EditorError(400, "Algún ajuste no es válido.")
+        raise EditorError(400, t("servidor.ajuste_no_valido"))
     return {
         "brightness": _optional(body, "brightness", int),
         "flip": _optional(body, "flip", bool),
@@ -110,7 +112,7 @@ def _language(body: dict) -> str | None:
         value == "auto"
         or (len(value) == 2 and value.isascii() and value.isalpha() and value.islower())
     ):
-        raise EditorError(400, "Algún ajuste no es válido.")
+        raise EditorError(400, t("servidor.ajuste_no_valido"))
     return value
 
 
@@ -122,7 +124,7 @@ def parse_answer(body: object) -> bool:
         and type(body["looks_right"]) is bool
     ):
         return body["looks_right"]
-    raise EditorError(400, "La respuesta no es válida.")
+    raise EditorError(400, t("servidor.respuesta_no_valida"))
 
 
 def parse_display(body: object) -> tuple[str | None, bool]:
@@ -137,4 +139,4 @@ def parse_display(body: object) -> tuple[str | None, bool]:
         and type(body.get("confirmed", False)) is bool
     ):
         return body["id"], body.get("confirmed", False)
-    raise EditorError(400, "La pantalla elegida no es válida.")
+    raise EditorError(400, t("servidor.pantalla_no_valida"))

@@ -24,6 +24,7 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps
 
 from luzeira import idioma
+from luzeira.idioma import t
 from luzeira.sensores.base import Reading
 from luzeira.temas.cargar import open_validated_image
 from luzeira.temas.modelo import (
@@ -49,12 +50,6 @@ NO_VALUE = "—"  # RQ-05: un sensor sin valor nunca se pinta como 0
 # saltaba ~40 % de los ticks (medido por el revisor de la fase 3).
 TICK_TOLERANCE = 0.25
 
-_WEEKDAYS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
-_MONTHS = [
-    "enero", "febrero", "marzo", "abril", "mayo", "junio",
-    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
-]  # fmt: skip
-
 
 @dataclass(frozen=True)
 class Patch:
@@ -65,27 +60,48 @@ class Patch:
     image: Image.Image
 
 
+def weekday_names() -> list[str]:
+    """Los días de la semana en el idioma activo, del lunes (0, como
+    ``datetime.weekday()``) al domingo (6). Zona ``pantalla`` del catálogo."""
+    return [t(f"pantalla.dia.{i}") for i in range(7)]
+
+
+def month_names() -> list[str]:
+    """Los meses en el idioma activo, de enero a diciembre."""
+    return [t(f"pantalla.mes.{i}") for i in range(1, 13)]
+
+
 def format_clock(fmt: str, moment: datetime) -> str:
-    """Formatos cerrados del tema, en español sin depender del idioma del sistema."""
+    """Formatos cerrados del tema, en el idioma activo (catálogo ``pantalla``, el mismo que
+    usa la vista previa del editor), sin depender del idioma del sistema."""
     if fmt == "HH:MM":
         return moment.strftime("%H:%M")
     if fmt == "HH:MM:SS":
         return moment.strftime("%H:%M:%S")
     if fmt == "date-short":
-        return moment.strftime("%d/%m/%Y")
-    weekday = _WEEKDAYS[moment.weekday()]
+        return t(
+            "pantalla.fecha_corta",
+            dd=f"{moment.day:02d}",
+            mm=f"{moment.month:02d}",
+            aaaa=f"{moment.year:04d}",
+        )
+    weekday = t(f"pantalla.dia.{moment.weekday()}")
     if fmt == "weekday":
         return weekday
     if fmt == "date-long":
-        return f"{weekday}, {moment.day} de {_MONTHS[moment.month - 1]}"
+        month = t(f"pantalla.mes.{moment.month}")
+        return t("pantalla.fecha_larga", dia=weekday, d=moment.day, mes=month)
     raise ValueError(f"formato de reloj desconocido: {fmt}")
 
 
-def format_reading(widget: SensorWidget, reading: Reading, decimal_sep: str = ",") -> str:
+def format_reading(widget: SensorWidget, reading: Reading, decimal_sep: str | None = None) -> str:
     """Compone el texto de un sensor con campos fijos (nunca str.format sobre texto del tema).
 
-    ``decimal_sep``: coma en español (14,1 GB). Configurable cuando haya más idiomas.
+    ``decimal_sep``: por defecto, el del idioma activo (coma en español: 14,1 GB; punto
+    en inglés: 14.1 GB).
     """
+    if decimal_sep is None:
+        decimal_sep = t("pantalla.decimal")
     lang = idioma.current()
     prefix = localized(widget.prefix, widget.prefix_i18n, lang)
     suffix = localized(widget.suffix, widget.suffix_i18n, lang)
@@ -191,7 +207,8 @@ class Renderer:
     def _open(self, rel: str) -> Image.Image:
         path = self._files.get(rel)
         if path is None:
-            raise KeyError(f"el tema usa «{rel}» pero el cargador no lo validó")
+            # Fallo de programación (nunca llega al usuario): no se traduce.
+            raise KeyError(f"el tema usa «{rel}» pero el cargador no lo validó")  # i18n: no
         # Se reabre con las mismas comprobaciones del cargador (formato fijo por
         # extensión, límite de lado, primer fotograma): el fichero podría haber cambiado
         # entre la carga y ahora (TOCTOU, revisor de la fase 3).

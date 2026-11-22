@@ -1,0 +1,17 @@
+{
+  "capas.titulo": "Capas",
+  "capas.lleno": "Un tema admite como mucho {max} elementos",
+  "capas.anadir": "Añadir",
+  "capas.anadir.ayuda": "Añadir un elemento nuevo a la pantalla",
+  "capas.tipo": "Tipo de elemento",
+  "capas.pista": "Lo de arriba se ve por delante. Arrastra para cambiar el orden.",
+  "capas.vacia": "La pantalla está vacía.",
+  "capas.vacia.pista": "Pulsa «Añadir» para poner el primer elemento.",
+  "capas.con_errores": "(tiene errores)",
+  "capas.alt": "Alt + ↑/↓ para subir o bajar la capa",
+  "capas.delante": "Traer hacia delante",
+  "capas.delante.ayuda": "Traer hacia delante (subir en la lista)",
+  "capas.atras": "Enviar hacia atrás",
+  "capas.atras.ayuda": "Enviar hacia atrás (bajar en la lista)",
+  "capas.cuenta": "{n} de {max} elementos"
+}

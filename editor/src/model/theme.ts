@@ -13,11 +13,13 @@ import {
   type StyleJson,
   type Theme,
   type ThemeJson,
+  type Translations,
   type Widget,
   type WidgetJson,
   type WidgetType,
 } from './types.ts'
 import { clampBox } from './geometry.ts'
+import { t } from './i18n.ts'
 
 /** Los mismos valores por defecto que `Style()` en modelo.py. */
 export const DEFAULT_STYLE: Style = {
@@ -40,13 +42,23 @@ export function normalizeStyle(s: StyleJson | undefined): Style {
   }
 }
 
+/**
+ * Las traducciones de un texto del tema (C-62), copiadas tal cual si el tema las trae. Sin
+ * ellas el campo ni aparece: así un tema sin traducciones se guarda igual que siempre y
+ * «Guardar como…» de un tema incluido no las pierde.
+ */
+function translations<K extends string>(key: K, value: Translations | null | undefined): Partial<Record<K, Translations>> {
+  if (!value || typeof value !== 'object') return {}
+  return { [key]: { ...value } } as Partial<Record<K, Translations>>
+}
+
 /** Rellena los campos que el JSON puede omitir con los valores por defecto de Python. */
 export function normalizeWidget(w: WidgetJson): Widget {
   const box = { ...w.box }
   const style = normalizeStyle(w.style)
   switch (w.type) {
     case 'text':
-      return { type: 'text', box, style, text: w.text }
+      return { type: 'text', box, style, text: w.text, ...translations('text_i18n', w.text_i18n) }
     case 'clock':
       return { type: 'clock', box, style, format: w.format ?? 'HH:MM' }
     case 'sensor':
@@ -58,6 +70,8 @@ export function normalizeWidget(w: WidgetJson): Widget {
         decimals: w.decimals ?? 0,
         prefix: w.prefix ?? '',
         suffix: w.suffix ?? '',
+        ...translations('prefix_i18n', w.prefix_i18n),
+        ...translations('suffix_i18n', w.suffix_i18n),
         show_unit: w.show_unit ?? true,
         interval: w.interval ?? 1,
         max_chars: w.max_chars ?? 40,
@@ -96,37 +110,18 @@ export function normalizeTheme(t: ThemeJson): Theme {
 }
 
 // --- Textos para el usuario ----------------------------------------------------------
+// Funciones (no constantes): el texto se busca en el idioma activo cada vez que se pinta.
 
-export const WIDGET_TYPE_INFO: Record<WidgetType, { label: string; help: string }> = {
-  text: { label: 'Texto', help: 'Un texto fijo que escribes tú, como «CPU» o tu nombre.' },
-  clock: { label: 'Reloj', help: 'La hora o la fecha de hoy, siempre al día.' },
-  sensor: {
-    label: 'Sensor',
-    help: 'Un dato del PC en vivo: uso de CPU, temperatura de la GPU, memoria…',
-  },
-  bar: { label: 'Barra', help: 'Una barra que se llena según un dato del PC (por ejemplo, % de CPU).' },
-  image: { label: 'Imagen', help: 'Una imagen tuya (PNG, JPG o GIF), como un logo.' },
+export function widgetTypeInfo(type: WidgetType): { label: string; help: string } {
+  return { label: t(`modelo.tipo.${type}`), help: t(`modelo.tipo.${type}.ayuda`) }
 }
 
-export const ORIENTATION_INFO: Record<Orientation, { label: string; help: string }> = {
-  landscape: { label: 'Horizontal', help: 'Pantalla tumbada, 480 × 320.' },
-  'reverse-landscape': {
-    label: 'Horizontal, girada',
-    help: 'Tumbada y dada la vuelta (180°), por si la pantalla está colocada al revés.',
-  },
-  portrait: { label: 'Vertical', help: 'Pantalla de pie, 320 × 480.' },
-  'reverse-portrait': {
-    label: 'Vertical, girada',
-    help: 'De pie y dada la vuelta (180°), por si la pantalla está colocada al revés.',
-  },
+export function orientationInfo(o: Orientation): { label: string; help: string } {
+  return { label: t(`modelo.orientacion.${o}`), help: t(`modelo.orientacion.${o}.ayuda`) }
 }
 
-export const CLOCK_FORMAT_INFO: Record<ClockFormat, string> = {
-  'HH:MM': 'Hora y minutos',
-  'HH:MM:SS': 'Hora, minutos y segundos',
-  'date-short': 'Fecha corta',
-  'date-long': 'Fecha larga',
-  weekday: 'Día de la semana',
+export function clockFormatLabel(f: ClockFormat): string {
+  return t(`modelo.reloj.${f}`)
 }
 
 // --- Elementos nuevos ----------------------------------------------------------------
@@ -205,7 +200,7 @@ export function createWidget(
   const sensor = options.sensor ?? 'cpu.usage'
   switch (type) {
     case 'text':
-      return { type, box, style: { ...style, size: 20 }, text: 'Texto' }
+      return { type, box, style: { ...style, size: 20 }, text: t('modelo.nuevo_texto') }
     case 'clock':
       return { type, box, style: { ...style, size: 36, bold: true }, format: 'HH:MM' }
     case 'sensor':

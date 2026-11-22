@@ -24,6 +24,13 @@ BLUETOOTH = com("COM4")
 
 
 @pytest.fixture(autouse=True)
+def own_config_folder(monkeypatch, tmp_path):
+    """``main`` lee el idioma de la configuración: la de un sitio vacío, no la del equipo."""
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    return tmp_path
+
+
+@pytest.fixture(autouse=True)
 def no_port_is_ever_opened(monkeypatch):
     def refuse(*_args, **_kwargs):
         raise AssertionError("«detectar» no debe abrir ningún puerto")
@@ -55,3 +62,20 @@ def test_detect_command_uses_the_port_list_of_windows(monkeypatch, capsys):
     monkeypatch.setattr(list_ports, "comports", lambda: [KIPYE])
     assert cli.main(["detectar"]) == 0
     assert capsys.readouterr().out.startswith("COM8: ")
+
+
+def test_the_command_line_speaks_the_language_chosen_in_settings(
+    own_config_folder, monkeypatch, capsys
+):
+    # C-62: el idioma elegido en Ajustes vale también para la línea de órdenes.
+    from serial.tools import list_ports
+
+    from luzeira.config import AppConfig, save_config
+
+    monkeypatch.setattr(list_ports, "comports", lambda: [BLUETOOTH])
+
+    folder = own_config_folder / "Luzeira"
+    folder.mkdir()
+    save_config(AppConfig(language="en"), folder / "config.json")
+    assert cli.main(["detectar"]) == 1  # sin pantallas: el comportamiento no cambia
+    assert capsys.readouterr().out.strip() == "I can't find any supported display connected."

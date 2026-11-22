@@ -1,0 +1,10 @@
+{
+  "app.conectando": "Conectando con Luzeira…",
+  "app.no_abre": "No se puede abrir el editor",
+  "app.sin_temas": "No hay temas",
+  "app.sin_temas.texto": "Luzeira no ha encontrado ningún tema. Reinstalar Luzeira debería arreglarlo.",
+  "app.sin_token": "No se pudo conectar con Luzeira. Abre el editor desde el icono de Luzeira en la bandeja.",
+  "app.sin_conexion": "Se ha perdido la conexión con Luzeira. ¿Sigue abierta?",
+  "app.respuesta_rara": "Luzeira ha respondido algo inesperado. Cierra el editor y vuelve a abrirlo.",
+  "app.fallo": "Algo ha fallado. Prueba otra vez."
+}

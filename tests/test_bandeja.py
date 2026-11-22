@@ -8,6 +8,7 @@ import pytest
 from luzeira import bandeja
 from luzeira.bandeja import WM_QUERYENDSESSION, allow_shutdown, clip, make_icon
 from luzeira.config import DEFAULT_THEME, AppConfig, DisplaySetting
+from luzeira.idioma import t
 from luzeira.pantallas.modelos import DisplayChoice, PortInfo
 from luzeira.servicio import DisplayInfo, Status
 
@@ -257,7 +258,7 @@ def test_missing_webview2_is_explained_to_the_user(app):
     app._on_editor_exit(EXIT_NO_WEBVIEW2)
     assert app.notes == []  # llega por el hilo del icono
     app._drain()
-    assert app.notes == [bandeja.MSG_NO_WEBVIEW2]
+    assert app.notes == [t(bandeja.MSG_NO_WEBVIEW2)]
     assert "WebView2" in app.notes[0]
 
 
@@ -524,7 +525,7 @@ def test_unverified_choice_that_looks_wrong_is_dropped(app, chosen, answers, mon
     assert app.saved == [] and app.config.display == saved
     # Se deja de usar y se vuelve a lo que estaba guardado.
     assert chosen == [KIPYE_CHOICE, bandeja.choice_from_setting(saved)]
-    assert bandeja.MSG_TRIAL_REJECTED in app.notes
+    assert t(bandeja.MSG_TRIAL_REJECTED) in app.notes
 
 
 def test_looks_right_question_defaults_to_no(app, monkeypatch):
@@ -595,7 +596,7 @@ def test_menu_dialog_cannot_open_on_top_of_another(app, chosen, answers, monkeyp
     monkeypatch.setattr(dialogos, "confirm", confirm)
     kipye(app.icon)
     assert len(opened) == 1 and chosen == []
-    assert bandeja.MSG_DIALOG_OPEN in app.notes
+    assert t(bandeja.MSG_DIALOG_OPEN) in app.notes
     assert not app._dialog_open
     kipye(app.icon)  # cerrado el primero, se puede volver a abrir
     assert len(opened) == 2
@@ -610,14 +611,14 @@ def test_looks_right_question_waits_for_an_open_dialog(app, chosen, answers, mon
         asked.append(title)
         if len(asked) == 1:
             app._ask_looks_right(KIPYE_CHOICE)  # llega mientras hay otro abierto
-            assert asked == [bandeja.TITLE_ADVANCED]  # no se abre encima
+            assert asked == [t(bandeja.TITLE_ADVANCED)]  # no se abre encima
         return False
 
     monkeypatch.setattr(dialogos, "confirm", confirm)
     advanced_kipye = submenu(app, "Pantalla", "Modo avanzado (cualquier puerto)")[0]
     advanced_kipye.submenu.items[2](app.icon)
     app._drain()
-    assert asked == [bandeja.TITLE_ADVANCED, bandeja.TITLE_LOOKS_RIGHT]
+    assert asked == [t(bandeja.TITLE_ADVANCED), t(bandeja.TITLE_LOOKS_RIGHT)]
 
 
 @pytest.mark.parametrize(
@@ -786,7 +787,7 @@ def test_question_from_the_editor_is_asked_in_the_editor(
 def test_question_from_the_editor_answered_no(app, settings, chosen, answers, monkeypatch):
     editor_open(monkeypatch, app)
     editor_trial(app, monkeypatch, settings)
-    assert settings.answer(False) == bandeja.MSG_TRIAL_REJECTED
+    assert settings.answer(False) == t(bandeja.MSG_TRIAL_REJECTED)
     app._drain()
     assert app.saved == [] and chosen[-1] is None and app.notes == []
     with pytest.raises(bandeja.EditorError):
@@ -892,7 +893,7 @@ def test_automatic_check_with_a_yes_notifies_once(app, with_keys, monkeypatch):
     app._drain()
     app.check_updates(manual=False)
     app._drain()
-    assert app.notes == [bandeja.MSG_UPDATE_AVAILABLE.format(version="0.9.0")]
+    assert app.notes == [t(bandeja.MSG_UPDATE_AVAILABLE, version="0.9.0")]
     assert app.saved[-1].updates_max_seen == "0.9.0" and app.saved[-1].updates_last_check
     assert "Actualizar a la versión 0.9.0" in menu_texts(app)
     assert app.updates_snapshot()["available"] == "0.9.0"
@@ -902,9 +903,7 @@ def test_check_passes_the_highest_version_seen(app, with_keys, monkeypatch):
     seen = []
     app.config = app.config.model_copy(update={"updates_max_seen": "0.5.0"})
     monkeypatch.setattr(bandeja.actualizar, "check", lambda **kw: seen.append(kw) or None)
-    assert app.check_updates(manual=True) == bandeja.MSG_UP_TO_DATE.format(
-        version=bandeja.__version__
-    )
+    assert app.check_updates(manual=True) == t(bandeja.MSG_UP_TO_DATE, version=bandeja.__version__)
     assert seen == [{"max_seen": "0.5.0"}]
 
 
@@ -917,7 +916,7 @@ def test_a_failed_check_says_why_and_waits_a_day(app, with_keys, monkeypatch, er
 
     monkeypatch.setattr(bandeja.actualizar, "check", fail)
     text = app.check_updates(manual=True)
-    assert text == (str(error) or bandeja.MSG_UPDATE_FAILED)
+    assert text == (str(error) or t(bandeja.MSG_UPDATE_FAILED))
     app._drain()
     assert app._update is None and not app._update_busy
     # Cuenta como la comprobación del día: sin internet no se reintenta cada hora.
@@ -927,7 +926,7 @@ def test_a_failed_check_says_why_and_waits_a_day(app, with_keys, monkeypatch, er
 
 def test_only_one_check_or_download_at_a_time(app, with_keys):
     assert app._claim_update()
-    assert app.check_updates(manual=True) == bandeja.MSG_UPDATE_BUSY
+    assert app.check_updates(manual=True) == t(bandeja.MSG_UPDATE_BUSY)
     app._update = a_manifest()
     with pytest.raises(bandeja.actualizar.UpdateError, match="Espera"):
         app.install_update()
@@ -993,7 +992,7 @@ def test_after_a_good_download_nothing_else_until_launch(app, with_keys, monkeyp
     monkeypatch.setattr(bandeja.actualizar, "launch", bad)
     app.install_update()
     assert app._update_busy  # ni otra descarga ni otro «Actualizar» mientras tanto
-    assert app.check_updates(manual=True) == bandeja.MSG_UPDATE_BUSY
+    assert app.check_updates(manual=True) == t(bandeja.MSG_UPDATE_BUSY)
     app._drain()  # al lanzar falla: se suelta
     assert not app._update_busy
 
@@ -1011,7 +1010,7 @@ def test_the_menu_shows_the_installed_version(app):
 
 
 def test_the_notice_points_to_the_editor():
-    assert "editor" in bandeja.MSG_UPDATE_AVAILABLE.format(version="0.9.0")
+    assert "editor" in t(bandeja.MSG_UPDATE_AVAILABLE, version="0.9.0")
 
 
 # --- versión de Microsoft Store (paquete MSIX, C-52) ------------------------------------
@@ -1027,7 +1026,7 @@ def test_store_has_no_updater_even_with_keys(store_app, settings, with_keys, mon
     assert not any("actualiza" in t.lower() for t in menu_texts(store_app))
     assert settings.updates_question() is False
     assert settings.snapshot()["updates"]["can_check"] is False
-    assert settings.check_updates() == bandeja.MSG_STORE_UPDATES
+    assert settings.check_updates() == t(bandeja.MSG_STORE_UPDATES)
     store_app.config = store_app.config.model_copy(update={"updates": True})
     assert one_loop_turn(store_app, monkeypatch) == []  # nunca se conecta
 
@@ -1085,7 +1084,7 @@ def test_store_autostart_removed_by_the_user_can_only_come_back_in_windows(
     assert exc.value.status == 409 and "Configuración" in str(exc.value)
     item = next(i for i in walk(store_app.icon.menu) if i.text == "Iniciar con Windows")
     item(store_app.icon)
-    assert store_app.notes[-1] == bandeja.MSG_AUTOSTART_BLOCKED
+    assert store_app.notes[-1] == t(bandeja.MSG_AUTOSTART_BLOCKED)
     assert opened == ["ms-settings:startupapps"]
     settings.open_startup_settings()
     assert opened == ["ms-settings:startupapps"] * 2
@@ -1165,3 +1164,18 @@ def idioma_current() -> str:
     from luzeira import idioma
 
     return idioma.current()
+
+
+def test_after_switching_to_english_the_menu_and_the_notices_are_in_english(app, monkeypatch):
+    # C-62: el menú se rehace con los textos nuevos (fijos y los que se evalúan al abrirlo)
+    # y los avisos de Windows salen ya en inglés.
+    monkeypatch.setattr(app.service, "apply", lambda s, reload=False: None)
+    assert {"Abrir editor", "Pantalla", "Salir"} <= set(menu_texts(app))
+    app._set_language("en")
+    texts = menu_texts(app)
+    assert {"Open editor", "Display", "Brightness", "Quit"} <= set(texts)
+    assert "Choose model and port" in texts and "Rotate 180°" in texts
+    assert not {"Abrir editor", "Pantalla", "Salir"} & set(texts)
+    app._back_to_auto()
+    assert app.notes[-1] == "OK: Luzeira will look for the display by itself."
+    assert app._display_text() == "No display connected"  # lambda: se evalúa al abrir

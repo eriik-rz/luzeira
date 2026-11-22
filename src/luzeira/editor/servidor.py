@@ -59,6 +59,7 @@ from urllib.parse import unquote, urlsplit
 from PIL import Image
 
 from luzeira import __version__, idioma
+from luzeira.idioma import t
 from luzeira.render.motor import (
     Renderer,
     format_clock,
@@ -71,6 +72,7 @@ from luzeira.temas.modelo import (
     ClockWidget,
     SensorWidget,
     TextWidget,
+    localized,
 )
 
 from .ajustes import SettingsBackend, parse_answer, parse_display, parse_update
@@ -88,7 +90,6 @@ FILENAME_HEADER = "X-Luzeira-Filename"
 MISSING_GLYPHS_HEADER = "X-Luzeira-Missing-Glyphs"
 WEB_ROOT = Path(__file__).parent / "web"
 
-DENIED = {"error": "Acceso denegado."}
 
 # Tipos fijos: ``mimetypes`` lee el registro de Windows, donde algunos programas dejan
 # «.js» como text/plain y el navegador se niega a ejecutarlo.
@@ -126,7 +127,7 @@ class PreviewSuperseded(EditorError):
     """Hay una vista previa más nueva esperando: esta no se pinta."""
 
     def __init__(self) -> None:
-        super().__init__(PREVIEW_SUPERSEDED, "Hay una vista previa más reciente en camino.")
+        super().__init__(PREVIEW_SUPERSEDED, t("servidor.vista_superada"))
 
     def body(self) -> dict:
         return {**super().body(), "superseded": True}
@@ -222,16 +223,20 @@ def find_missing_glyphs(theme, files, moment: datetime | None = None) -> list[di
     """Elementos con texto cuya fuente no tiene alguna letra: ``[{index, chars}]``.
 
     Se miran los textos fijos (texto, prefijo y sufijo de un sensor, el reloj tal y como
-    sale ahora). Los valores de los sensores son números y unidades: los tiene cualquier
-    fuente que tenga el resto. Los espacios no cuentan (no tienen dibujo que comparar).
+    sale ahora), en el idioma activo: lo mismo que se pinta. Los valores de los sensores
+    son números y unidades: los tiene cualquier fuente que tenga el resto. Los espacios
+    no cuentan (no tienen dibujo que comparar).
     """
     moment = moment or datetime.now()
+    lang = idioma.current()
     found = []
     for index, widget in enumerate(theme.widgets):
         if isinstance(widget, TextWidget):
-            text = widget.text
+            text = localized(widget.text, widget.text_i18n, lang)
         elif isinstance(widget, SensorWidget):
-            text = widget.prefix + widget.suffix
+            text = localized(widget.prefix, widget.prefix_i18n, lang) + localized(
+                widget.suffix, widget.suffix_i18n, lang
+            )
         elif isinstance(widget, ClockWidget):
             text = format_clock(widget.format, moment)
         else:
@@ -340,7 +345,8 @@ class EditorServer:
     @property
     def port(self) -> int:
         if self._httpd is None:
-            raise RuntimeError("El servidor del editor no está arrancado.")
+            # Fallo de programación, no un texto para el usuario.
+            raise RuntimeError("El servidor del editor no está arrancado.")  # i18n: no
         return self._httpd.server_address[1]
 
     @property
@@ -414,7 +420,7 @@ class EditorServer:
             return self._generation != generation
 
         if not isinstance(body, dict):
-            raise EditorError(400, "Faltan «name» y «theme».")
+            raise EditorError(400, t("servidor.faltan_name_theme"))
         entry = self.store.entry(body.get("name"))
         theme = parse_theme(body.get("theme"))
         files = self.store.check_files(theme, entry.path)
@@ -444,14 +450,14 @@ class EditorServer:
     def settings(self) -> SettingsBackend:
         """Los ajustes de la app; sin ellos (tests, ``--desarrollo`` suelto), 404."""
         if self._settings is None:
-            raise EditorError(404, "No existe.")
+            raise EditorError(404, t("servidor.no_existe"))
         return self._settings
 
     def import_theme(self, data: bytes, suggested: str) -> str:
         """Importa un tema ``.zip`` subido desde el editor (las mismas reglas que desde
         el menú: ``import_theme_zip`` valida rutas, tamaños e imágenes)."""
         if not suggested.lower().endswith(".zip"):
-            raise EditorError(400, "El tema tiene que ser un fichero .zip.")
+            raise EditorError(400, t("servidor.solo_zip"))
         backend = self.settings()
         # Carpeta temporal propia: el zip nunca se escribe con el nombre que manda la página.
         with tempfile.TemporaryDirectory(prefix="luzeira-importar-") as tmp:
@@ -499,7 +505,7 @@ def _route_label(path: str) -> str:
             "importar-tema", "actualizaciones", "buscar", "instalar",
         }  # fmt: skip
         return "/" + "/".join(p if p in known or p == "api" else "*" for p in parts[1:6])
-    return "/(estático)"
+    return "/(estático)"  # i18n: no (solo va a los logs)
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -508,7 +514,14 @@ class _Handler(BaseHTTPRequestHandler):
     sys_version = ""
     timeout = 30  # una conexión lenta no se queda un hilo para siempre
     error_content_type = "application/json; charset=utf-8"
-    error_message_format = '{"error": "Petición no válida (%(code)d)."}'
+
+    @property
+    def error_message_format(self) -> str:  # type: ignore[override]
+        """Cuerpo de los errores que responde el propio ``http.server`` (petición mal
+        formada…), en el idioma activo. Lo rellena con ``%``: «%(code)d» es el código."""
+        text = t("servidor.peticion_no_valida", code="%(code)d")
+        return json.dumps({"error": text}, ensure_ascii=False)
+
     server: _HTTPServer
 
     # --- logs: sin rutas ni nombres del usuario ---
@@ -571,27 +584,25 @@ class _Handler(BaseHTTPRequestHandler):
         self._send(code, body, "application/json; charset=utf-8")
 
     def _deny(self) -> None:
-        self._json(403, DENIED)
+        self._json(403, {"error": t("servidor.denegado")})
 
     # --- cuerpo ---
 
     def _body(self, limit: int) -> bytes:
         if self.headers.get("Transfer-Encoding"):
-            raise EditorError(411, "Falta la longitud de los datos (Content-Length).")
+            raise EditorError(411, t("servidor.falta_longitud"))
         lengths = self.headers.get_all("Content-Length") or []
         if len(lengths) != 1:
-            raise EditorError(411, "Falta la longitud de los datos (Content-Length).")
+            raise EditorError(411, t("servidor.falta_longitud"))
         if not lengths[0].isdigit():
-            raise EditorError(400, "La longitud de los datos no es válida.")
+            raise EditorError(400, t("servidor.longitud_no_valida"))
         length = int(lengths[0])
         if length > limit:
-            raise EditorError(
-                413, f"Los datos son demasiado grandes (máximo {limit // (1024 * 1024)} MB)."
-            )
+            raise EditorError(413, t("servidor.datos_grandes", max=limit // (1024 * 1024)))
         self._consumed = True
         data = self.rfile.read(length)
         if len(data) != length:
-            raise EditorError(400, "Los datos llegaron incompletos.")
+            raise EditorError(400, t("servidor.datos_incompletos"))
         return data
 
     def _drain(self) -> None:
@@ -636,14 +647,14 @@ class _Handler(BaseHTTPRequestHandler):
                 return self._api(method, split.path, split.query)
             if method == "GET":
                 return self._static(split.path)
-            raise EditorError(404, "No existe.")
+            raise EditorError(404, t("servidor.no_existe"))
         except EditorError as exc:
             self._json(exc.status, exc.body())
         except Exception as exc:
             # Solo el tipo: el mensaje y la traza pueden llevar rutas con el usuario.
             log.error("Error interno del editor (%s).", type(exc).__name__)
             with contextlib.suppress(OSError):
-                self._json(500, {"error": "Error interno. Prueba otra vez."})
+                self._json(500, {"error": t("servidor.error_interno")})
 
     def _preflight(self, origins: list[str]) -> None:
         editor = self.server.editor
@@ -688,7 +699,7 @@ class _Handler(BaseHTTPRequestHandler):
             case ("POST", "temas", name, "copiar"):
                 body = self._json_body()
                 if not isinstance(body, dict):
-                    raise EditorError(400, "Falta el nombre del tema nuevo.")
+                    raise EditorError(400, t("servidor.falta_nombre_nuevo"))
                 new = store.copy(name, body.get("title"), body.get("theme"))
                 return self._json(200, {"name": new})
             case ("POST", "temas", name, "aplicar"):
@@ -698,9 +709,7 @@ class _Handler(BaseHTTPRequestHandler):
                 store._writable(name)  # 404/409 antes de leer 10 MB
                 if query:
                     # Antes iba en ``?nombre=``; que nadie lo siga mandando por ahí.
-                    raise EditorError(
-                        400, f"El nombre del fichero va en la cabecera {FILENAME_HEADER}."
-                    )
+                    raise EditorError(400, t("servidor.nombre_en_cabecera", header=FILENAME_HEADER))
                 suggested = self._upload_filename()
                 store._upload_target(suggested)  # 400 antes de leer 10 MB
                 data = self._body(MAX_UPLOAD_BODY)
@@ -737,7 +746,7 @@ class _Handler(BaseHTTPRequestHandler):
             case ("GET", "temas", name, "recursos", *rest) if rest:
                 data, ctype = store.resource(name, "/".join(rest))
                 return self._send(200, data, ctype)
-        raise EditorError(404, "No existe.")
+        raise EditorError(404, t("servidor.no_existe"))
 
     def _upload_filename(self) -> str:
         """Nombre sugerido de la cabecera ``X-Luzeira-Filename``, ya decodificado.
@@ -746,7 +755,7 @@ class _Handler(BaseHTTPRequestHandler):
         luego ``ThemeStore._upload_target`` aplica las reglas de siempre (sin «/», barra
         invertida, «:», «..», ni carácter nulo; extensión permitida).
         """
-        bad = EditorError(400, "El nombre del fichero no es válido.")
+        bad = EditorError(400, t("servidor.nombre_fichero_no_valido"))
         values = self.headers.get_all(FILENAME_HEADER) or []
         if len(values) != 1 or not values[0].isascii():
             raise bad
@@ -761,13 +770,13 @@ class _Handler(BaseHTTPRequestHandler):
         if not parts:
             parts = ["index.html"]
         if len(parts) > 4 or not all(_STATIC_SEGMENT.match(p) and ".." not in p for p in parts):
-            raise EditorError(404, "No existe.")
+            raise EditorError(404, t("servidor.no_existe"))
         target = root.joinpath(*parts)
         if not target.resolve().is_relative_to(root) or target.is_symlink() or not target.is_file():
-            raise EditorError(404, "No existe.")
+            raise EditorError(404, t("servidor.no_existe"))
         ctype = STATIC_TYPES.get(target.suffix.lower())
         if ctype is None:
-            raise EditorError(404, "No existe.")
+            raise EditorError(404, t("servidor.no_existe"))
         # La CSP en todos los estáticos (no solo en el HTML): un SVG o un JSON abierto
         # directamente en el navegador tampoco puede cargar ni ejecutar nada de fuera.
         self._send(200, target.read_bytes(), ctype, {"Content-Security-Policy": CSP})

@@ -44,11 +44,11 @@ export function SettingsDialog({ api, onDisplayChosen, onLanguageChanged, onClos
         },
         (e: unknown) => {
           if (e instanceof ApiError && e.status === 404) {
-            setLoadError('Los ajustes solo están cuando abres el editor desde el icono de Luzeira (junto al reloj).')
+            setLoadError(t('ajustes.sin_bandeja'))
           } else setLoadError(errorMessage(e))
         },
       ),
-    [api],
+    [api, t],
   )
 
   useEffect(() => {
@@ -84,7 +84,7 @@ export function SettingsDialog({ api, onDisplayChosen, onLanguageChanged, onClos
     setConfirm(null)
     try {
       await api.chooseDisplay(option?.id ?? null, confirmed)
-      toast(option ? 'Probando la pantalla elegida…' : 'Vale: Luzeira buscará la pantalla ella sola.', 'info')
+      toast(option ? t('ajustes.probando') : t('ajustes.auto.elegida'), 'info')
     } catch (e) {
       toast(errorMessage(e), 'error')
     }
@@ -117,7 +117,7 @@ export function SettingsDialog({ api, onDisplayChosen, onLanguageChanged, onClos
   const importZip = (file: File) =>
     run(async () => {
       const name = await api.importTheme(file)
-      toast('Tema importado. Lo tienes en «Mis temas».', 'ok')
+      toast(t('ajustes.importado'), 'ok')
       onImported(name)
     })
 
@@ -125,35 +125,35 @@ export function SettingsDialog({ api, onDisplayChosen, onLanguageChanged, onClos
   return (
     <>
       <Dialog
-        title="Ajustes"
+        title={t('ajustes.titulo')}
         className="settings"
         onClose={onClose}
         actions={
           <button type="button" className="btn primary" onClick={onClose}>
-            Cerrar
+            {t('comun.cerrar')}
           </button>
         }
       >
         {loadError && !settings && <p className="settings-error">{loadError}</p>}
-        {!loadError && !settings && <p>Cargando…</p>}
+        {!loadError && !settings && <p>{t('comun.cargando')}</p>}
         {settings && (
           <>
             <section className="settings-section" aria-labelledby="ajustes-pantalla">
-              <h3 id="ajustes-pantalla">Pantalla</h3>
+              <h3 id="ajustes-pantalla">{t('ajustes.pantalla')}</h3>
               <p className="settings-status" role="status">
                 {settings.display_text}
               </p>
               <Segmented
-                label="Brillo"
+                label={t('ajustes.brillo')}
                 value={String(settings.brightness)}
-                options={settings.brightness_levels.map((l) => ({ value: String(l), label: `${l} %` }))}
+                options={settings.brightness_levels.map((l) => ({ value: String(l), label: t('ajustes.brillo.nivel', { n: l }) }))}
                 onChange={(v) => void change({ brightness: Number(v) })}
               />
-              <Toggle label="Girar 180°" checked={settings.flip} onChange={(v) => void change({ flip: v })} hint="Si tienes la pantalla montada boca abajo." />
-              <Field label="Modelo y puerto" hint="Lo normal es dejar que Luzeira la encuentre sola. Elige aquí solo si no la encuentra o tienes varias.">
+              <Toggle label={t('ajustes.girar')} checked={settings.flip} onChange={(v) => void change({ flip: v })} hint={t('ajustes.girar.ayuda')} />
+              <Field label={t('ajustes.modelo')} hint={t('ajustes.modelo.ayuda')}>
                 {({ inputId, describedBy }) => (
                   <select id={inputId} className="input" aria-describedby={describedBy} value={selectValue} onChange={(e) => pick(e.target.value)}>
-                    <option value={AUTO}>Detectarla sola (recomendado)</option>
+                    <option value={AUTO}>{t('ajustes.modelo.auto')}</option>
                     {settings.choices.map((o, i) => (
                       <option key={o.id ?? `no-${i}`} value={o.id ?? `no-${i}`} disabled={o.id === null}>
                         {o.label}
@@ -161,23 +161,23 @@ export function SettingsDialog({ api, onDisplayChosen, onLanguageChanged, onClos
                     ))}
                     {selectValue === OTHER && (
                       <option value={OTHER} disabled>
-                        Elegida a mano (modo avanzado)
+                        {t('ajustes.modelo.otra')}
                       </option>
                     )}
                   </select>
                 )}
               </Field>
               <details className="settings-advanced">
-                <summary>Modo avanzado (cualquier puerto)</summary>
+                <summary>{t('ajustes.avanzado.resumen')}</summary>
                 <p className="settings-warning">
-                  <IconWarn /> Solo si sabes qué hay conectado en cada puerto: si no es una pantalla, recibirá datos que no entiende.
+                  <IconWarn /> {t('ajustes.avanzado.aviso')}
                 </p>
                 <label className="sr-only" htmlFor="ajustes-avanzado">
-                  Puerto y modelo en modo avanzado
+                  {t('ajustes.avanzado.etiqueta')}
                 </label>
                 <select id="ajustes-avanzado" className="input" value="" onChange={(e) => pick(e.target.value)}>
                   <option value="" disabled>
-                    {settings.advanced.length ? 'Elige puerto y modelo…' : 'No hay ningún puerto COM'}
+                    {settings.advanced.length ? t('ajustes.avanzado.elige') : t('ajustes.avanzado.ninguno')}
                   </option>
                   {settings.advanced.map((o) => (
                     <option key={o.id} value={o.id ?? ''}>
@@ -210,41 +210,41 @@ export function SettingsDialog({ api, onDisplayChosen, onLanguageChanged, onClos
             </section>
 
             <section className="settings-section" aria-labelledby="ajustes-inicio">
-              <h3 id="ajustes-inicio">Inicio y accesos</h3>
+              <h3 id="ajustes-inicio">{t('ajustes.inicio')}</h3>
               {settings.autostart_blocked ? (
                 <>
                   <p className="settings-status">
-                    Quitaste Luzeira del inicio desde Windows, así que solo se puede volver a activar allí.
+                    {t('ajustes.inicio.bloqueado')}
                   </p>
                   <button type="button" className="btn" disabled={busy} onClick={() => void run(() => api.openStartupSettings())}>
-                    Abrir Configuración de Windows
+                    {t('ajustes.inicio.configuracion')}
                   </button>
                 </>
               ) : (
                 <Toggle
-                  label="Iniciar con Windows"
+                  label={t('ajustes.inicio.windows')}
                   checked={settings.autostart}
                   onChange={(v) => void change({ autostart: v })}
-                  hint="Luzeira se abre sola al encender el PC, sin pedir permisos de administrador."
+                  hint={t('ajustes.inicio.windows.ayuda')}
                 />
               )}
               {settings.store ? (
-                <p className="settings-status">Luzeira ya está en el menú Inicio, y se actualiza desde la Store.</p>
+                <p className="settings-status">{t('ajustes.inicio.store')}</p>
               ) : (
                 <button type="button" className="btn" disabled={busy} onClick={() => void run(async () => toast(await api.createShortcut(), 'ok'))}>
-                  Crear acceso directo en el escritorio
+                  {t('ajustes.inicio.acceso')}
                 </button>
               )}
             </section>
 
             <section className="settings-section" aria-labelledby="ajustes-temas">
-              <h3 id="ajustes-temas">Temas</h3>
+              <h3 id="ajustes-temas">{t('ajustes.temas')}</h3>
               <div className="settings-row">
                 <button type="button" className="btn" disabled={busy} onClick={() => fileRef.current?.click()}>
-                  <IconUpload /> Importar tema (.zip)…
+                  <IconUpload /> {t('ajustes.temas.importar')}
                 </button>
                 <button type="button" className="btn" disabled={busy} onClick={() => void run(() => api.openThemesFolder())}>
-                  <IconFolder /> Abrir carpeta de temas
+                  <IconFolder /> {t('ajustes.temas.carpeta')}
                 </button>
               </div>
               <input
@@ -262,17 +262,17 @@ export function SettingsDialog({ api, onDisplayChosen, onLanguageChanged, onClos
 
             {settings.updates.can_check && (
               <section className="settings-section" aria-labelledby="ajustes-actualizaciones">
-                <h3 id="ajustes-actualizaciones">Actualizaciones</h3>
+                <h3 id="ajustes-actualizaciones">{t('ajustes.actualizaciones')}</h3>
                 <p className="settings-status" role="status">
                   {settings.updates.available
-                    ? `Tienes la ${settings.updates.version}. Hay una versión nueva: la ${settings.updates.available}.`
-                    : `Tienes la versión ${settings.updates.version}.`}
+                    ? t('ajustes.actualizaciones.hay', { version: settings.updates.version, nueva: settings.updates.available })
+                    : t('ajustes.actualizaciones.tienes', { version: settings.updates.version })}
                 </p>
                 <Toggle
-                  label="Avisarme de versiones nuevas"
+                  label={t('ajustes.actualizaciones.avisar')}
                   checked={settings.updates.enabled === true}
                   onChange={(v) => void setUpdates(v)}
-                  hint="Una vez al día mira en GitHub si hay versión nueva. No envía nada tuyo y nunca instala sin que pulses «Actualizar»."
+                  hint={t('ajustes.actualizaciones.avisar.ayuda')}
                 />
                 <div className="settings-row">
                   {settings.updates.available && (
@@ -282,7 +282,7 @@ export function SettingsDialog({ api, onDisplayChosen, onLanguageChanged, onClos
                       disabled={busy || settings.updates.busy}
                       onClick={() => void run(async () => toast(await api.installUpdate(), 'ok'))}
                     >
-                      Actualizar a la {settings.updates.available}
+                      {t('comun.actualizar_a', { version: settings.updates.available })}
                     </button>
                   )}
                   <button
@@ -297,7 +297,7 @@ export function SettingsDialog({ api, onDisplayChosen, onLanguageChanged, onClos
                       })
                     }
                   >
-                    Buscar ahora
+                    {t('ajustes.actualizaciones.buscar')}
                   </button>
                 </div>
               </section>
@@ -308,15 +308,15 @@ export function SettingsDialog({ api, onDisplayChosen, onLanguageChanged, onClos
 
       {confirm && (
         <Dialog
-          title={confirm.id?.startsWith('avanzado:') ? 'Modo avanzado' : 'Probar un modelo en beta'}
+          title={confirm.id?.startsWith('avanzado:') ? t('ajustes.confirmar.avanzado') : t('ajustes.confirmar.beta')}
           onClose={() => setConfirm(null)}
           actions={
             <>
               <button type="button" className="btn primary" onClick={() => setConfirm(null)}>
-                No
+                {t('comun.no')}
               </button>
               <button type="button" className="btn danger" onClick={() => void choose(confirm, true)}>
-                Sí, probar
+                {t('ajustes.confirmar.si')}
               </button>
             </>
           }

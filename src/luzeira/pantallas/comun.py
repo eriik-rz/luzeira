@@ -14,6 +14,8 @@ from collections.abc import Callable
 from enum import IntEnum
 from typing import TYPE_CHECKING, Protocol
 
+from luzeira.idioma import t
+
 if TYPE_CHECKING:
     from luzeira.pantallas.modelos import DisplayChoice
 
@@ -40,7 +42,13 @@ class Orientation(IntEnum):
 
 
 class DisplayError(Exception):
-    """Error al hablar con la pantalla, con un mensaje que se puede enseñar al usuario."""
+    """Error al hablar con la pantalla, con un mensaje que se puede enseñar al usuario.
+
+    El mensaje se escribe en el idioma activo al crear el error (con ``t()``)."""
+
+    #: True si el mensaje ya dice que se sigue intentando: el servicio no lo repite.
+    #: (Antes se buscaba la palabra «intentando» en el texto, que en otro idioma no está.)
+    says_retrying = False
 
 
 class DisplayBusy(DisplayError):
@@ -49,10 +57,7 @@ class DisplayBusy(DisplayError):
 
     def __init__(self, device: str) -> None:
         self.device = device
-        super().__init__(
-            f"La pantalla ({device}) está en uso por otro programa, como UsbPCMonitor. "
-            "Ciérralo para que Luzeira pueda usarla."
-        )
+        super().__init__(t("pantallas.en_uso", device=device))
 
 
 class ConfirmationNeeded(DisplayError):
@@ -66,14 +71,7 @@ class ConfirmationNeeded(DisplayError):
 
     def __init__(self, device: str, message: str | None = None) -> None:
         self.device = device
-        super().__init__(
-            message
-            or (
-                f"He encontrado una pantalla en {device}, pero no puedo asegurar qué modelo es. "
-                'Confirma que es una Turing / UsbPCMonitor de 3,5" (revisión A) para '
-                "continuar, o elige otro modelo en «Pantalla»."
-            )
-        )
+        super().__init__(message or t("pantallas.confirmar_rev_a", device=device))
 
 
 class ModelToConfirm(ConfirmationNeeded):
@@ -83,9 +81,7 @@ class ModelToConfirm(ConfirmationNeeded):
     def __init__(self, choice: DisplayChoice, label: str) -> None:
         self.choice = choice
         super().__init__(
-            choice.device,
-            f"He encontrado en {choice.device} una pantalla que parece una {label} (beta). "
-            "Si es la tuya, confírmalo en el menú del icono para probarla.",
+            choice.device, t("pantallas.confirmar_modelo", device=choice.device, model=label)
         )
 
 
@@ -95,11 +91,7 @@ class WrongModel(DisplayError):
 
     def __init__(self, device: str, label: str) -> None:
         self.device = device
-        super().__init__(
-            f"La pantalla de {device} no contesta como una {label}: no parece ser ese "
-            "modelo. He cerrado el puerto. Prueba otro en «Pantalla» > «Elegir modelo y "
-            "puerto»."
-        )
+        super().__init__(t("pantallas.modelo_equivocado", device=device, model=label))
 
 
 class NoAnswer(DisplayError):
@@ -107,9 +99,11 @@ class NoAnswer(DisplayError):
     :class:`WrongModel`): puede estar aún arrancando, así que se reintenta como cualquier
     otro fallo al abrir. El puerto ya está cerrado."""
 
+    says_retrying = True
+
     def __init__(self, device: str) -> None:
         self.device = device
-        super().__init__(f"La pantalla de {device} no contesta todavía. Lo sigo intentando.")
+        super().__init__(t("pantallas.no_contesta", device=device))
 
 
 class UnsupportedModel(DisplayError):
@@ -120,18 +114,14 @@ class UnsupportedModel(DisplayError):
 
     def __init__(self, device: str, label: str) -> None:
         self.device = device
-        super().__init__(
-            f"He encontrado una {label} en {device}, pero Luzeira todavía no es compatible "
-            "con ese modelo, así que no le mando nada. Si conectas otra pantalla compatible, "
-            "la usaré sola."
-        )
+        super().__init__(t("pantallas.no_compatible", device=device, model=label))
 
 
 class ChosenDisplayMissing(DisplayError):
     """La pantalla elegida a mano no está conectada ahora (o su USB ya no coincide)."""
 
     def __init__(self) -> None:
-        super().__init__("No encuentro la pantalla que elegiste. ¿Está conectada por USB?")
+        super().__init__(t("pantallas.elegida_no_esta"))
 
 
 class Transport(Protocol):
@@ -169,7 +159,8 @@ def open_error(device: str, exc: BaseException) -> DisplayError:
     if is_access_denied(exc):
         error: DisplayError = DisplayBusy(device)
     else:
-        error = DisplayError(f"No puedo abrir la pantalla ({device}). Lo sigo intentando.")
+        error = DisplayError(t("pantallas.no_puedo_abrir_reintento", device=device))
+        error.says_retrying = True
     error.__cause__ = exc  # para el log; el mensaje es para el usuario
     return error
 
@@ -191,7 +182,7 @@ def open_probed(
       puerto y se para ahí: ni otro intento ni otro modelo.
     """
     factory = serial_factory or default_serial_factory
-    last_error: DisplayError = DisplayError(f"No puedo abrir la pantalla ({device}).")
+    last_error: DisplayError = DisplayError(t("pantallas.no_puedo_abrir", device=device))
     for attempt in range(max(1, retries)):
         transport = None
         try:

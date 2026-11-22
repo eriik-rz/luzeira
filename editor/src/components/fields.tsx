@@ -3,6 +3,9 @@
 // hay, el error en español junto al campo.
 
 import { useId, useState, type ReactNode } from 'react'
+import { useT } from '../i18n/contexto.ts'
+import { localNumber } from '../model/format.ts'
+import { t } from '../model/i18n.ts'
 
 interface FieldProps {
   label: string
@@ -68,6 +71,7 @@ interface NumberFieldProps {
  * tema cuando es un número válido (y la coma decimal vale igual que el punto).
  */
 export function NumberField({ label, value, onChange, min, max, step = 1, integer = true, hint, error, affix }: NumberFieldProps) {
+  useT() // el número y los avisos cambian con el idioma
   const [draft, setDraft] = useState<string | null>(null)
   const shown = draft ?? formatNumber(value)
   const parse = (text: string): number | null => {
@@ -81,7 +85,7 @@ export function NumberField({ label, value, onChange, min, max, step = 1, intege
     draft === null
       ? null
       : parsed === null
-        ? 'Escribe un número.'
+        ? t('campos.escribe_numero')
         : (min !== undefined && parsed < min) || (max !== undefined && parsed > max)
           ? rangeMessage(min, max)
           : null
@@ -132,13 +136,13 @@ export function NumberField({ label, value, onChange, min, max, step = 1, intege
 }
 
 function rangeMessage(min?: number, max?: number): string {
-  if (min !== undefined && max !== undefined) return `Tiene que estar entre ${formatNumber(min)} y ${formatNumber(max)}.`
-  if (max !== undefined) return `Como mucho ${formatNumber(max)}.`
-  return `Como poco ${formatNumber(min ?? 0)}.`
+  if (min !== undefined && max !== undefined) return t('modelo.validar.entre', { min: formatNumber(min), max: formatNumber(max) })
+  if (max !== undefined) return t('campos.como_mucho', { max: formatNumber(max) })
+  return t('campos.como_poco', { min: formatNumber(min ?? 0) })
 }
 
 function formatNumber(n: number): string {
-  return String(n).replace('.', ',')
+  return localNumber(n)
 }
 
 interface TextFieldProps {
@@ -195,6 +199,7 @@ interface ColorFieldProps {
 
 /** Selector de color del sistema + el código #rrggbb para quien lo quiera escribir. */
 export function ColorField({ label, value, onChange, hint, error }: ColorFieldProps) {
+  const tr = useT()
   const [draft, setDraft] = useState<string | null>(null)
   const valid = (v: string) => /^#[0-9a-fA-F]{6}$/.test(v)
   return (
@@ -203,7 +208,7 @@ export function ColorField({ label, value, onChange, hint, error }: ColorFieldPr
         <div className="color-field">
           <input
             type="color"
-            aria-label={`${label}: elegir en la paleta`}
+            aria-label={tr('campos.paleta', { campo: label })}
             value={valid(value) ? value.toLowerCase() : '#000000'}
             onChange={(e) => {
               setDraft(null)

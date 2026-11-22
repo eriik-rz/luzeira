@@ -1,0 +1,19 @@
+{
+  "sistema.acceso_fallo": "I couldn't create the shortcut.",
+  "sistema.actualizar_firma_no_valida": "The new version's signature isn't valid.",
+  "sistema.actualizar_info_no_valida": "The new version's information isn't valid.",
+  "sistema.actualizar_fuera_de_github": "The download tried to go to a site that isn't GitHub.",
+  "sistema.actualizar_sin_versiones": "There are no versions with update notices yet.",
+  "sistema.actualizar_error_github": "GitHub answered with an error ({code}).",
+  "sistema.actualizar_sin_conexion": "I couldn't connect to GitHub. Are you online?",
+  "sistema.actualizar_respuesta_grande": "GitHub's answer is bigger than expected.",
+  "sistema.actualizar_descarga_grande": "The download is bigger than expected.",
+  "sistema.actualizar_no_puede": "This copy of Luzeira can't check for updates.",
+  "sistema.actualizar_instalador_distinto": "The downloaded installer doesn't match the signed one. I won't open it.",
+  "sistema.ventana_titulo": "Luzeira — Theme editor",
+  "sistema.ventana_sin_guardar": "There are unsaved changes ({reason}). Close anyway?",
+  "sistema.ventana_pendiente_errores": "there are errors marked in red",
+  "sistema.ventana_pendiente_incluido": "they're changes to a built-in theme; use “Save as” to keep them",
+  "sistema.ventana_pendiente_fallo": "they couldn't be saved",
+  "sistema.ventana_pendiente_desconocido": "I couldn't check whether anything is left to save"
+}

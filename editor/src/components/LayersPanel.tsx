@@ -5,7 +5,8 @@
 import { useState, type Dispatch } from 'react'
 import { gapToIndex, type Action } from '../model/editorState.ts'
 import { MAX_WIDGETS, type Theme, type WidgetType } from '../model/types.ts'
-import { WIDGET_TYPE_INFO } from '../model/theme.ts'
+import { widgetTypeInfo } from '../model/theme.ts'
+import { useT } from '../i18n/contexto.ts'
 import { IconDown, IconGrip, IconPlus, IconUp, WidgetIcon } from './icons.tsx'
 
 interface Props {
@@ -21,6 +22,7 @@ interface Props {
 const ADD_ORDER: WidgetType[] = ['text', 'clock', 'sensor', 'bar', 'image']
 
 export function LayersPanel({ theme, ids, labels, selectedId, errorIds, dispatch, onAdd }: Props) {
+  const t = useT()
   const [menuOpen, setMenuOpen] = useState(false)
   const [dragFrom, setDragFrom] = useState<number | null>(null) // índice en el tema
   const [gap, setGap] = useState<number | null>(null) // hueco en la lista mostrada
@@ -43,9 +45,9 @@ export function LayersPanel({ theme, ids, labels, selectedId, errorIds, dispatch
   }
 
   return (
-    <aside className="left" aria-label="Capas">
+    <aside className="left" aria-label={t('capas.titulo')}>
       <div className="panel-head">
-        <h2 id="layers-title">Capas</h2>
+        <h2 id="layers-title">{t('capas.titulo')}</h2>
         <div
           className="menu-wrap"
           onBlur={(e) => {
@@ -58,16 +60,16 @@ export function LayersPanel({ theme, ids, labels, selectedId, errorIds, dispatch
             aria-haspopup="menu"
             aria-expanded={menuOpen}
             disabled={full}
-            title={full ? `Un tema admite como mucho ${MAX_WIDGETS} elementos` : 'Añadir un elemento nuevo a la pantalla'}
+            title={full ? t('capas.lleno', { max: MAX_WIDGETS }) : t('capas.anadir.ayuda')}
             onClick={() => setMenuOpen((o) => !o)}
           >
-            <IconPlus /> Añadir
+            <IconPlus /> {t('capas.anadir')}
           </button>
           {menuOpen && (
             <div
               className="menu"
               role="menu"
-              aria-label="Tipo de elemento"
+              aria-label={t('capas.tipo')}
               onKeyDown={(e) => {
                 const items = [...e.currentTarget.querySelectorAll<HTMLButtonElement>('[role=menuitem]')]
                 const i = items.indexOf(document.activeElement as HTMLButtonElement)
@@ -92,8 +94,8 @@ export function LayersPanel({ theme, ids, labels, selectedId, errorIds, dispatch
                 >
                   <WidgetIcon type={type} />
                   <div>
-                    <strong>{WIDGET_TYPE_INFO[type].label}</strong>
-                    <span>{WIDGET_TYPE_INFO[type].help}</span>
+                    <strong>{widgetTypeInfo(type).label}</strong>
+                    <span>{widgetTypeInfo(type).help}</span>
                   </div>
                 </button>
               ))}
@@ -101,13 +103,13 @@ export function LayersPanel({ theme, ids, labels, selectedId, errorIds, dispatch
           )}
         </div>
       </div>
-      <p className="panel-hint">Lo de arriba se ve por delante. Arrastra para cambiar el orden.</p>
+      <p className="panel-hint">{t('capas.pista')}</p>
 
       {n === 0 ? (
         <div className="empty-layers">
-          La pantalla está vacía.
+          {t('capas.vacia')}
           <br />
-          Pulsa «Añadir» para poner el primer elemento.
+          {t('capas.vacia.pista')}
         </div>
       ) : (
         <ul
@@ -160,7 +162,7 @@ export function LayersPanel({ theme, ids, labels, selectedId, errorIds, dispatch
                   type="button"
                   className="layer-button"
                   aria-pressed={selected}
-                  aria-label={`${WIDGET_TYPE_INFO[w.type].label}: ${labels[index]}${errorIds.has(id) ? ' (tiene errores)' : ''}`}
+                  aria-label={`${widgetTypeInfo(w.type).label}: ${labels[index]}${errorIds.has(id) ? ` ${t('capas.con_errores')}` : ''}`}
                   onKeyDown={(e) => {
                     if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
                       e.preventDefault()
@@ -168,7 +170,7 @@ export function LayersPanel({ theme, ids, labels, selectedId, errorIds, dispatch
                       moveBy(index, e.key === 'ArrowUp' ? 1 : -1)
                     }
                   }}
-                  title="Alt + ↑/↓ para subir o bajar la capa"
+                  title={t('capas.alt')}
                 >
                   <span className="layer-name">{labels[index]}</span>
                 </button>
@@ -182,8 +184,8 @@ export function LayersPanel({ theme, ids, labels, selectedId, errorIds, dispatch
                         e.stopPropagation()
                         moveBy(index, 1)
                       }}
-                      title="Traer hacia delante (subir en la lista)"
-                      aria-label="Traer hacia delante"
+                      title={t('capas.delante.ayuda')}
+                      aria-label={t('capas.delante')}
                     >
                       <IconUp />
                     </button>
@@ -195,8 +197,8 @@ export function LayersPanel({ theme, ids, labels, selectedId, errorIds, dispatch
                         e.stopPropagation()
                         moveBy(index, -1)
                       }}
-                      title="Enviar hacia atrás (bajar en la lista)"
-                      aria-label="Enviar hacia atrás"
+                      title={t('capas.atras.ayuda')}
+                      aria-label={t('capas.atras')}
                     >
                       <IconDown />
                     </button>
@@ -208,7 +210,7 @@ export function LayersPanel({ theme, ids, labels, selectedId, errorIds, dispatch
         </ul>
       )}
       <div className="layers-foot">
-        {n} de {MAX_WIDGETS} elementos
+        {t('capas.cuenta', { n, max: MAX_WIDGETS })}
       </div>
     </aside>
   )

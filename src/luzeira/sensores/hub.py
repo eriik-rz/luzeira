@@ -10,12 +10,14 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 
+from luzeira.idioma import t
 from luzeira.sensores.base import Reading, SensorInfo, SensorSource
 
 log = logging.getLogger(__name__)
 
-NOT_READ_YET = "Aún no hay lectura."
-SOURCE_FAILED = "No se pudo leer este sensor."
+# Claves del catálogo (zona ``sensores``): el motivo se traduce al crear cada lectura.
+NOT_READ_YET = "sensores.sin_lectura"
+SOURCE_FAILED = "sensores.fuente_fallo"
 
 
 class SensorHub:
@@ -47,7 +49,7 @@ class SensorHub:
                 readings = source.read_all()
             except Exception as exc:
                 _log_failure("read_all", source, exc)
-                readings = {i.id: Reading(None, i.unit, reason=SOURCE_FAILED) for i in infos}
+                readings = {i.id: Reading(None, i.unit, reason=t(SOURCE_FAILED)) for i in infos}
             for sensor_id, reading in readings.items():
                 snapshot.setdefault(sensor_id, reading)
         self._snapshot = snapshot
@@ -58,8 +60,8 @@ class SensorHub:
             return reading
         info = self._info.get(sensor_id)
         if info is None:
-            return Reading(None, "", reason=f"Sensor desconocido: {sensor_id}")
-        return Reading(None, info.unit, reason=NOT_READ_YET)
+            return Reading(None, "", reason=t("sensores.desconocido", id=sensor_id))
+        return Reading(None, info.unit, reason=t(NOT_READ_YET))
 
     def close(self) -> None:
         for source in self._sources:

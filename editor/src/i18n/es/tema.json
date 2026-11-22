@@ -1,0 +1,18 @@
+{
+  "tema.titulo": "Tema",
+  "tema.pista": "Haz clic en un elemento del lienzo para editarlo.",
+  "tema.datos": "Datos",
+  "tema.nombre": "Nombre",
+  "tema.nombre.ayuda": "Así aparece en la lista de temas.",
+  "tema.autor": "Autor (opcional)",
+  "tema.autor.ayuda": "Si compartes el tema, quién lo hizo. Puede ser un apodo.",
+  "tema.pantalla": "Pantalla",
+  "tema.orientacion": "Orientación",
+  "tema.orientacion.ayuda": "Cómo tienes colocada la pantalla. Si al girarla algo no cabe, se recoloca dentro.",
+  "tema.fondo": "Fondo",
+  "tema.fondo.color": "Color de fondo",
+  "tema.fondo.color.ayuda": "Se ve donde no hay imagen de fondo.",
+  "tema.fondo.imagen": "Imagen de fondo",
+  "tema.fondo.imagen.ayuda": "Llena toda la pantalla; si no tiene la misma forma, se recorta por los lados.",
+  "tema.fondo.solo_color": "Solo color"
+}

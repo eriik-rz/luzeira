@@ -11,6 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from luzeira.idioma import t
 from luzeira.sensores import nvidia, windows_gpu
 from luzeira.sensores.base import Reading, SensorInfo
 from luzeira.sensores.gpu import GpuSource
@@ -216,7 +217,7 @@ def test_reads_every_sensor_from_windows():
     assert r["gpu.clock"] == Reading(2610.0, "MHz")
     assert r["gpu.name"] == Reading(None, "", text="GeForce RTX 4070 SUPER")
     assert r["gpu.power"].value is None
-    assert r["gpu.power"].reason == windows_gpu.NO_WATTS
+    assert r["gpu.power"].reason == t(windows_gpu.NO_WATTS)
     assert api.opened_luids == [LUID]  # la repetida de DXGI no se usa
     src.close()
     assert api.counters.closed
@@ -239,7 +240,7 @@ def test_zero_means_no_sensor_not_zero_degrees():
     r = make(api).read_all()
     for sid in ("gpu.temperature", "gpu.fan", "gpu.clock"):
         assert r[sid].value is None, sid
-        assert r[sid].reason == windows_gpu.NOT_SUPPORTED
+        assert r[sid].reason == t(windows_gpu.NOT_SUPPORTED)
     assert r["gpu.usage"].value == 35.0
 
 
@@ -260,8 +261,8 @@ def test_kmt_failures_keep_pdh_values():
     api = FakeApi()
     api.fail_kmt = True
     r = make(api).read_all()
-    assert r["gpu.temperature"].reason == windows_gpu.NOT_SUPPORTED
-    assert r["gpu.fan"].reason == windows_gpu.NOT_SUPPORTED
+    assert r["gpu.temperature"].reason == t(windows_gpu.NOT_SUPPORTED)
+    assert r["gpu.fan"].reason == t(windows_gpu.NOT_SUPPORTED)
     assert r["gpu.usage"].value == 35.0
     assert r["gpu.name"].text == "GeForce RTX 4070 SUPER"
 
@@ -270,7 +271,7 @@ def test_caps_failing_hides_fan_but_keeps_temperature():
     kmt = FakeKmt()
     kmt.caps = None  # Windows antiguo sin ADAPTERPERFDATA_CAPS: sin máximo, sin %
     r = make(FakeApi(kmt=kmt)).read_all()
-    assert r["gpu.fan"].reason == windows_gpu.NOT_SUPPORTED
+    assert r["gpu.fan"].reason == t(windows_gpu.NOT_SUPPORTED)
     assert r["gpu.temperature"] == Reading(56.0, "°C")
 
 
@@ -279,7 +280,7 @@ def test_perfdata_query_failing_gives_reason():
     src = make(api)
     api.kmt.fail_perf = True  # p. ej. otro Windows donde el tipo 62 ya no responde
     r = src.read_all()
-    assert r["gpu.temperature"].reason == windows_gpu.NOT_SUPPORTED
+    assert r["gpu.temperature"].reason == t(windows_gpu.NOT_SUPPORTED)
     assert r["gpu.clock"].value == 2610.0
 
 
@@ -287,8 +288,8 @@ def test_pdh_unavailable_keeps_name_total_and_temperature():
     api = FakeApi()
     api.fail_pdh = True
     r = make(api).read_all()
-    assert r["gpu.usage"].reason == windows_gpu.NOT_SUPPORTED
-    assert r["gpu.memory_used"].reason == windows_gpu.NOT_SUPPORTED
+    assert r["gpu.usage"].reason == t(windows_gpu.NOT_SUPPORTED)
+    assert r["gpu.memory_used"].reason == t(windows_gpu.NOT_SUPPORTED)
     assert r["gpu.memory_usage"].value is None  # nunca se mezcla usada y total
     assert r["gpu.memory_total"] == Reading(12.0, "GB")
     assert r["gpu.temperature"].value == 56.0
@@ -298,7 +299,7 @@ def test_pdh_unavailable_keeps_name_total_and_temperature():
 def test_first_pdh_sample_says_measuring():
     api = FakeApi(samples=[None])
     r = make(api).read_all()
-    assert r["gpu.usage"] == Reading(None, "%", reason=windows_gpu.MEASURING)
+    assert r["gpu.usage"] == Reading(None, "%", reason=t(windows_gpu.MEASURING))
     assert r["gpu.memory_total"].value == 12.0
 
 
@@ -317,7 +318,7 @@ def test_no_hardware_adapter_says_not_found_and_retries_limited():
     clock = Clock()
     src = make(api, clock)
     r = src.read_all()
-    assert all(x.value is None and x.reason == windows_gpu.NOT_FOUND for x in r.values())
+    assert all(x.value is None and x.reason == t(windows_gpu.NOT_FOUND) for x in r.values())
     calls = api.calls
     clock.now += windows_gpu.RETRY_SECONDS - 1
     src.read_all()
@@ -333,7 +334,7 @@ def test_dll_failure_is_reported_and_recovers_on_retry():
     api.fail_dxgi = True
     clock = Clock()
     src = make(api, clock)
-    assert src.read_all()["gpu.name"].reason == windows_gpu.NOT_FOUND
+    assert src.read_all()["gpu.name"].reason == t(windows_gpu.NOT_FOUND)
     api.fail_dxgi = False
     clock.now += windows_gpu.RETRY_SECONDS
     assert src.read_all()["gpu.name"].text == "GeForce RTX 4070 SUPER"
@@ -349,7 +350,7 @@ def test_reselects_when_luid_disappears():
     api.adapters = [new, BASIC]
     api.counters.samples = [sample(luid=0x777, used=6 * GIB)]
     clock.now += windows_gpu.RESELECT_SECONDS
-    assert src.read_all()["gpu.usage"].reason == windows_gpu.NOT_READY
+    assert src.read_all()["gpu.usage"].reason == t(windows_gpu.NOT_READY)
     r = src.read_all()
     assert r["gpu.memory_used"] == Reading(6.0, "GB")
     assert api.opened_luids == [LUID, 0x777]
@@ -455,12 +456,12 @@ def test_background_start_does_not_block_and_close_releases():
     src = WindowsGpuSource(api=slow, sleep=lambda s: None)
     r = src.read_all()  # vuelve enseguida, con el hilo aún abriendo PDH
     assert started.wait(5)
-    assert r["gpu.usage"].reason == windows_gpu.NOT_READY
+    assert r["gpu.usage"].reason == t(windows_gpu.NOT_READY)
     src.close()  # se cierra mientras arranca
     release.set()
     src._thread.join(5)
     assert slow.kmt.closed  # el hilo suelta lo que abrió
-    assert src.read_all()["gpu.usage"].reason == windows_gpu.NOT_READY
+    assert src.read_all()["gpu.usage"].reason == t(windows_gpu.NOT_READY)
 
 
 # --- combinación con NVML -------------------------------------------------------------
@@ -479,7 +480,7 @@ class FakeNvml:
 
     def read_all(self):
         if not self.has_gpu:
-            return {"gpu.usage": Reading(None, "%", reason=nvidia.NOT_FOUND)}
+            return {"gpu.usage": Reading(None, "%", reason=t(nvidia.NOT_FOUND))}
         out = {
             "gpu.temperature": Reading(55.0, "°C"),
             "gpu.usage": Reading(40.0, "%"),
@@ -492,7 +493,9 @@ class FakeNvml:
             "gpu.name": Reading(None, "", text="GeForce RTX 4070 SUPER"),
         }
         for name in self.unsupported:
-            out[f"gpu.{name}"] = Reading(None, out[f"gpu.{name}"].unit, reason=nvidia.NOT_SUPPORTED)
+            out[f"gpu.{name}"] = Reading(
+                None, out[f"gpu.{name}"].unit, reason=t(nvidia.NOT_SUPPORTED)
+            )
         return out
 
     def close(self):
@@ -531,7 +534,7 @@ def test_windows_fills_only_what_nvml_does_not_support():
 def test_fill_needs_the_same_vendor():
     api = FakeApi(adapters=[RADEON], samples=[None, sample(luid=RADEON.luid)])
     src = GpuSource(FakeNvml(has_gpu=True, unsupported=("fan",)), make(api))
-    assert src.read_all()["gpu.fan"].reason == nvidia.NOT_SUPPORTED
+    assert src.read_all()["gpu.fan"].reason == t(nvidia.NOT_SUPPORTED)
 
 
 def test_fill_refused_with_two_nvidia_cards():
@@ -543,7 +546,7 @@ def test_fill_refused_with_two_nvidia_cards():
     )
     api = FakeApi(adapters=[RTX, other, BASIC], samples=[None, both])
     src = GpuSource(FakeNvml(has_gpu=True, unsupported=("fan",)), make(api))
-    assert src.read_all()["gpu.fan"].reason == nvidia.NOT_SUPPORTED
+    assert src.read_all()["gpu.fan"].reason == t(nvidia.NOT_SUPPORTED)
 
 
 def test_windows_released_when_nvml_arrives_late():

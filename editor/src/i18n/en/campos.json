@@ -1,0 +1,6 @@
+{
+  "campos.escribe_numero": "Type a number.",
+  "campos.como_mucho": "{max} at most.",
+  "campos.como_poco": "{min} at least.",
+  "campos.paleta": "{campo}: pick from the palette"
+}

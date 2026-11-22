@@ -3,6 +3,8 @@
 
 import type { Info, ThemeSummary } from '../api.ts'
 import { displayPill } from '../model/contract.ts'
+import { t } from '../model/i18n.ts'
+import { useT } from '../i18n/contexto.ts'
 import { BrandMark, IconRedo, IconSaveAs, IconSend, IconSettings, IconTrash, IconUndo } from './icons.tsx'
 
 export type SaveStatus =
@@ -38,22 +40,23 @@ interface Props {
 function statusView(s: SaveStatus): { cls: string; text: string; title: string } {
   switch (s.kind) {
     case 'saved':
-      return { cls: 'ok', text: 'Guardado', title: 'Todos los cambios están guardados.' }
+      return { cls: 'ok', text: t('barra.estado.guardado'), title: t('barra.estado.guardado.ayuda') }
     case 'pending':
     case 'saving':
-      return { cls: 'busy', text: 'Guardando…', title: 'Se guarda solo un momento después de cada cambio.' }
+      return { cls: 'busy', text: t('barra.estado.guardando'), title: t('barra.estado.guardando.ayuda') }
     case 'invalid':
-      return { cls: 'warn', text: 'Sin guardar: hay errores', title: 'Corrige los campos marcados en rojo y se guardará solo.' }
+      return { cls: 'warn', text: t('barra.estado.errores'), title: t('barra.estado.errores.ayuda') }
     case 'error':
-      return { cls: 'error', text: 'No se ha guardado', title: s.message }
+      return { cls: 'error', text: t('barra.estado.fallo'), title: s.message }
     case 'readonly':
-      return { cls: '', text: 'Tema incluido', title: 'Los temas incluidos no se pueden cambiar. Usa «Guardar como…» para tener tu copia.' }
+      return { cls: '', text: t('barra.estado.incluido'), title: t('barra.estado.incluido.ayuda') }
     case 'readonly-dirty':
-      return { cls: 'warn', text: 'Cambios sin guardar', title: 'Este tema es incluido: tus cambios solo se conservan con «Guardar como…».' }
+      return { cls: 'warn', text: t('barra.estado.sin_guardar'), title: t('barra.estado.sin_guardar.ayuda') }
   }
 }
 
 export function TopBar(p: Props) {
+  useT()
   const st = statusView(p.status)
   const pill = displayPill(p.info && { status: p.info.status, message: p.info.message })
   const mine = p.themes.filter((t) => !t.builtin)
@@ -65,25 +68,25 @@ export function TopBar(p: Props) {
         <span className="brand-text">
           Luzeira{' '}
           {p.info && (
-            <span className="brand-version">{p.info.simulated ? 'demo' : p.info.version}</span>
+            <span className="brand-version">{p.info.simulated ? t('barra.demo') : p.info.version}</span>
           )}{' '}
-          <small>· Editor de temas</small>
+          <small>· {t('barra.editor')}</small>
         </span>
       </div>
 
       <label className="sr-only" htmlFor="theme-select">
-        Tema que estás editando
+        {t('barra.tema')}
       </label>
       <select
         id="theme-select"
         className="input"
         style={{ width: 230, minWidth: 150, flex: "0 4 230px" }}
         value={p.current}
-        title="Tema que estás editando. Cambia para abrir otro."
+        title={t('barra.tema.ayuda')}
         onChange={(e) => p.onSelectTheme(e.target.value)}
       >
         {mine.length > 0 && (
-          <optgroup label="Mis temas">
+          <optgroup label={t('comun.mis_temas')}>
             {mine.map((t) => (
               <option key={t.name} value={t.name}>
                 {t.title}
@@ -91,7 +94,7 @@ export function TopBar(p: Props) {
             ))}
           </optgroup>
         )}
-        <optgroup label="Incluidos con Luzeira">
+        <optgroup label={t('barra.incluidos')}>
           {builtins.map((t) => (
             <option key={t.name} value={t.name}>
               {t.title}
@@ -103,23 +106,23 @@ export function TopBar(p: Props) {
       <button
         type="button"
         className="btn ghost danger"
-        aria-label="Borrar tema"
+        aria-label={t('barra.borrar.etiqueta')}
         disabled={p.builtin}
         onClick={p.onDeleteTheme}
         title={
           p.builtin
-            ? 'Los temas incluidos no se pueden borrar.'
-            : 'Mover este tema a la papelera de Luzeira (se puede recuperar).'
+            ? t('barra.borrar.incluido')
+            : t('barra.borrar.ayuda')
         }
       >
-        <IconTrash /> <span className="btn-label">Borrar</span>
+        <IconTrash /> <span className="btn-label">{t('comun.borrar')}</span>
       </button>
 
       <span className="sep" />
-      <button type="button" className="btn ghost icon" disabled={!p.canUndo} onClick={p.onUndo} title="Deshacer (Ctrl+Z)" aria-label="Deshacer">
+      <button type="button" className="btn ghost icon" disabled={!p.canUndo} onClick={p.onUndo} title={t('barra.deshacer.ayuda')} aria-label={t('comun.deshacer')}>
         <IconUndo />
       </button>
-      <button type="button" className="btn ghost icon" disabled={!p.canRedo} onClick={p.onRedo} title="Rehacer (Ctrl+Y)" aria-label="Rehacer">
+      <button type="button" className="btn ghost icon" disabled={!p.canRedo} onClick={p.onRedo} title={t('barra.rehacer.ayuda')} aria-label={t('barra.rehacer')}>
         <IconRedo />
       </button>
       <span className={`status-pill ${st.cls}`} title={st.title} role="status" aria-live="polite">
@@ -129,9 +132,9 @@ export function TopBar(p: Props) {
       {p.info?.simulated && (
         <span
           className="status-pill sim"
-          title={`${p.info.message} La vista previa es una aproximación dibujada en el navegador; en la app la pinta Luzeira tal cual sale en la pantalla.`}
+          title={`${p.info.message} ${t('barra.simulado.ayuda')}`}
         >
-          Modo simulado
+          {t('barra.simulado')}
         </span>
       )}
 
@@ -145,7 +148,7 @@ export function TopBar(p: Props) {
         <button
           type="button"
           className={`status-pill display-alert ${pill.kind}`}
-          title={`${pill.title} Pulsa para elegir la pantalla en «Ajustes».`}
+          title={`${pill.title} ${t('barra.pastilla.ayuda')}`}
           onClick={p.onSettings}
           role="status"
           aria-live="polite"
@@ -158,36 +161,36 @@ export function TopBar(p: Props) {
         type="button"
         className="btn ghost"
         onClick={p.onRestore}
-        aria-label="Restaurar"
+        aria-label={t('comun.restaurar')}
         disabled={!p.canRestore}
-        title="Volver a como estaba el tema al abrirlo (se puede deshacer con Ctrl+Z)"
+        title={t('barra.restaurar.ayuda')}
       >
-        <IconUndo /> <span className="btn-label">Restaurar</span>
+        <IconUndo /> <span className="btn-label">{t('comun.restaurar')}</span>
       </button>
       {p.builtin ? (
         <button
           type="button"
           className="btn primary highlight"
-          aria-label="Guardar como…"
+          aria-label={t('comun.guardar_como')}
           onClick={p.onSaveAs}
-          title="Los temas incluidos no se cambian: guarda una copia tuya en «Mis temas»"
+          title={t('barra.guardar_como.incluido')}
         >
-          <IconSaveAs /> <span className="btn-label">Guardar como…</span>
+          <IconSaveAs /> <span className="btn-label">{t('comun.guardar_como')}</span>
         </button>
       ) : (
         <>
-          <button type="button" className="btn ghost" aria-label="Guardar como…" onClick={p.onSaveAs} title="Guardar una copia con otro nombre en «Mis temas»">
-            <IconSaveAs /> <span className="btn-label">Guardar como…</span>
+          <button type="button" className="btn ghost" aria-label={t('comun.guardar_como')} onClick={p.onSaveAs} title={t('barra.guardar_como.ayuda')}>
+            <IconSaveAs /> <span className="btn-label">{t('comun.guardar_como')}</span>
           </button>
           <button
             type="button"
             className="btn"
-            aria-label="Guardar"
+            aria-label={t('barra.guardar')}
             onClick={p.onSave}
             disabled={p.status.kind === 'saved'}
-            title={p.status.kind === 'saved' ? 'Todo está guardado (se guarda solo al cambiar algo).' : 'Guardar ahora'}
+            title={p.status.kind === 'saved' ? t('barra.guardar.todo') : t('barra.guardar.ahora')}
           >
-            <IconSaveAs /> <span className="btn-label">Guardar</span>
+            <IconSaveAs /> <span className="btn-label">{t('barra.guardar')}</span>
           </button>
         </>
       )}
@@ -196,19 +199,19 @@ export function TopBar(p: Props) {
         className={`btn keep-label${p.builtin ? '' : ' primary'}`}
         onClick={p.onApply}
         disabled={p.applying}
-        aria-label="Aplicar a la pantalla"
-        title="Mostrar este tema en la pantalla USB ahora y dejarlo puesto"
+        aria-label={t('barra.aplicar')}
+        title={t('barra.aplicar.ayuda')}
       >
-        <IconSend /> <span className="btn-label">{p.applying ? 'Aplicando…' : 'Aplicar a la pantalla'}</span>
+        <IconSend /> <span className="btn-label">{p.applying ? t('barra.aplicando') : t('barra.aplicar')}</span>
       </button>
       <button
         type="button"
         className="btn ghost"
-        aria-label="Ajustes"
+        aria-label={t('ajustes.titulo')}
         onClick={p.onSettings}
-        title="Brillo, girar, elegir pantalla, iniciar con Windows e importar temas"
+        title={t('barra.ajustes.ayuda')}
       >
-        <IconSettings /> <span className="btn-label">Ajustes</span>
+        <IconSettings /> <span className="btn-label">{t('ajustes.titulo')}</span>
       </button>
     </header>
   )

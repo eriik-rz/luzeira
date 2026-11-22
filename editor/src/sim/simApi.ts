@@ -2,13 +2,19 @@
 // contrato (incluidos los 400 con `details`) para que el editor se comporte igual.
 // La vista previa se dibuja aproximada en un <canvas>: NO es la de Python.
 
-import { ApiError, type AppSettings, type EditorApi, type Info, type MissingGlyphs, type Preview, type SettingsChange, type SensorInfo, type ThemeDocument, type ThemeSummary } from '../api.ts'
-import { availableLanguages, NATIVE_NAMES, resolveLanguage } from '../model/i18n.ts'
-import { formatClock, formatReading } from '../model/format.ts'
+import { ApiError, type AppSettings, type DisplayOption, type EditorApi, type Info, type MissingGlyphs, type Preview, type SettingsChange, type SensorInfo, type ThemeDocument, type ThemeSummary } from '../api.ts'
+import { availableLanguages, NATIVE_NAMES, resolveLanguage, t } from '../model/i18n.ts'
+import { formatClock, formatReading, localized } from '../model/format.ts'
 import { normalizeTheme } from '../model/theme.ts'
 import { screenSize, type Theme, type ThemeJson } from '../model/types.ts'
 import { validateTheme } from '../model/validate.ts'
-import { ESENCIAL, MI_TEMA, readSimSensors } from './simData.ts'
+import { ESENCIAL, inLanguage, miTema, readSimSensors } from './simData.ts'
+
+/** Los ajustes que guarda la demo (lo de la pantalla se calcula al pedirlos). */
+type StoredSettings = Omit<AppSettings, 'display_text' | 'display_auto' | 'choices' | 'advanced'>
+
+/** `t` con otro nombre, para los métodos que ya llaman `t` al tema que tocan. */
+const t_ = t
 
 interface StoredTheme {
   builtin: boolean
@@ -33,6 +39,15 @@ function themeFiles(theme: ThemeJson): string[] {
   return [...out]
 }
 
+/**
+ * `?lang=en` en la dirección fuerza el idioma de la demo (para capturas); sin él, manda el
+ * del navegador («automático»).
+ */
+function languageFromUrl(): string {
+  const code = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('lang')
+  return code && availableLanguages().includes(code) ? code : 'auto'
+}
+
 function slugify(title: string): string {
   const base = title
     .normalize('NFD')
@@ -47,7 +62,7 @@ export class SimulatedApi implements EditorApi {
   readonly simulated = true
   private themes = new Map<string, StoredTheme>([
     ['esencial', { builtin: true, theme: ESENCIAL, files: new Map() }],
-    ['mi-tema', { builtin: false, theme: MI_TEMA, files: new Map() }],
+    ['mi-tema', { builtin: false, theme: inLanguage(resolveLanguage(languageFromUrl(), navigator.language), miTema), files: new Map() }],
   ])
   private readings: SensorInfo[] = readSimSensors()
   private applied = 'esencial'
@@ -107,7 +122,7 @@ export class SimulatedApi implements EditorApi {
 
   private get(name: string): StoredTheme {
     const t = this.themes.get(name)
-    if (!t) throw new ApiError('Ese tema ya no existe.', 404)
+    if (!t) throw new ApiError(t_('demo.error.no_existe'), 404)
     return t
   }
 
@@ -121,12 +136,10 @@ export class SimulatedApi implements EditorApi {
       // En la demo, «automático» es el idioma del navegador.
       language: resolveLanguage(this.appSettings.language, navigator.language),
       status: noDisplay ? 'no_display' : 'simulado',
-      message: noDisplay
-        ? 'No encuentro la pantalla. ¿Está conectada por USB? Lo sigo intentando cada pocos segundos.'
-        : 'Modo simulado: no hay pantalla conectada, los datos son inventados.',
+      message: noDisplay ? t('demo.info.sin_pantalla') : t('demo.info.simulado'),
       active_theme: this.applied,
       simulated: true,
-      question: this.question,
+      question: this.question(),
       // En la demo de la web no se pregunta nada al entrar: se ve en «Ajustes».
       updates_question: false,
       update_available: null,
@@ -149,9 +162,9 @@ export class SimulatedApi implements EditorApi {
   async saveTheme(name: string, theme: Theme): Promise<void> {
     await wait(250)
     const t = this.get(name)
-    if (t.builtin) throw new ApiError('Los temas incluidos no se pueden cambiar. Usa «Guardar como…».', 409)
+    if (t.builtin) throw new ApiError(t_('demo.error.incluido'), 409)
     const issues = validateTheme(theme)
-    if (issues.length) throw new ApiError('El tema tiene errores; revisa los campos marcados.', 400, issues)
+    if (issues.length) throw new ApiError(t_('demo.error.errores'), 400, issues)
     t.theme = structuredClone(theme)
   }
 
@@ -161,13 +174,13 @@ export class SimulatedApi implements EditorApi {
     const t = this.get(name)
     const clean = title.trim()
     if (!clean || clean.length > 60) {
-      throw new ApiError('El nombre tiene que tener entre 1 y 60 caracteres.', 400, [{ path: 'title', message: 'Entre 1 y 60 caracteres.' }])
+      throw new ApiError(t_('demo.error.nombre'), 400, [{ path: 'title', message: t_('demo.error.nombre.corto') }])
     }
     // Con `theme`, la copia lleva ya lo editado (un solo paso), validado como en PUT.
     const content: ThemeJson = theme === undefined ? structuredClone(t.theme) : structuredClone(theme)
     if (theme !== undefined) {
       const issues = validateTheme({ ...theme, name: clean })
-      if (issues.length) throw new ApiError('El tema tiene errores; revisa los campos marcados.', 400, issues)
+      if (issues.length) throw new ApiError(t_('demo.error.errores'), 400, issues)
     }
     let slug = slugify(clean)
     for (let i = 2; this.themes.has(slug); i++) slug = `${slugify(clean)}-${i}`
@@ -178,8 +191,8 @@ export class SimulatedApi implements EditorApi {
   async deleteTheme(name: string): Promise<void> {
     await wait(100)
     const t = this.get(name)
-    if (t.builtin) throw new ApiError('Los temas incluidos no se pueden borrar.', 409)
-    if (name === this.applied) throw new ApiError('Este tema está en la pantalla. Aplica otro antes de borrarlo.', 409)
+    if (t.builtin) throw new ApiError(t_('demo.error.borrar_incluido'), 409)
+    if (name === this.applied) throw new ApiError(t_('demo.error.en_pantalla'), 409)
     this.themes.delete(name)
   }
 
@@ -198,12 +211,12 @@ export class SimulatedApi implements EditorApi {
   async uploadResource(name: string, file: File): Promise<string> {
     await wait(200)
     const t = this.get(name)
-    if (t.builtin) throw new ApiError('Los temas incluidos no se pueden cambiar. Usa «Guardar como…».', 409)
-    if (file.size > 10 * 1024 * 1024) throw new ApiError('El fichero pasa de 10 MB.', 413)
+    if (t.builtin) throw new ApiError(t_('demo.error.incluido'), 409)
+    if (file.size > 10 * 1024 * 1024) throw new ApiError(t_('demo.error.grande'), 413)
     const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
     const isFont = ext === 'ttf' || ext === 'otf'
     if (!['png', 'jpg', 'jpeg', 'gif', 'ttf', 'otf'].includes(ext)) {
-      throw new ApiError('Solo se admiten imágenes PNG, JPG o GIF y fuentes TTF u OTF.', 400)
+      throw new ApiError(t_('demo.error.tipo'), 400)
     }
     const stem = slugify(file.name.replace(/\.[^.]+$/, '')).slice(0, 40) || 'fichero'
     let path = `${isFont ? 'fuentes' : 'img'}/${stem}.${ext}`
@@ -212,7 +225,12 @@ export class SimulatedApi implements EditorApi {
     return path
   }
 
-  private appSettings: AppSettings = {
+  /**
+   * Lo que se guarda de los ajustes. La pantalla elegida y la lista de pantallas van aparte
+   * (`chosen`, `displayOptions`): sus textos se escriben en el idioma activo cada vez que se
+   * piden, para que cambiar de idioma en la demo los cambie también.
+   */
+  private appSettings: StoredSettings = {
     updates: { can_check: true, enabled: null, available: null, busy: false, version: '0.0.0-simulado' },
     brightness: 50,
     brightness_levels: [25, 50, 75, 100],
@@ -220,40 +238,49 @@ export class SimulatedApi implements EditorApi {
     store: false,
     autostart: true,
     autostart_blocked: false,
-    language: 'auto',
+    language: languageFromUrl(),
     languages: availableLanguages().map((code) => ({ code, name: NATIVE_NAMES[code] })),
-    display_text: 'Ninguna pantalla conectada',
-    display_auto: true,
-    choices: [
-      { id: 'lista:COM3:turing-rev-a', label: 'COM3: Turing / UsbPCMonitor 3,5"', beta: false, current: false, warning: null },
-      {
-        id: 'lista:COM8:kipye-rev-d',
-        label: 'COM8: Kipye Qiye 3,5" (beta)',
-        beta: true,
-        current: false,
-        warning: 'Vas a probar Luzeira con una Kipye Qiye 3,5" en COM8.\n\nEste modelo está en beta (modo simulado).\n\n¿Quieres probarlo?',
-      },
-    ],
-    advanced: [
-      {
-        id: 'avanzado:COM4:turing-rev-a',
-        label: 'Bluetooth (COM4): Turing / UsbPCMonitor 3,5"',
-        beta: false,
-        current: false,
-        warning: 'Cuidado: vas a mandar datos de pantalla a COM4 (modo simulado).\n\n¿Seguro que quieres probar?',
-      },
-    ],
+  }
+  /** La pantalla elegida a mano (`null`: «detectarla sola»). */
+  private chosen: string | null = null
+
+  private displayOptions(): Pick<AppSettings, 'choices' | 'advanced'> {
+    const option = (id: string, label: string, beta: boolean, warning: string | null): DisplayOption => ({
+      id,
+      label,
+      beta,
+      current: id === this.chosen,
+      warning,
+    })
+    return {
+      choices: [
+        option('lista:COM3:turing-rev-a', t('demo.pantalla.turing', { puerto: 'COM3' }), false, null),
+        option('lista:COM8:kipye-rev-d', t('demo.pantalla.kipye'), true, t('demo.pantalla.kipye.aviso')),
+      ],
+      advanced: [option('avanzado:COM4:turing-rev-a', t('demo.pantalla.bluetooth'), false, t('demo.pantalla.avanzado.aviso'))],
+    }
+  }
+
+  private findDisplay(id: string | null): DisplayOption | undefined {
+    const { choices, advanced } = this.displayOptions()
+    return [...choices, ...advanced].find((o) => o.id === id)
   }
 
   async settings(): Promise<AppSettings> {
     await wait(50)
-    return structuredClone(this.appSettings)
+    const option = this.findDisplay(this.chosen)
+    return {
+      ...structuredClone(this.appSettings),
+      ...this.displayOptions(),
+      display_text: option ? t('demo.pantalla.probando', { pantalla: option.label }) : t('demo.pantalla.ninguna'),
+      display_auto: this.chosen === null,
+    }
   }
 
   async updateSettings(change: SettingsChange): Promise<void> {
     await wait(80)
     if (change.brightness !== undefined && !this.appSettings.brightness_levels.includes(change.brightness)) {
-      throw new ApiError('Ese brillo no está entre los que se pueden elegir.', 400)
+      throw new ApiError(t('demo.error.brillo'), 400)
     }
     const { updates, ...rest } = change
     this.appSettings = { ...this.appSettings, ...rest }
@@ -262,53 +289,45 @@ export class SimulatedApi implements EditorApi {
 
   async checkUpdates(): Promise<string> {
     await wait(400)
-    return 'Ya tienes la última versión de Luzeira. (simulado: no se ha conectado a nada)'
+    return t('demo.actualizar.ultima')
   }
 
   async installUpdate(): Promise<string> {
     await wait(80)
-    throw new ApiError('No hay ninguna versión nueva pendiente. Busca otra vez.', 409)
+    throw new ApiError(t('demo.actualizar.ninguna'), 409)
   }
 
   async chooseDisplay(id: string | null, confirmed: boolean): Promise<void> {
     await wait(80)
-    const all = [...this.appSettings.choices, ...this.appSettings.advanced]
-    const option = id === null ? null : all.find((o) => o.id === id)
-    if (id !== null && !option) throw new ApiError('Esa pantalla ya no está en la lista. Vuelve a elegir.', 409)
-    if (option?.warning && !confirmed) throw new ApiError('Falta confirmar el aviso antes de probar esa pantalla.', 400)
-    for (const o of all) o.current = o.id === id
-    this.appSettings.display_auto = id === null
-    this.appSettings.display_text = option ? `Probando ${option.label}` : 'Ninguna pantalla conectada'
-    this.question = null
-    if (option?.id?.includes('kipye')) {
-      this.questionFor = option.label
-      this.question = {
-        title: '¿Se ve bien?',
-        text: 'Luzeira está mandando el tema a la Kipye, pero no puede comprobar por sí sola que se vea.\n\n¿Se ve bien el tema en la pantalla?\n\nSi contestas «Sí», la recordaré para la próxima vez. Si ves rayas, colores raros o nada, contesta «No» y dejaré de usarla. (simulado)',
-      }
-    }
+    const option = id === null ? null : this.findDisplay(id)
+    if (id !== null && !option) throw new ApiError(t('demo.error.pantalla_no_esta'), 409)
+    if (option?.warning && !confirmed) throw new ApiError(t('demo.error.confirmar'), 400)
+    this.chosen = id
+    this.asking = option?.id?.includes('kipye') ? option.id : null
   }
 
   /** La Kipye (sin saludo) pregunta «¿se ve bien?» al elegirla, como en la app. */
-  private question: Info['question'] = null
-  private questionFor: string | null = null
+  private asking: string | null = null
+
+  private question(): Info['question'] {
+    return this.asking ? { title: t('demo.pregunta.titulo'), text: t('demo.pregunta.texto') } : null
+  }
 
   async answerQuestion(looksRight: boolean): Promise<string> {
     await wait(80)
-    if (!this.question) throw new ApiError('Esa pregunta ya no está pendiente.', 409)
-    this.question = null
+    const asked = this.asking
+    if (!asked) throw new ApiError(t('demo.error.pregunta'), 409)
+    this.asking = null
     if (!looksRight) {
-      for (const o of [...this.appSettings.choices, ...this.appSettings.advanced]) o.current = false
-      this.appSettings.display_auto = true
-      this.appSettings.display_text = 'Ninguna pantalla conectada'
-      return 'Vale: no la recuerdo y dejo de mandarle nada. (simulado)'
+      this.chosen = null
+      return t('demo.pregunta.no')
     }
-    return `Listo: Luzeira usará ${this.questionFor ?? 'tu pantalla'}. Lo recordaré. (simulado)`
+    return t('demo.pregunta.si', { pantalla: this.findDisplay(asked)?.label ?? t('demo.pregunta.tu_pantalla') })
   }
 
   async createShortcut(): Promise<string> {
     await wait(100)
-    return 'Listo: tienes Luzeira en el escritorio. (simulado)'
+    return t('demo.acceso')
   }
 
   async openThemesFolder(): Promise<void> {
@@ -321,15 +340,15 @@ export class SimulatedApi implements EditorApi {
 
   async importTheme(file: File): Promise<string> {
     await wait(200)
-    if (!file.name.toLowerCase().endsWith('.zip')) throw new ApiError('El tema tiene que ser un fichero .zip.', 400)
+    if (!file.name.toLowerCase().endsWith('.zip')) throw new ApiError(t('demo.error.zip'), 400)
     const name = slugify(file.name.replace(/\.zip$/i, ''))
-    this.themes.set(name, { builtin: false, theme: { ...MI_TEMA, name: file.name.replace(/\.zip$/i, '') }, files: new Map() })
+    this.themes.set(name, { builtin: false, theme: { ...miTema(), name: file.name.replace(/\.zip$/i, '') }, files: new Map() })
     return name
   }
 
   async resource(name: string, path: string): Promise<Blob> {
     const blob = this.get(name).files.get(path)
-    if (!blob) throw new ApiError('No se ha encontrado el fichero.', 404)
+    if (!blob) throw new ApiError(t('demo.error.fichero'), 404)
     return blob
   }
 
@@ -337,7 +356,7 @@ export class SimulatedApi implements EditorApi {
     await wait(120)
     if (signal?.aborted) throw new DOMException('Cancelada', 'AbortError')
     const issues = validateTheme(theme)
-    if (issues.length) throw new ApiError('El tema tiene errores; revisa los campos marcados.', 400, issues)
+    if (issues.length) throw new ApiError(t('demo.error.errores'), 400, issues)
     const image = await renderSimulated(normalizeTheme(theme), this.get(name).files, this.readings)
     return { image, missingGlyphs: simMissingGlyphs(theme) }
   }
@@ -371,7 +390,12 @@ const simFontHas = (c: string) => (c.codePointAt(0) ?? 0) < 0x2600 || SIM_FONT_E
 function simMissingGlyphs(theme: Theme): MissingGlyphs[] {
   const out: MissingGlyphs[] = []
   theme.widgets.forEach((w, index) => {
-    const text = w.type === 'text' ? w.text : w.type === 'sensor' ? `${w.prefix ?? ''}${w.suffix ?? ''}` : ''
+    const text =
+      w.type === 'text'
+        ? localized(w.text, w.text_i18n)
+        : w.type === 'sensor'
+          ? `${localized(w.prefix, w.prefix_i18n)}${localized(w.suffix, w.suffix_i18n)}`
+          : ''
     const missing = [...new Set([...text].filter((c) => !/\s/u.test(c) && !simFontHas(c)))]
     if (missing.length) out.push({ index, chars: missing.join('') })
   })
@@ -384,7 +408,7 @@ async function renderSimulated(theme: Theme, files: Map<string, Blob>, readings:
   canvas.width = width
   canvas.height = height
   const ctx = canvas.getContext('2d')
-  if (!ctx) throw new ApiError('Este navegador no puede dibujar la vista previa simulada.', 0)
+  if (!ctx) throw new ApiError(t('demo.error.canvas'), 0)
 
   ctx.fillStyle = theme.background.color
   ctx.fillRect(0, 0, width, height)
@@ -438,7 +462,7 @@ async function renderSimulated(theme: Theme, files: Map<string, Blob>, readings:
     } else {
       const text =
         w.type === 'text'
-          ? w.text
+          ? localized(w.text, w.text_i18n) // el texto del tema en el idioma activo, si lo trae
           : w.type === 'clock'
             ? formatClock(w.format, now)
             : formatReading(w, byId.get(w.sensor))
@@ -453,6 +477,6 @@ async function renderSimulated(theme: Theme, files: Map<string, Blob>, readings:
   }
 
   return new Promise((resolve, reject) =>
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new ApiError('No se pudo crear la vista previa.', 0))), 'image/png'),
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new ApiError(t('demo.error.vista_previa'), 0))), 'image/png'),
   )
 }

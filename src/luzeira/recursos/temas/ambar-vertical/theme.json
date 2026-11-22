@@ -24,7 +24,7 @@
 
     {"type": "sensor", "sensor": "network.download", "decimals": 1, "prefix": "↓ ", "box": {"x": 24, "y": 422, "width": 134, "height": 24}, "style": {"size": 17, "bold": true, "color": "#ffb000", "align": "left"}},
     {"type": "sensor", "sensor": "network.upload", "decimals": 1, "prefix": "↑ ", "box": {"x": 162, "y": 422, "width": 134, "height": 24}, "style": {"size": 17, "color": "#ffb000", "align": "right"}},
-    {"type": "sensor", "sensor": "disk.usage.c", "prefix": "disco C: ", "interval": 10, "box": {"x": 24, "y": 448, "width": 272, "height": 22}, "style": {"size": 15, "color": "#d08a10", "align": "center"}},
+    {"type": "sensor", "sensor": "disk.usage.c", "prefix": "disco C: ", "prefix_i18n": { "en": "disk C: " }, "interval": 10, "box": {"x": 24, "y": 448, "width": 272, "height": 22}, "style": {"size": 15, "color": "#d08a10", "align": "center"}},
 
     {"type": "image", "file": "barrido.png", "box": {"x": 0, "y": 0, "width": 320, "height": 480}}
   ]

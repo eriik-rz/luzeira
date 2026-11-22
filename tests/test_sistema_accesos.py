@@ -62,8 +62,10 @@ def test_relaunch_command_quotes_the_executable():
     assert accesos.relaunch_command() == f'"{cmd.target}" -m luzeira'
 
 
-def test_command_line_passes_open_editor_to_the_tray(monkeypatch):
+def test_command_line_passes_open_editor_to_the_tray(monkeypatch, tmp_path):
     from luzeira import __main__ as cli
+
+    monkeypatch.setenv("APPDATA", str(tmp_path))  # main lee el idioma: no el del equipo
     from luzeira import bandeja
 
     calls = []

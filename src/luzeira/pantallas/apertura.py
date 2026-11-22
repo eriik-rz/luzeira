@@ -10,6 +10,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable, Iterable
 
+from luzeira.idioma import t
 from luzeira.pantallas.comun import (
     ChosenDisplayMissing,
     ConfirmationNeeded,
@@ -36,7 +37,7 @@ from luzeira.pantallas.modelos import (
 from luzeira.pantallas.turing_rev_a import TuringRevA
 from luzeira.pantallas.xuanfang_rev_b import XuanFangRevB
 
-MSG_NOT_FOUND = "No encuentro la pantalla. ¿Está conectada por USB?"  # el de la rev A
+MSG_NOT_FOUND = "pantallas.no_encuentro"  # clave del catálogo (el mensaje de la rev A)
 
 
 def open_auto(
@@ -81,7 +82,7 @@ def open_auto(
     port = next((p for p, i in found if i.model is REV_C), None)
     if port is not None:
         raise UnsupportedModel(port.device, REV_C.label)
-    raise DisplayError(MSG_NOT_FOUND)
+    raise DisplayError(t(MSG_NOT_FOUND))
 
 
 def open_chosen(

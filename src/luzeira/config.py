@@ -151,7 +151,7 @@ def load_config(path: Path | None = None) -> AppConfig:
         raw = None
     try:
         if raw is None:
-            raise ValueError("configuración ilegible")
+            raise ValueError("configuración ilegible")  # i18n: no
         return AppConfig.model_validate_json(raw)
     except (ValidationError, ValueError):
         log.warning("Configuración dañada; se aparta y se usa la de por defecto.")

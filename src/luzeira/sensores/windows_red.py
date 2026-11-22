@@ -117,7 +117,7 @@ def list_interfaces() -> list[Interface]:
     table = ctypes.c_void_p()
     status = iphlpapi.GetIfTable2(ctypes.byref(table))
     if status != 0:
-        raise OSError(f"GetIfTable2 devolvió {status}")
+        raise OSError(f"GetIfTable2 devolvió {status}")  # i18n: no
     try:
         count = ctypes.c_ulong.from_address(table.value).value
         # La tabla empieza tras NumEntries, alineada a 8 (la fila lleva enteros de 64 bits).

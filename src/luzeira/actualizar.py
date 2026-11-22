@@ -45,6 +45,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from luzeira import __version__
+from luzeira.idioma import t
 
 log = logging.getLogger(__name__)
 
@@ -81,7 +82,7 @@ INSTALLER_ARGS = ("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/ACTUALIZAR
 
 
 class UpdateError(Exception):
-    """Algo no ha salido bien. El mensaje es para el usuario, en español."""
+    """Algo no ha salido bien. El mensaje es para el usuario, en su idioma."""
 
 
 Version = tuple[int, int, int]
@@ -91,7 +92,7 @@ def parse_version(text: str) -> Version:
     """``"1.2.3"`` → ``(1, 2, 3)``. Solo ese formato: nada de sufijos ni ceros delante."""
     match = _VERSION.match(text)
     if match is None:
-        raise ValueError(f"versión no válida: {text!r}")
+        raise ValueError(f"versión no válida: {text!r}")  # i18n: no
     return int(match[1]), int(match[2]), int(match[3])
 
 
@@ -133,7 +134,7 @@ def verify_manifest(data: bytes, signature: bytes, keys: Iterable[str]) -> Manif
     try:
         sig = base64.b64decode(signature.strip(), validate=True)
     except ValueError:
-        raise UpdateError("La firma de la versión nueva no es válida.") from None
+        raise UpdateError(t("sistema.actualizar_firma_no_valida")) from None
     for key in _load_keys(keys):
         try:
             key.verify(sig, data)
@@ -141,13 +142,13 @@ def verify_manifest(data: bytes, signature: bytes, keys: Iterable[str]) -> Manif
             continue
         break
     else:
-        raise UpdateError("La firma de la versión nueva no es válida.")
+        raise UpdateError(t("sistema.actualizar_firma_no_valida"))
     try:
         manifest = Manifest.model_validate_json(data)
     except ValidationError:
-        raise UpdateError("La información de la versión nueva no es válida.") from None
+        raise UpdateError(t("sistema.actualizar_info_no_valida")) from None
     if not manifest.file.startswith(f"Luzeira-{manifest.version}-"):
-        raise UpdateError("La información de la versión nueva no es válida.")
+        raise UpdateError(t("sistema.actualizar_info_no_valida"))
     return manifest
 
 
@@ -177,7 +178,7 @@ class Http(Protocol):
 def _check_url(url: str) -> None:
     parts = urllib.parse.urlsplit(url)
     if parts.scheme != "https" or parts.hostname not in ALLOWED_HOSTS or parts.port:
-        raise UpdateError("La descarga intentó ir a un sitio que no es GitHub.")
+        raise UpdateError(t("sistema.actualizar_fuera_de_github"))
 
 
 class _OnlyGitHub(urllib.request.HTTPRedirectHandler):
@@ -201,16 +202,16 @@ class GitHubHttp:
             return self._opener.open(url, timeout=TIMEOUT)
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
-                raise UpdateError("Todavía no hay versiones con aviso de actualización.") from None
-            raise UpdateError(f"GitHub ha contestado con un error ({exc.code}).") from None
+                raise UpdateError(t("sistema.actualizar_sin_versiones")) from None
+            raise UpdateError(t("sistema.actualizar_error_github", code=exc.code)) from None
         except (urllib.error.URLError, OSError):
-            raise UpdateError("No he podido conectar con GitHub. ¿Hay internet?") from None
+            raise UpdateError(t("sistema.actualizar_sin_conexion")) from None
 
     def get(self, url: str, limit: int) -> bytes:
         with self._open(url) as response:
             data = response.read(limit + 1)
         if len(data) > limit:
-            raise UpdateError("La respuesta de GitHub es más grande de lo esperado.")
+            raise UpdateError(t("sistema.actualizar_respuesta_grande"))
         return data
 
     def save(self, url: str, dest: Path, limit: int) -> None:
@@ -219,7 +220,7 @@ class GitHubHttp:
             while chunk := response.read(_CHUNK):
                 total += len(chunk)
                 if total > limit:
-                    raise UpdateError("La descarga es más grande de lo esperado.")
+                    raise UpdateError(t("sistema.actualizar_descarga_grande"))
                 out.write(chunk)
 
 
@@ -245,7 +246,7 @@ def check(
     :data:`PUBLIC_KEYS` si no se dan otras (solo los tests dan otras)."""
     keys = tuple(PUBLIC_KEYS if keys is None else keys)
     if not keys:
-        raise UpdateError("Esta copia de Luzeira no puede comprobar actualizaciones.")
+        raise UpdateError(t("sistema.actualizar_no_puede"))
     http = http or GitHubHttp()
     data = http.get(MANIFEST_URL, MAX_MANIFEST_BYTES)
     signature = http.get(SIGNATURE_URL, MAX_SIGNATURE_BYTES)
@@ -263,7 +264,7 @@ def _sha256(path: Path) -> str:
 
 def verify_installer(path: Path, manifest: Manifest) -> None:
     if path.stat().st_size != manifest.size or _sha256(path) != manifest.sha256:
-        raise UpdateError("El instalador descargado no coincide con el firmado. No lo abro.")
+        raise UpdateError(t("sistema.actualizar_instalador_distinto"))
 
 
 def download(manifest: Manifest, *, http: Http | None = None, folder: Path | None = None) -> Path:

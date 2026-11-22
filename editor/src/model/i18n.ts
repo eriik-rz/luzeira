@@ -18,9 +18,9 @@ export const NATIVE_NAMES: Record<string, string> = {
   de: 'Deutsch',
   fr: 'Français', // i18n: no
   it: 'Italiano',
-  pt: 'Português', // i18n: no
+  pt: 'Português (Brasil)', // i18n: no
   pl: 'Polski',
-  nl: 'Nederlands',
+  tr: 'Türkçe', // i18n: no
   ru: 'Русский',
 }
 

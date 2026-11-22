@@ -224,7 +224,12 @@ def test_busy_display_shows_clear_message_and_retries_with_backoff():
 
 
 def test_open_failure_message_is_not_repeated():
-    failed = DisplayError("No puedo abrir la pantalla (COM3). Lo sigo intentando.")
+    # El error tal como lo crean los drivers: su mensaje ya dice «lo sigo intentando»
+    # (``says_retrying``), así que el servicio no lo repite. Antes se buscaba la palabra
+    # «intentando» en el texto, lo que en otro idioma no funcionaría.
+    from luzeira.pantallas.comun import open_error
+
+    failed = open_error("COM3", OSError("no abre"))
     opener = Opener(plan=[failed] * 1000)
     with Harness(opener=opener) as h:
         h.wait_status(Status.NO_DISPLAY)

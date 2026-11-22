@@ -34,3 +34,22 @@ def test_overlapping_widgets_are_allowed():
     # D-11 (2026-11-17): el motor compone capas, así que los solapes se pintan bien y el
     # editor puede superponer widgets. Antes estaban prohibidos.
     Theme.model_validate(theme(bar(0, 0), bar(50, 5)))
+
+
+def test_validator_messages_follow_the_language():
+    """C-62: los mensajes de nuestros validadores salen en el idioma activo."""
+    import pytest
+    from pydantic import ValidationError
+
+    from luzeira import idioma
+
+    idioma.set_language("en")
+    image = {"type": "image", "file": "a.bmp", "box": {"x": 0, "y": 0, "width": 9, "height": 9}}
+    cases = [
+        ({**bar(0, 0), "min": 5, "max": 5}, "max must be greater than min"),
+        (bar(470, 0), "widget 1 [(]bar[)] goes off the 480x320 screen"),
+        (image, "extension not allowed [(]only png, jpg, jpeg, gif[)]"),
+    ]
+    for widget, message in cases:
+        with pytest.raises(ValidationError, match=message):
+            Theme.model_validate(theme(widget))

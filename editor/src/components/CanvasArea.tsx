@@ -7,7 +7,9 @@ import { HANDLES, HANDLE_CURSOR, GRID, fitZoom, moveBox, pickBelow, resizeBox, t
 export type { ZoomMode }
 import type { Action } from '../model/editorState.ts'
 import { screenSize, type Box, type Theme } from '../model/types.ts'
-import { WIDGET_TYPE_INFO } from '../model/theme.ts'
+import { widgetTypeInfo } from '../model/theme.ts'
+import { localNumber } from '../model/format.ts'
+import { useT } from '../i18n/contexto.ts'
 
 interface Props {
   theme: Theme
@@ -47,6 +49,7 @@ function hasFiles(dt: DataTransfer): boolean {
 
 export function CanvasArea(props: Props) {
   const { theme, ids, selectedId, zoomMode, snap, showOutlines, previewUrl, previewStale, errorIds, labels, dispatch, onPointerPos, onDropFile } = props
+  const t = useT()
   const screen = screenSize(theme)
   const stageRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<Drag | null>(null)
@@ -178,21 +181,21 @@ export function CanvasArea(props: Props) {
               dispatch({ type: 'select', id: null })
             }
           }}
-          aria-label={`Lienzo de ${screen.width} por ${screen.height} píxeles`}
+          aria-label={t('lienzo.etiqueta', { ancho: screen.width, alto: screen.height })}
           role="group"
         >
           <div className="screen-label">
-            {screen.width} × {screen.height} · zoom ×{String(zoom).replace('.', ',')}
+            {t('lienzo.medida', { ancho: screen.width, alto: screen.height, zoom: localNumber(zoom) })}
           </div>
           {previewUrl ? (
             <img
               className={`stage-img${previewStale ? ' stale' : ''}`}
               src={previewUrl}
-              alt="Vista previa de la pantalla"
+              alt={t('lienzo.vista_previa')}
               draggable={false}
             />
           ) : (
-            <div className="stage-placeholder">Preparando la vista previa…</div>
+            <div className="stage-placeholder">{t('lienzo.preparando')}</div>
           )}
           {snap && (
             <div
@@ -215,7 +218,7 @@ export function CanvasArea(props: Props) {
                 key={id}
                 className={`wbox${errorIds.has(id) ? ' error' : ''}${dragging === id ? ' ghost' : ''}`}
                 style={{ left: b.x * zoom, top: b.y * zoom, width: b.width * zoom, height: b.height * zoom }}
-                title={`${WIDGET_TYPE_INFO[w.type].label}: ${labels[i]}`}
+                title={`${widgetTypeInfo(w.type).label}: ${labels[i]}`}
                 onPointerDown={(e) => begin(e, id, 'move', b)}
               />
             )

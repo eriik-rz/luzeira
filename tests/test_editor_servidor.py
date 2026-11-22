@@ -1209,7 +1209,7 @@ class _DeleteBeforeLock:
 
 @pytest.mark.parametrize("op", ["save", "copy", "upload", "delete"])
 def test_write_after_concurrent_delete_is_404_not_500(env, op):
-    from luzeira.editor.almacen import GONE
+    from luzeira.editor.almacen import gone
 
     server, client, user, tmp_path, _ = env
     folder = user / "mio"
@@ -1226,13 +1226,13 @@ def test_write_after_concurrent_delete_is_404_not_500(env, op):
         status, body = client.json("DELETE", "/api/temas/mio")
     assert wrapper.fired
     assert status == 404, body
-    assert body["error"] in ("No existe ese tema.", GONE)
+    assert body["error"] in ("No existe ese tema.", gone())
     assert not any(p.name.startswith(".") for p in user.iterdir())  # sin temporales
 
 
 def test_folder_removed_mid_save_is_404_with_clear_message(env, monkeypatch):
     """La carpeta desaparece **después** de buscar el tema (borrada a mano): 404 claro."""
-    from luzeira.editor.almacen import GONE
+    from luzeira.editor.almacen import gone
 
     server, client, user, *_ = env
     real = server.store.check_files
@@ -1244,7 +1244,7 @@ def test_folder_removed_mid_save_is_404_with_clear_message(env, monkeypatch):
 
     monkeypatch.setattr(server.store, "check_files", check_then_vanish)
     status, body = client.json("PUT", "/api/temas/mio", theme_dict())
-    assert status == 404 and body["error"] == GONE
+    assert status == 404 and body["error"] == gone()
 
 
 # --- Textos para el usuario (RQ-12) ---------------------------------------------------------
@@ -1282,14 +1282,16 @@ def test_messages_have_no_jargon(env):
 
 
 def test_untranslated_pydantic_error_is_generic_spanish():
-    from luzeira.editor.almacen import GENERIC_INVALID, _item_message
+    from luzeira.editor.almacen import _item_message
+    from luzeira.temas.modelo import RangeError
 
+    generic = "este valor no es válido"
     item = {"type": "tipo_nuevo_de_pydantic", "msg": "Input should be blah", "loc": ("x",)}
-    assert _item_message(item) == GENERIC_INVALID
+    assert _item_message(item) == generic
     no_ctx = {"type": "value_error", "msg": "Value error, x", "loc": ()}
-    assert _item_message(no_ctx) == GENERIC_INVALID
+    assert _item_message(no_ctx) == generic
     bar = {"type": "value_error", "msg": "Value error, …", "loc": ()}
-    bar["ctx"] = {"error": ValueError("max tiene que ser mayor que min")}
+    bar["ctx"] = {"error": RangeError("max tiene que ser mayor que min")}
     assert _item_message(bar) == "el máximo tiene que ser mayor que el mínimo"
 
 
@@ -1559,3 +1561,68 @@ def test_preview_without_missing_letters_sends_an_empty_list(env):
     _, client, *_ = env
     _, headers, _ = _preview(client, "mio", theme_dict())
     assert json.loads(headers["x-luzeira-missing-glyphs"]) == []
+
+
+# --- C-62: los errores que llegan al editor, en el idioma activo ------------------------------
+
+
+def test_errors_come_in_the_active_language(env):
+    from luzeira import idioma
+
+    _, client, *_ = env
+    idioma.set_language("en")
+    status, body = client.json("DELETE", "/api/temas/esencial")
+    assert (status, body["error"]) == (409, "Built-in themes can't be deleted.")
+    status, body = client.json("GET", "/api/no-existe")
+    assert (status, body["error"]) == (404, "Not found.")
+    # Detalles por campo: el de pydantic, el del cargador y el de «se sale de la pantalla»
+    box = {"x": 0, "y": 0, "width": 9, "height": 9}
+    bad = theme_dict(
+        widgets=[
+            {"type": "text", "text": "a", "box": box, "style": {"bold": "quizá"}},
+            {"type": "text", "text": "b", "box": {"x": 470, "y": 0, "width": 20, "height": 10}},
+        ]
+    )
+    status, body = client.json("PUT", "/api/temas/mio", bad)
+    assert status == 400 and body["error"] == "The theme is not valid."
+    assert body["details"] == [{"path": "widgets.0.style.bold", "message": "must be yes or no"}]
+    off = theme_dict(widgets=[bad["widgets"][1]])
+    status, body = client.json("PUT", "/api/temas/mio", off)
+    assert body["details"] == [
+        {
+            "path": "widgets.0.box",
+            "message": f"Element 1 (Text) goes off the screen (480 {chr(0xD7)} 320)",
+        }
+    ]
+    missing = theme_dict(widgets=[{"type": "image", "file": "no.png", "box": box}])
+    status, body = client.json("PUT", "/api/temas/mio", missing)
+    assert body["details"][0]["message"] == (
+        "The image of element 1 “no.png” is not in the theme folder."
+    )
+
+
+def test_loader_errors_say_element_in_the_editor_in_any_language(tmp_path):
+    """El cargador dice «widget» y el editor «elemento»: se cambia el sujeto entero, no se
+    buscan palabras en el texto (que cambian con el idioma)."""
+    from luzeira import idioma
+    from luzeira.editor.almacen import friendly_theme_error
+    from luzeira.temas import ThemeError, load_theme
+
+    folder = tmp_path / "roto"
+    folder.mkdir()
+    box = {"x": 0, "y": 0, "width": 9, "height": 9}
+    theme = theme_dict(widgets=[{"type": "image", "file": "no.png", "box": box}])
+    (folder / "theme.json").write_text(json.dumps(theme), encoding="utf-8")
+    for language, loader, editor in [
+        ("es", "La imagen del widget 1 «no.png»", "La imagen del elemento 1 «no.png»"),
+        ("en", "The image of widget 1 “no.png”", "The image of element 1 “no.png”"),
+    ]:
+        idioma.set_language(language)
+        with pytest.raises(ThemeError) as info:
+            load_theme(folder)
+        assert str(info.value).startswith(loader)
+        assert friendly_theme_error(info.value).startswith(editor)
+    (folder / "theme.json").write_text("{roto", encoding="utf-8")
+    with pytest.raises(ThemeError) as info:
+        load_theme(folder)
+    assert friendly_theme_error(info.value) == "This theme is damaged and can't be opened."

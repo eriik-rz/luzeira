@@ -16,6 +16,10 @@ por línea (contrato «Remate 2» de la fase 5):
 - ``cerrar``: cerrar por el camino normal (guardando lo pendiente y preguntando si queda
   algo sin guardar). La bandeja solo mata el proceso si no termina en 5 s.
 - ``mostrar``: traer la ventana al frente (clic en el icono con el editor ya abierto).
+- ``idioma <código>``: el usuario ha cambiado de idioma (C-62). Cambia el título y el
+  aviso de «¿cerrar sin guardar?», que son de Python; la página cambia sola.
+
+El idioma de arranque llega con la dirección y el token (``language``).
 """
 
 from __future__ import annotations
@@ -32,9 +36,14 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+from luzeira import idioma
+from luzeira.idioma import t
+
 log = logging.getLogger(__name__)
 
-WINDOW_TITLE = "Luzeira — Editor de temas"
+# Claves del catálogo (zona ``sistema``): se traducen al usarlas, en el idioma de ese
+# momento (el proceso de la ventana lo recibe de la bandeja).
+WINDOW_TITLE = "sistema.ventana_titulo"
 
 # Códigos de salida del proceso de la ventana (la bandeja los vigila).
 EXIT_OK = 0
@@ -51,11 +60,11 @@ FLUSH_JS = (
     " : {saved: true, pending: 'none'})"
 )
 _PENDING_TEXT = {
-    "invalid": "hay errores marcados en rojo",
-    "builtin": "son cambios sobre un tema incluido; usa «Guardar como» para quedártelos",
-    "error": "no se ha podido guardar",
+    "invalid": "sistema.ventana_pendiente_errores",
+    "builtin": "sistema.ventana_pendiente_incluido",
+    "error": "sistema.ventana_pendiente_fallo",
 }
-_UNKNOWN_PENDING = "no he podido comprobar si queda algo por guardar"
+_UNKNOWN_PENDING = "sistema.ventana_pendiente_desconocido"
 
 
 def _python_for_window() -> str:
@@ -105,7 +114,8 @@ class EditorWindow:
         return process is not None and process.poll() is None
 
     def open(self, url: str, token: str) -> bool:
-        """Abre la ventana. Si ya está abierta, no abre otra (devuelve False)."""
+        """Abre la ventana. Si ya está abierta, no abre otra (devuelve False). Le pasa
+        también el idioma activo, para su título y sus avisos."""
         with self._lock:
             if self.is_open:
                 return False
@@ -118,7 +128,8 @@ class EditorWindow:
             )
             self._process = process
             # stdin queda abierto: por ahí van luego «cerrar» y «mostrar».
-            self._send(process, json.dumps({"url": url, "token": token}))
+            config = {"url": url, "token": token, "language": idioma.current()}
+            self._send(process, json.dumps(config))
         threading.Thread(
             target=self._watch, args=(process,), name="luzeira-editor-ventana", daemon=True
         ).start()
@@ -157,6 +168,14 @@ class EditorWindow:
         with contextlib.suppress(AttributeError, OSError):
             ctypes.windll.user32.AllowSetForegroundWindow(process.pid)
         return self._send(process, "mostrar")
+
+    def set_language(self, code: str) -> bool:
+        """Avisa a la ventana abierta de que el idioma ha cambiado. False si no hay
+        ventana o no responde (no pasa nada: al abrirla de nuevo ya lleva el nuevo)."""
+        process = self._process
+        if process is None or process.poll() is not None:
+            return False
+        return self._send(process, f"idioma {code}")
 
     def close(self, timeout: float = CLOSE_TIMEOUT) -> None:
         """Pide a la ventana que se cierre (guardando lo pendiente) y espera ``timeout``
@@ -251,10 +270,9 @@ class _WindowController:
             result = self.flush()
             pending = None if result is None else result.get("pending")
             if pending != "none":
-                reason = _PENDING_TEXT.get(str(pending), _UNKNOWN_PENDING)
+                reason = t(_PENDING_TEXT.get(str(pending), _UNKNOWN_PENDING))
                 if not self.window.create_confirmation_dialog(
-                    "Luzeira",
-                    f"Hay cambios que no se han guardado ({reason}). ¿Cerrar igualmente?",
+                    "Luzeira", t("sistema.ventana_sin_guardar", reason=reason)
                 ):
                     return  # el usuario sigue editando
             with self._lock:
@@ -273,6 +291,12 @@ class _WindowController:
             self.window.restore()  # restore() también quitaría «maximizada»: solo si hace falta
         self.window.show()  # Show() + Activate() en WinForms
 
+    def set_language(self, code: str) -> None:
+        """La bandeja ha cambiado de idioma: el título y los avisos de aquí, también. Un
+        código que no tenemos acaba en el de Windows (``idioma.set_language``)."""
+        idioma.set_language(code or None)
+        self.window.set_title(t(WINDOW_TITLE))
+
     def listen(self, lines: Any) -> None:
         """Lee órdenes línea a línea hasta que la bandeja cierra stdin.
 
@@ -289,6 +313,11 @@ class _WindowController:
                     self.show()
                 except Exception:
                     log.exception("No se pudo traer al frente la ventana del editor")
+            elif command.startswith("idioma "):
+                try:
+                    self.set_language(command.removeprefix("idioma ").strip())
+                except Exception:
+                    log.exception("No se pudo cambiar el idioma de la ventana del editor")
         with contextlib.suppress(Exception):
             self.window.destroy()
 
@@ -332,18 +361,21 @@ def run_window_from_stdin() -> int:
     try:
         config = json.loads(sys.stdin.readline())
         url, token = str(config["url"]), str(config["token"])
-    except (ValueError, KeyError, TypeError):
+        language = config.get("language")
+    except (ValueError, KeyError, TypeError, AttributeError):
         log.error("La ventana del editor no recibió su configuración.")
         return EXIT_BAD_CONFIG
     if not is_local_editor_url(url):
         # Defensa: esta ventana solo enseña el editor local de Luzeira.
         log.error("Dirección del editor no permitida.")
         return EXIT_BAD_CONFIG
+    # El de la bandeja; sin él (una bandeja antigua), el de Windows.
+    idioma.set_language(language if isinstance(language, str) else None)
     if not _webview2_ready(webview):
         log.error("Falta Microsoft Edge WebView2 Runtime: no se abre el editor.")
         return EXIT_NO_WEBVIEW2
     window = webview.create_window(
-        WINDOW_TITLE,
+        t(WINDOW_TITLE),
         url,
         js_api=_Bridge(token),
         width=1280,

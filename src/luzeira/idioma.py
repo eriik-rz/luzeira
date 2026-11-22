@@ -8,7 +8,9 @@ añade un idioma escribiendo ficheros, sin tocar el código.
   ``{"clave": "texto"}``. Cada zona (``bandeja``, ``temas``…) es un fichero, para que varias
   personas puedan trabajar a la vez sin pisarse; una clave no puede estar en dos zonas.
 - Variables con llaves: ``"Hay una versión nueva: la {version}."`` →
-  ``t("…", version="0.2.0")``. Una llave literal se escribe ``{{``.
+  ``t("…", version="0.2.0")``. Los textos no llevan llaves sueltas: sin variables se
+  muestran tal cual, y con variables una llave rompería el formato (y el editor no
+  desescapa ``{{``).
 - Si al idioma elegido le falta una clave, se usa la inglesa, y si no la española (los
   dos se mantienen completos: lo vigila un test). Si no está en ninguno, sale la clave,
   que se ve rara a propósito para que se note.
@@ -42,9 +44,9 @@ NATIVE_NAMES = {
     "de": "Deutsch",
     "fr": "Français",
     "it": "Italiano",
-    "pt": "Português",
+    "pt": "Português (Brasil)",
     "pl": "Polski",
-    "nl": "Nederlands",
+    "tr": "Türkçe",
     "ru": "Русский",
 }
 

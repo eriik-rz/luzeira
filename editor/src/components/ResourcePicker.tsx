@@ -6,6 +6,7 @@ import { useEffect, useId, useState } from 'react'
 import type { EditorApi } from '../api.ts'
 import { baseName, isFontPath, isImagePath } from '../model/theme.ts'
 import { IconUpload } from './icons.tsx'
+import { useT } from '../i18n/contexto.ts'
 import type { Services } from './services.ts'
 
 function Thumb({ api, theme, path }: { api: EditorApi; theme: string; path: string }) {
@@ -39,7 +40,8 @@ interface ImageProps {
   error?: string | null
 }
 
-export function ImagePicker({ label, hint, value, services, allowNone, noneLabel = 'Sin imagen', onChange, error }: ImageProps) {
+export function ImagePicker({ label, hint, value, services, allowNone, noneLabel, onChange, error }: ImageProps) {
+  const t = useT()
   const labelId = useId()
   const images = services.files.filter(isImagePath)
   return (
@@ -50,7 +52,7 @@ export function ImagePicker({ label, hint, value, services, allowNone, noneLabel
       <div className="thumbs" role="group" aria-labelledby={labelId}>
         {allowNone && (
           <button type="button" className="thumb none" aria-pressed={value === null} onClick={() => onChange(null)}>
-            {noneLabel}
+            {noneLabel ?? t('recursos.sin_imagen')}
           </button>
         )}
         {images.map((p) => (
@@ -60,7 +62,7 @@ export function ImagePicker({ label, hint, value, services, allowNone, noneLabel
             className="thumb"
             aria-pressed={value === p}
             title={baseName(p)}
-            aria-label={`Usar ${baseName(p)}`}
+            aria-label={t('recursos.usar', { fichero: baseName(p) })}
             onClick={() => onChange(p)}
           >
             <Thumb api={services.api} theme={services.themeName} path={p} />
@@ -75,9 +77,9 @@ export function ImagePicker({ label, hint, value, services, allowNone, noneLabel
           const r = await services.upload('image')
           if (r) onChange(r.path)
         }}
-        title="PNG, JPG o GIF de hasta 10 MB y 4096 píxeles de lado"
+        title={t('recursos.subir_imagen.ayuda')}
       >
-        <IconUpload /> Subir imagen…
+        <IconUpload /> {t('recursos.subir_imagen')}
       </button>
       {error ? (
         <p className="err" role="alert">
@@ -98,11 +100,12 @@ interface FontProps {
 }
 
 export function FontPicker({ value, services, onChange, error }: FontProps) {
+  const t = useT()
   const id = useId()
   const fonts = services.files.filter(isFontPath)
   return (
     <div className="field">
-      <label htmlFor={id}>Tipo de letra</label>
+      <label htmlFor={id}>{t('recursos.letra')}</label>
       <div style={{ display: 'flex', gap: 6 }}>
         <select
           id={id}
@@ -110,19 +113,19 @@ export function FontPicker({ value, services, onChange, error }: FontProps) {
           value={value ?? ''}
           onChange={(e) => onChange(e.target.value || null)}
         >
-          <option value="">La de Luzeira</option>
+          <option value="">{t('recursos.letra.luzeira')}</option>
           {fonts.map((f) => (
             <option key={f} value={f}>
               {baseName(f)}
             </option>
           ))}
-          {value && !fonts.includes(value) && <option value={value}>{baseName(value)} (no está)</option>}
+          {value && !fonts.includes(value) && <option value={value}>{t('recursos.letra.no_esta', { fichero: baseName(value) })}</option>}
         </select>
         <button
           type="button"
           className="btn icon"
-          title="Subir un tipo de letra (TTF u OTF)"
-          aria-label="Subir un tipo de letra"
+          title={t('recursos.letra.subir.ayuda')}
+          aria-label={t('recursos.letra.subir')}
           onClick={async () => {
             const r = await services.upload('font')
             if (r) onChange(r.path)
@@ -136,7 +139,7 @@ export function FontPicker({ value, services, onChange, error }: FontProps) {
           {error}
         </p>
       ) : (
-        <p className="hint">La de Luzeira tiene tildes y ñ. Puedes subir la tuya (.ttf u .otf).</p>
+        <p className="hint">{t('recursos.letra.ayuda')}</p>
       )}
     </div>
   )

@@ -26,19 +26,19 @@
     {"type": "sensor", "sensor": "memory.usage", "box": {"x": 218, "y": 190, "width": 90, "height": 24}, "style": {"size": 15, "color": "#1fa84a", "align": "right"}},
     {"type": "bar", "sensor": "memory.usage", "fill": "#3dff6e", "track": "#0b2a14", "box": {"x": 12, "y": 218, "width": 296, "height": 12}},
     {"type": "image", "file": "segmentos.png", "box": {"x": 12, "y": 218, "width": 296, "height": 12}},
-    {"type": "text", "text": "> disco c:", "box": {"x": 12, "y": 240, "width": 92, "height": 24}, "style": {"size": 16, "color": "#1fa84a", "align": "left"}},
+    {"type": "text", "text": "> disco c:", "text_i18n": { "en": "> disk c:" }, "box": {"x": 12, "y": 240, "width": 92, "height": 24}, "style": {"size": 16, "color": "#1fa84a", "align": "left"}},
     {"type": "sensor", "sensor": "disk.usage.c", "interval": 10, "box": {"x": 104, "y": 240, "width": 110, "height": 24}, "style": {"size": 16, "bold": true, "color": "#3dff6e", "align": "left"}},
     {"type": "bar", "sensor": "disk.usage.c", "interval": 10, "fill": "#3dff6e", "track": "#0b2a14", "box": {"x": 12, "y": 268, "width": 296, "height": 12}},
     {"type": "image", "file": "segmentos.png", "box": {"x": 12, "y": 268, "width": 296, "height": 12}},
-    {"type": "text", "text": "> red", "box": {"x": 12, "y": 290, "width": 92, "height": 24}, "style": {"size": 16, "color": "#1fa84a", "align": "left"}},
+    {"type": "text", "text": "> red", "text_i18n": { "en": "> net" }, "box": {"x": 12, "y": 290, "width": 92, "height": 24}, "style": {"size": 16, "color": "#1fa84a", "align": "left"}},
     {"type": "sensor", "sensor": "network.download", "decimals": 1, "prefix": "↓ ", "box": {"x": 28, "y": 314, "width": 140, "height": 24}, "style": {"size": 16, "bold": true, "color": "#3dff6e", "align": "left"}},
     {"type": "sensor", "sensor": "network.upload", "decimals": 1, "prefix": "↑ ", "box": {"x": 170, "y": 314, "width": 140, "height": 24}, "style": {"size": 16, "color": "#3dff6e", "align": "left"}},
-    {"type": "text", "text": "> e/s", "box": {"x": 12, "y": 344, "width": 92, "height": 24}, "style": {"size": 16, "color": "#1fa84a", "align": "left"}},
-    {"type": "sensor", "sensor": "disk.read", "decimals": 1, "prefix": "lee ", "box": {"x": 28, "y": 368, "width": 140, "height": 24}, "style": {"size": 16, "bold": true, "color": "#3dff6e", "align": "left"}},
-    {"type": "sensor", "sensor": "disk.write", "decimals": 1, "prefix": "esc ", "box": {"x": 170, "y": 368, "width": 140, "height": 24}, "style": {"size": 16, "color": "#3dff6e", "align": "left"}},
+    {"type": "text", "text": "> e/s", "text_i18n": { "en": "> i/o" }, "box": {"x": 12, "y": 344, "width": 92, "height": 24}, "style": {"size": 16, "color": "#1fa84a", "align": "left"}},
+    {"type": "sensor", "sensor": "disk.read", "decimals": 1, "prefix": "lee ", "prefix_i18n": { "en": "rd " }, "box": {"x": 28, "y": 368, "width": 140, "height": 24}, "style": {"size": 16, "bold": true, "color": "#3dff6e", "align": "left"}},
+    {"type": "sensor", "sensor": "disk.write", "decimals": 1, "prefix": "esc ", "prefix_i18n": { "en": "wr " }, "box": {"x": 170, "y": 368, "width": 140, "height": 24}, "style": {"size": 16, "color": "#3dff6e", "align": "left"}},
     {"type": "text", "text": "$", "box": {"x": 12, "y": 412, "width": 16, "height": 24}, "style": {"size": 15, "bold": true, "color": "#3dff6e", "align": "left"}},
     {"type": "sensor", "sensor": "cpu.name", "max_chars": 35, "interval": 3600, "box": {"x": 30, "y": 412, "width": 280, "height": 24}, "style": {"size": 14, "color": "#1fa84a", "align": "left"}},
     {"type": "clock", "format": "date-short", "box": {"x": 12, "y": 444, "width": 120, "height": 24}, "style": {"size": 14, "color": "#1fa84a", "align": "left"}},
-    {"type": "sensor", "sensor": "system.uptime", "decimals": 1, "prefix": "activo ", "interval": 60, "box": {"x": 150, "y": 444, "width": 160, "height": 24}, "style": {"size": 14, "color": "#1fa84a", "align": "right"}}
+    {"type": "sensor", "sensor": "system.uptime", "decimals": 1, "prefix": "activo ", "prefix_i18n": { "en": "up " }, "interval": 60, "box": {"x": 150, "y": 444, "width": 160, "height": 24}, "style": {"size": 14, "color": "#1fa84a", "align": "right"}}
   ]
 }

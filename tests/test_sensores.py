@@ -10,6 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from luzeira.idioma import t
 from luzeira.sensores import nvidia, sistema
 from luzeira.sensores.base import SENSOR_ID, Reading, SensorInfo
 from luzeira.sensores.hub import SensorHub
@@ -321,7 +322,7 @@ def test_nvml_unavailable_declares_sensors_without_value(monkeypatch):
     assert "gpu.temperature" in ids
     r = src.read_all()
     assert set(r) == ids
-    assert all(x.value is None and x.reason == nvidia.NOT_READY for x in r.values())
+    assert all(x.value is None and x.reason == t(nvidia.NOT_READY) for x in r.values())
     assert r["gpu.power"].unit == "W"
     src.close()
 
@@ -353,7 +354,7 @@ def test_nvml_gives_up_wording_after_5_minutes_but_keeps_retrying(monkeypatch):
     src = nvidia.NvidiaSource(clock=clock)
     clock.now += nvidia.GIVE_UP_SECONDS
     r = src.read_all()
-    assert r["gpu.usage"].reason == nvidia.NOT_FOUND
+    assert r["gpu.usage"].reason == t(nvidia.NOT_FOUND)
     assert calls["init"] == 2
     src.close()
     clock.now += 60
@@ -386,7 +387,7 @@ def test_nvml_unsupported_sensor_has_reason(monkeypatch):
     r = nvidia.NvidiaSource().read_all()
     assert r["gpu.fan"].value is None
     assert r["gpu.fan"].unit == "%"
-    assert r["gpu.fan"].reason == nvidia.NOT_SUPPORTED
+    assert r["gpu.fan"].reason == t(nvidia.NOT_SUPPORTED)
     assert r["gpu.temperature"].value == 55.0
 
 

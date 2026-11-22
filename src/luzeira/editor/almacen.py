@@ -10,7 +10,8 @@ sola. Reglas (contrato de la fase 5 y skill ``seguridad-luzeira``):
 - Escrituras **atómicas** (temporal + ``os.replace``) y carpetas nuevas montadas en una
   temporal ``.importando-*`` (la que limpia ``clean_import_leftovers`` tras un corte de luz).
 - Borrar **mueve** a la papelera; nunca se borra un tema de verdad desde aquí.
-- Los mensajes son para el usuario y nunca llevan rutas del disco.
+- Los mensajes son para el usuario, en el idioma activo (catálogo ``servidor``), y
+  nunca llevan rutas del disco.
 """
 
 from __future__ import annotations
@@ -19,7 +20,6 @@ import contextlib
 import json
 import math
 import os
-import re
 import shutil
 import tempfile
 import threading
@@ -31,68 +31,88 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from luzeira.config import ThemeEntry, list_themes
+from luzeira.idioma import t
 from luzeira.temas.cargar import (
     _PATH_FIELDS,
-    _PYDANTIC_ES,
+    BACKGROUND_IMAGE,
     FONT_SIGNATURES,
     IMAGE_SIGNATURES,
     MAX_FILE_BYTES,
     MAX_JSON_BYTES,
     MAX_UNZIPPED_BYTES,
+    MB,
     THEME_JSON,
+    WIDGET_FONT,
+    WIDGET_IMAGE,
+    Subject,
     ThemeError,
     _check_file,
     _check_relpath,
     _free_name,
     _target_name,
     load_theme,
+    pydantic_message,
     slugify,
 )
-from luzeira.temas.modelo import Theme
+from luzeira.temas.modelo import RangeError, Theme, WidgetOffScreen
 
 MAX_TITLE = 60  # igual que Theme.name
 MAX_LISTED_FILES = 500  # tope de recursos que se listan de una carpeta
 _WIDGET_TYPES = {"text", "clock", "sensor", "bar", "image"}
 _IMPORT_PREFIX = ".importando-"  # lo limpia config.clean_import_leftovers
-# Mensaje de Theme._widgets_inside_screen (en ``temas/modelo.py``, que también usa el
-# cargador): «el widget 3 (text) se sale de la pantalla 480x320». Aquí se traduce a
-# palabras del editor (RQ-12) y se cuelga de la caja de ese elemento.
-_WIDGET_OFF_SCREEN = re.compile(r"^el widget (\d+) \((\w+)\) se sale de la pantalla (\d+)x(\d+)$")
-# Los nombres de los tipos tal como salen en el botón «Añadir» del editor.
-WIDGET_TYPE_ES = {
-    "text": "Texto",
-    "clock": "Reloj",
-    "sensor": "Sensor",
-    "bar": "Barra",
-    "image": "Imagen",
+# Los tipos de elemento tienen nombre en el catálogo (``servidor.tipo.<tipo>``), el mismo
+# que sale en el botón «Añadir» del editor.
+_WIDGET_TYPE_NAMES = frozenset(_WIDGET_TYPES)
+# Mensajes de pydantic en palabras del usuario, sin jerga (true/false, JSON, objeto…):
+# estos tienen texto propio del editor (``servidor.pydantic.<tipo>``); el resto, el del
+# cargador, y lo que no tenga ninguno sale con ``generic_invalid()``, nunca con el texto
+# de pydantic (en inglés).
+EDITOR_PYDANTIC_TYPES = frozenset(
+    {
+        "bool_type",
+        "bool_parsing",
+        "model_type",
+        "dict_type",
+        "union_tag_invalid",
+        "union_tag_not_found",
+        "json_invalid",
+        "json_type",
+        "float_parsing",
+        "int_from_float",
+        "greater_than",
+        "less_than",
+        "too_short",
+    }
+)
+# Sujetos del cargador («La imagen del widget 3») dichos con palabras del editor.
+_EDITOR_SUBJECTS = {
+    WIDGET_IMAGE: "servidor.que.imagen_elemento",
+    WIDGET_FONT: "servidor.que.fuente_elemento",
 }
-# Mensajes de pydantic en palabras del usuario, sin jerga (true/false, JSON, objeto…).
-# Lo que no esté aquí sale con ``GENERIC_INVALID``, nunca con el texto de pydantic (en
-# inglés). Se parte del diccionario del cargador y se cambia lo que el editor enseña.
-PYDANTIC_ES = {
-    **_PYDANTIC_ES,
-    "bool_type": "tiene que ser sí o no",
-    "bool_parsing": "tiene que ser sí o no",
-    "model_type": "faltan los datos de este apartado o están mal formados",
-    "dict_type": "faltan los datos de este apartado o están mal formados",
-    "union_tag_invalid": "tipo de elemento desconocido",
-    "union_tag_not_found": "falta el tipo del elemento",
-    "json_invalid": "los datos del tema están mal formados",
-    "json_type": "los datos del tema están mal formados",
-    "float_parsing": "tiene que ser un número",
-    "int_from_float": "tiene que ser un número entero",
-    "greater_than": "número demasiado pequeño",
-    "less_than": "número demasiado grande",
-    "too_short": "faltan elementos",
-}
-GENERIC_INVALID = "este valor no es válido"
-# Mensajes de nuestros validadores que nombran campos del JSON.
-_VALUE_ERRORS_ES = {
-    "max tiene que ser mayor que min": "el máximo tiene que ser mayor que el mínimo",
-}
-TIMES = chr(0xD7)  # signo de multiplicar (así ruff no lo confunde con una equis)
-DAMAGED = "Este tema está dañado y no se puede abrir."
-GONE = "Ese tema ya no existe: puede que se haya borrado mientras tanto."
+
+
+# Los mensajes se piden al usarlos (nunca al importar): así salen en el idioma activo.
+def generic_invalid() -> str:
+    return t("servidor.no_valido")
+
+
+def damaged() -> str:
+    return t("servidor.danado")
+
+
+def gone() -> str:
+    return t("servidor.ya_no_existe")
+
+
+def pydantic_editor_message(kind: str) -> str:
+    if kind in EDITOR_PYDANTIC_TYPES:
+        return t(f"servidor.pydantic.{kind}")
+    return pydantic_message(kind) or generic_invalid()
+
+
+FILE = Subject("servidor.que.fichero")
+RESOURCE = Subject("servidor.que.recurso")
+UPLOADED = Subject("servidor.que.subido")
 
 CONTENT_TYPES = {
     "png": "image/png",
@@ -102,8 +122,6 @@ CONTENT_TYPES = {
     "ttf": "font/ttf",
     "otf": "font/otf",
 }
-
-READ_ONLY = "Los temas incluidos no se pueden cambiar. Usa «Guardar como…» para hacer tu copia."
 
 
 class EditorError(Exception):
@@ -132,7 +150,7 @@ def _reject_constant(name: str) -> float:
 def _finite_float(text: str) -> float:
     value = float(text)
     if not math.isfinite(value):  # «1e400» → inf
-        raise ValueError("número fuera de rango")
+        raise ValueError("número fuera de rango")  # i18n: no (no llega al usuario)
     return value
 
 
@@ -144,7 +162,7 @@ def parse_json(raw: bytes) -> object:
             raw.decode("utf-8"), parse_constant=_reject_constant, parse_float=_finite_float
         )
     except (UnicodeDecodeError, ValueError, RecursionError):
-        raise EditorError(400, "Los datos enviados están mal formados.") from None
+        raise EditorError(400, t("servidor.datos_mal")) from None
 
 
 def friendly_theme_error(exc: ThemeError) -> str:
@@ -153,10 +171,12 @@ def friendly_theme_error(exc: ThemeError) -> str:
     El cargador habla de ``theme.json`` y de «widgets» (lo lee también quien comparte
     temas); en el editor un tema roto es «dañado» y un widget es un «elemento».
     """
-    message = str(exc)
-    if message.startswith(THEME_JSON) or message.startswith(f"Falta el fichero {THEME_JSON}"):
-        return DAMAGED
-    return message.replace(" del widget ", " del elemento ")
+    if exc.damaged:
+        return damaged()
+    subject = exc.subject
+    if subject is not None and subject.key in _EDITOR_SUBJECTS:
+        return exc.retold(Subject(_EDITOR_SUBJECTS[subject.key], subject.n))
+    return str(exc)
 
 
 def _loc_path(loc: tuple) -> str:
@@ -179,36 +199,42 @@ def _loc_path(loc: tuple) -> str:
 def _item_message(item: dict) -> str:
     # Mismo criterio que cargar._friendly_validation (aquí por campo, no en un bloque).
     if item["type"] == "value_error":
-        # Nuestros validadores ya hablan en español (``ctx.error``); si no hay, genérico.
+        # Nuestros validadores ya hablan en el idioma activo (``ctx.error``); si no hay,
+        # genérico. El de «max y min» nombra campos del JSON: el editor lo dice con
+        # palabras suyas.
         error = item.get("ctx", {}).get("error")
         if error is None:
-            return GENERIC_INVALID
-        return _VALUE_ERRORS_ES.get(str(error), str(error))
+            return generic_invalid()
+        if isinstance(error, RangeError):
+            return t("servidor.max_min")
+        return str(error)
     if item["type"] == "string_pattern_mismatch" and tuple(item["loc"][-1:]) in _PATH_FIELDS:
-        return (
-            "no es un nombre de fichero válido (solo letras sin tilde, números, - y _, "
-            "carpetas con «/», sin «..», «\\» ni «:»)"
-        )
-    return PYDANTIC_ES.get(item["type"], GENERIC_INVALID)
+        return t("servidor.ruta_no_valida")
+    return pydantic_editor_message(item["type"])
 
 
 def _detail(item: dict) -> dict:
     """Un error de pydantic como ``{path, message}`` para el editor.
 
-    Los errores de todo el tema (``loc`` vacío) que nombran un widget («el widget 3
-    (text) se sale de la pantalla 480x320») se traducen («El elemento 3 (Texto) se sale
-    de la pantalla (480 por 320)», con el signo de multiplicar ``TIMES``) y se cuelgan
-    de su caja, ``widgets.2.box``, para que el editor marque ese elemento. El mensaje
-    cuenta desde 1; la ruta, desde 0.
+    Los errores de todo el tema (``loc`` vacío) que nombran un widget
+    (``WidgetOffScreen``: «el widget 3 (text) se sale de la pantalla 480x320») se
+    cuentan con palabras del editor («El elemento 3 (Texto) se sale de la pantalla
+    (480 por 320)», con el signo de multiplicar) y se cuelgan de su caja,
+    ``widgets.2.box``, para que el editor marque ese elemento. El mensaje cuenta desde 1;
+    la ruta, desde 0.
     """
     path = _loc_path(tuple(item["loc"]))
     message = _item_message(item)
-    if not path and (m := _WIDGET_OFF_SCREEN.match(message)) and int(m.group(1)) >= 1:
-        n, kind, width, height = m.groups()
-        path = f"widgets.{int(n) - 1}.box"
-        message = (
-            f"El elemento {n} ({WIDGET_TYPE_ES.get(kind, kind)}) se sale de la pantalla "
-            f"({width} {TIMES} {height})"
+    error = item.get("ctx", {}).get("error") if item["type"] == "value_error" else None
+    if not path and isinstance(error, WidgetOffScreen) and error.n >= 1:
+        path = f"widgets.{error.n - 1}.box"
+        kind = t(f"servidor.tipo.{error.kind}") if error.kind in _WIDGET_TYPE_NAMES else error.kind
+        message = t(
+            "servidor.fuera_pantalla",
+            n=error.n,
+            kind=kind,
+            width=error.width,
+            height=error.height,
         )
     return {"path": path, "message": message}
 
@@ -221,18 +247,18 @@ def parse_theme(obj: object) -> Theme:
     """Valida un tema que llega del editor **igual que lo leerá luego** ``load_theme``:
     se serializa y se pasa por ``Theme.model_validate_json`` (modo JSON, estricto)."""
     if not isinstance(obj, dict):
-        raise EditorError(400, "Los datos del tema están mal formados.")
+        raise EditorError(400, t("servidor.tema_mal_formado"))
     try:
         return Theme.model_validate_json(json.dumps(obj, ensure_ascii=False))
     except ValidationError as err:
-        raise EditorError(400, "El tema no es válido.", validation_details(err)) from None
+        raise EditorError(400, t("servidor.tema_no_valido"), validation_details(err)) from None
 
 
 def theme_bytes(theme: Theme) -> bytes:
     data = json.dumps(theme.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n"
     raw = data.encode("utf-8")
     if len(raw) > MAX_JSON_BYTES:
-        raise EditorError(413, "El tema es demasiado grande para guardarlo.")
+        raise EditorError(413, t("servidor.tema_grande"))
     return raw
 
 
@@ -268,7 +294,7 @@ def _gone_as_404():
     try:
         yield
     except FileNotFoundError:
-        raise EditorError(404, GONE) from None
+        raise EditorError(404, gone()) from None
 
 
 # --- Almacén -------------------------------------------------------------------------
@@ -305,12 +331,12 @@ class ThemeStore:
             for entry in self.entries():
                 if entry.name == name:
                     return entry
-        raise EditorError(404, "No existe ese tema.")
+        raise EditorError(404, t("servidor.no_existe_tema"))
 
     def _writable(self, name: object) -> ThemeEntry:
         entry = self.entry(name)
         if entry.builtin:
-            raise EditorError(409, READ_ONLY)
+            raise EditorError(409, t("servidor.solo_lectura"))
         return entry
 
     def list(self) -> list[dict]:
@@ -336,11 +362,11 @@ class ThemeStore:
         try:
             theme = self._read_theme(entry.path)
         except ValidationError as err:
-            raise EditorError(400, DAMAGED, validation_details(err)) from None
+            raise EditorError(400, damaged(), validation_details(err)) from None
         except FileNotFoundError:
-            raise EditorError(404, GONE) from None
+            raise EditorError(404, gone()) from None
         except (ThemeError, OSError):
-            raise EditorError(400, DAMAGED) from None
+            raise EditorError(400, damaged()) from None
         return {
             "name": entry.name,
             "builtin": entry.builtin,
@@ -363,7 +389,7 @@ class ThemeStore:
             if rel.rsplit(".", 1)[-1].lower() not in allowed:
                 continue
             try:
-                _check_relpath(rel, "El fichero")
+                _check_relpath(rel, FILE)
             except ThemeError:
                 continue
             found.append(rel)
@@ -372,7 +398,7 @@ class ThemeStore:
     # --- validación de ficheros ---
 
     def _check_cached(
-        self, directory: Path, rel: str, what: str, kind: str, sizes: frozenset[int]
+        self, directory: Path, rel: str, what: Subject, kind: str, sizes: frozenset[int]
     ) -> Path:
         _check_relpath(rel, what)  # antes de tocar el disco con ese nombre
         try:
@@ -406,24 +432,17 @@ class ThemeStore:
         devolviendo **todos** los problemas con su campo, para pintarlos en el editor.
         """
         directory = directory.resolve()
-        refs: list[tuple[str, str, str, str]] = []  # (ruta, descripción, tipo, campo)
+        refs: list[tuple[str, Subject, str, str]] = []  # (ruta, sujeto, tipo, campo)
         font_sizes: dict[str, set[int]] = {}
         if theme.background.image:
-            refs.append((theme.background.image, "La imagen de fondo", "image", "background.image"))
+            refs.append((theme.background.image, BACKGROUND_IMAGE, "image", "background.image"))
         for i, widget in enumerate(theme.widgets):
             if widget.type == "image":
-                refs.append(
-                    (widget.file, f"La imagen del elemento {i + 1}", "image", f"widgets.{i}.file")
-                )
+                what = Subject("servidor.que.imagen_elemento", i + 1)
+                refs.append((widget.file, what, "image", f"widgets.{i}.file"))
             if widget.style.font:
-                refs.append(
-                    (
-                        widget.style.font,
-                        f"La fuente del elemento {i + 1}",
-                        "font",
-                        f"widgets.{i}.style.font",
-                    )
-                )
+                what = Subject("servidor.que.fuente_elemento", i + 1)
+                refs.append((widget.style.font, what, "font", f"widgets.{i}.style.font"))
                 font_sizes.setdefault(widget.style.font, set()).add(widget.style.size)
         files: dict[str, Path] = {}
         failed: dict[str, str] = {}
@@ -440,7 +459,7 @@ class ThemeStore:
                     failed[rel] = str(exc)
             details.append({"path": field, "message": failed[rel]})
         if details:
-            raise EditorError(400, "Algún fichero del tema no vale.", details)
+            raise EditorError(400, t("servidor.fichero_no_vale"), details)
         return files
 
     # --- escritura ---
@@ -472,12 +491,12 @@ class ThemeStore:
         if not isinstance(title, str) or not title.strip() or len(title.strip()) > MAX_TITLE:
             raise EditorError(
                 400,
-                "El nombre del tema nuevo no es válido.",
-                [{"path": "title", "message": f"entre 1 y {MAX_TITLE} caracteres"}],
+                t("servidor.nombre_nuevo_no_valido"),
+                [{"path": "title", "message": t("servidor.entre_caracteres", max=MAX_TITLE)}],
             )
         title = title.strip()
         if edited is not None and not isinstance(edited, dict):
-            raise EditorError(400, "Los datos del tema están mal formados.")
+            raise EditorError(400, t("servidor.tema_mal_formado"))
         with self._lock, _gone_as_404():
             source = self.entry(name)
             try:
@@ -521,7 +540,7 @@ class ThemeStore:
                 continue
             budget -= size
             if budget < 0:
-                raise ThemeError("El tema ocupa demasiado para copiarlo.")
+                raise ThemeError(t("servidor.copia_grande"))
             target = dest / rel
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(path, target)
@@ -533,11 +552,9 @@ class ThemeStore:
     def _delete_locked(self, name: object) -> None:
         entry = self.entry(name)
         if entry.builtin:
-            raise EditorError(409, "Los temas incluidos no se pueden borrar.")
+            raise EditorError(409, t("servidor.no_borrar_incluido"))
         if self._active_theme is not None and self._active_theme() == entry.name:
-            raise EditorError(
-                409, "Es el tema que está en la pantalla. Aplica otro antes de borrarlo."
-            )
+            raise EditorError(409, t("servidor.no_borrar_activo"))
         self.trash.mkdir(parents=True, exist_ok=True)
         stamp = self._now().strftime("%Y%m%d-%H%M%S")
         dest = self.trash / f"{entry.name}-{stamp}"
@@ -548,11 +565,9 @@ class ThemeStore:
         try:
             entry.path.rename(dest)
         except PermissionError:
-            raise EditorError(
-                409, "No se puede borrar ahora: algún fichero del tema está en uso."
-            ) from None
+            raise EditorError(409, t("servidor.no_borrar_en_uso")) from None
         except FileNotFoundError:
-            raise EditorError(404, GONE) from None
+            raise EditorError(404, gone()) from None
         except OSError:
             # Otra unidad (papelera fuera del disco de los temas): copiar y quitar.
             shutil.move(str(entry.path), str(dest))
@@ -562,7 +577,7 @@ class ThemeStore:
     @staticmethod
     def _upload_target(suggested: str | None) -> tuple[str, str, str, str]:
         """(carpeta, nombre, extensión, tipo) saneados a partir del nombre sugerido."""
-        bad = EditorError(400, "El nombre del fichero no es válido.")
+        bad = EditorError(400, t("servidor.nombre_fichero_no_valido"))
         if not suggested or len(suggested) > 200:
             raise bad
         if any(c in suggested for c in "/\\:\x00") or ".." in suggested:
@@ -575,7 +590,7 @@ class ThemeStore:
             return "img", slugify(stem), ext, "image"
         if ext in FONT_SIGNATURES:
             return "fuentes", slugify(stem), ext, "font"
-        raise EditorError(400, "Solo se pueden subir imágenes PNG, JPEG o GIF y fuentes TTF u OTF.")
+        raise EditorError(400, t("servidor.solo_tipos"))
 
     def upload(self, name: object, suggested: str | None, data: bytes) -> str:
         """Guarda un recurso subido y devuelve su ruta dentro del tema (``img/logo.png``).
@@ -586,7 +601,7 @@ class ThemeStore:
         self._writable(name)  # 404/409 antes de escribir nada
         folder, stem, ext, kind = self._upload_target(suggested)
         if len(data) > MAX_FILE_BYTES:
-            raise EditorError(413, "El fichero es demasiado grande (máximo 10 MB).")
+            raise EditorError(413, t("servidor.fichero_grande", max=MAX_FILE_BYTES // MB))
         self.user_themes.mkdir(parents=True, exist_ok=True)
         tmp = Path(tempfile.mkdtemp(prefix=_IMPORT_PREFIX, dir=self.user_themes.resolve()))
         try:
@@ -594,7 +609,7 @@ class ThemeStore:
             (tmp / folder).mkdir()
             (tmp / rel_tmp).write_bytes(data)
             try:
-                _check_file(tmp, rel_tmp, "El fichero subido", kind)
+                _check_file(tmp, rel_tmp, UPLOADED, kind)
             except ThemeError as exc:
                 raise EditorError(400, str(exc)) from None
             with self._lock, _gone_as_404():
@@ -614,21 +629,21 @@ class ThemeStore:
         entry = self.entry(name)
         ext = rel.rsplit(".", 1)[-1].lower() if "." in rel else ""
         if ext not in CONTENT_TYPES:
-            raise EditorError(404, "No existe ese recurso.")
+            raise EditorError(404, t("servidor.no_existe_recurso"))
         directory = entry.path.resolve()
         try:
-            _check_relpath(rel, "El recurso")
+            _check_relpath(rel, RESOURCE)
         except ThemeError:
-            raise EditorError(404, "No existe ese recurso.") from None
+            raise EditorError(404, t("servidor.no_existe_recurso")) from None
         target = directory / rel
         if target.is_symlink() or not target.is_file():
-            raise EditorError(404, "No existe ese recurso.")
+            raise EditorError(404, t("servidor.no_existe_recurso"))
         kind = "image" if ext in IMAGE_SIGNATURES else "font"
         try:
-            path = self._check_cached(directory, rel, "El recurso", kind, frozenset())
+            path = self._check_cached(directory, rel, RESOURCE, kind, frozenset())
         except ThemeError as exc:
             raise EditorError(400, str(exc)) from None
         try:
             return path.read_bytes(), CONTENT_TYPES[ext]
         except FileNotFoundError:  # borrado entre la comprobación y la lectura
-            raise EditorError(404, "No existe ese recurso.") from None
+            raise EditorError(404, t("servidor.no_existe_recurso")) from None

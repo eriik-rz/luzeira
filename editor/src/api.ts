@@ -18,6 +18,7 @@ import {
   MISSING_GLYPHS_HEADER,
   parseMissingGlyphs,
 } from './model/contract.ts'
+import { t } from './model/i18n.ts'
 import type { Theme, ThemeJson } from './model/types.ts'
 
 // --- Tipos de las respuestas ---------------------------------------------------------
@@ -232,7 +233,7 @@ async function obtainToken(timeoutMs = 4000): Promise<string> {
   })
   if (waited) return waited
   throw new ApiError(
-    'No se pudo conectar con Luzeira. Abre el editor desde el icono de Luzeira en la bandeja.',
+    t('app.sin_token'),
     0,
   )
 }
@@ -262,7 +263,7 @@ class HttpApi implements EditorApi {
       res = await fetch(path, { method, headers, body, signal, keepalive, cache: 'no-store', credentials: 'omit' })
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') throw e
-      throw new ApiError('Se ha perdido la conexión con Luzeira. ¿Sigue abierta?', 0)
+      throw new ApiError(t('app.sin_conexion'), 0)
     }
     if (!res.ok) throw await errorFrom(res)
     return res
@@ -278,7 +279,7 @@ class HttpApi implements EditorApi {
     try {
       return (await res.json()) as T
     } catch {
-      throw new ApiError('Luzeira ha respondido algo inesperado. Cierra el editor y vuelve a abrirlo.', res.status)
+      throw new ApiError(t('app.respuesta_rara'), res.status)
     }
   }
 
@@ -426,5 +427,5 @@ export async function connect(): Promise<EditorApi> {
 /** Texto para el usuario de cualquier error. */
 export function errorMessage(e: unknown): string {
   if (e instanceof ApiError) return e.message
-  return 'Algo ha fallado. Prueba otra vez.'
+  return t('app.fallo')
 }

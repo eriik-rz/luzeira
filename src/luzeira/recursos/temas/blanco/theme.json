@@ -8,12 +8,12 @@
     {"type": "clock", "format": "date-long", "box": {"x": 24, "y": 20, "width": 280, "height": 24}, "style": {"size": 16, "color": "#181818", "align": "left"}},
     {"type": "clock", "format": "HH:MM", "box": {"x": 18, "y": 44, "width": 300, "height": 110}, "style": {"size": 100, "color": "#181818", "align": "left"}},
 
-    {"type": "text", "text": "RED", "box": {"x": 320, "y": 62, "width": 136, "height": 20}, "style": {"size": 14, "bold": true, "color": "#5f5b54", "align": "right"}},
+    {"type": "text", "text": "RED", "text_i18n": { "en": "NET" }, "box": {"x": 320, "y": 62, "width": 136, "height": 20}, "style": {"size": 14, "bold": true, "color": "#5f5b54", "align": "right"}},
     {"type": "sensor", "sensor": "network.download", "decimals": 1, "prefix": "↓ ", "box": {"x": 304, "y": 86, "width": 152, "height": 26}, "style": {"size": 18, "color": "#181818", "align": "right"}},
     {"type": "sensor", "sensor": "network.upload", "decimals": 1, "prefix": "↑ ", "box": {"x": 304, "y": 114, "width": 152, "height": 26}, "style": {"size": 18, "color": "#5f5b54", "align": "right"}},
 
     {"type": "text", "text": "CPU", "box": {"x": 24, "y": 172, "width": 60, "height": 20}, "style": {"size": 14, "bold": true, "color": "#5f5b54", "align": "left"}},
-    {"type": "sensor", "sensor": "system.uptime", "prefix": "activo ", "box": {"x": 64, "y": 172, "width": 96, "height": 20}, "style": {"size": 14, "color": "#5f5b54", "align": "right"}},
+    {"type": "sensor", "sensor": "system.uptime", "prefix": "activo ", "prefix_i18n": { "en": "up " }, "box": {"x": 64, "y": 172, "width": 96, "height": 20}, "style": {"size": 14, "color": "#5f5b54", "align": "right"}},
     {"type": "sensor", "sensor": "cpu.usage", "show_unit": false, "suffix": "%", "box": {"x": 24, "y": 196, "width": 136, "height": 64}, "style": {"size": 50, "color": "#181818", "align": "left"}},
     {"type": "bar", "sensor": "cpu.usage", "fill": "#181818", "track": "#dcd8cf", "box": {"x": 24, "y": 266, "width": 136, "height": 6}},
 

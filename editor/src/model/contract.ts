@@ -2,6 +2,8 @@
 // probarlas con node:test). Ver docs/planning/fase-5-editor.md, «Decisiones y cambios
 // al contrato (2026-11-17)».
 
+import { t } from './i18n.ts'
+
 /** Cabecera con el nombre sugerido de una subida (el servidor lo sanea siempre). */
 export const FILENAME_HEADER = 'X-Luzeira-Filename'
 
@@ -41,17 +43,22 @@ export function parseMissingGlyphs(header: string | null): { index: number; char
 /** Texto del aviso: «★» en «Texto: Hola» y «€» en «Sensor: …». */
 export function missingGlyphsMessage(items: { index: number; chars: string }[], labels: string[]): string {
   return items
-    .map((m) => `${[...m.chars].map((c) => `«${c}»`).join(' ')} en «${labels[m.index] ?? 'un elemento'}»`)
+    .map((m) =>
+      t('modelo.letras.en', {
+        letras: [...m.chars].map((c) => t('modelo.letras.letra', { c })).join(' '),
+        elemento: labels[m.index] ?? t('modelo.letras.un_elemento'),
+      }),
+    )
     .join('; ')
 }
 
 export function messageForStatus(status: number, serverMessage?: string | null): string {
-  if (status === 403) return 'Luzeira ha rechazado la petición. Cierra el editor y vuelve a abrirlo.'
-  if (serverMessage) return serverMessage
-  if (status === 404) return 'No se ha encontrado.'
-  if (status === 409) return 'Este tema no se puede cambiar. Usa «Guardar como…» para hacer tu copia.'
-  if (status === 413) return 'El fichero es demasiado grande.'
-  return `Algo ha fallado (código ${status}).`
+  if (status === 403) return t('modelo.http.403')
+  if (serverMessage) return serverMessage // ya viene traducido de Luzeira
+  if (status === 404) return t('modelo.http.404')
+  if (status === 409) return t('modelo.http.409')
+  if (status === 413) return t('modelo.http.413')
+  return t('modelo.http.otro', { codigo: status })
 }
 
 /**
@@ -121,11 +128,11 @@ export function displayPill(info: { status: string; message: string } | null): D
   if (!info || !info.message) return null
   switch (info.status) {
     case 'no_display':
-      return { kind: 'alert', text: 'Sin pantalla', title: info.message }
+      return { kind: 'alert', text: t('modelo.pastilla.sin_pantalla'), title: info.message }
     case 'theme_error':
-      return { kind: 'error', text: 'Error en el tema', title: info.message }
+      return { kind: 'error', text: t('modelo.pastilla.error_tema'), title: info.message }
     case 'error':
-      return { kind: 'error', text: 'Error en la pantalla', title: info.message }
+      return { kind: 'error', text: t('modelo.pastilla.error_pantalla'), title: info.message }
     case 'simulado':
       return null // ya sale «Modo simulado»
     default:
@@ -138,24 +145,25 @@ export function appliedMessage(
   title: string,
   info: { status: string; message: string } | null,
 ): { message: string; kind: 'ok' | 'info' | 'error' } {
-  const saved = 'Guardado como tema de la pantalla.'
-  if (!info) return { message: `${saved} No se ha podido comprobar cómo está la pantalla.`, kind: 'info' }
+  const saved = t('modelo.aplicado.guardado')
+  const then = (key: string, vars?: Record<string, string>) => `${saved} ${t(key, vars)}`
+  if (!info) return { message: then('modelo.aplicado.sin_comprobar'), kind: 'info' }
   switch (info.status) {
     case 'running':
-      return { message: `Listo: la pantalla muestra «${title}».`, kind: 'ok' }
+      return { message: t('modelo.aplicado.running', { tema: title }), kind: 'ok' }
     case 'starting':
-      return { message: `Listo: «${title}» se está poniendo en la pantalla.`, kind: 'ok' }
+      return { message: t('modelo.aplicado.starting', { tema: title }), kind: 'ok' }
     case 'no_display':
-      return { message: `${saved} Se verá cuando la conectes.`, kind: 'info' }
+      return { message: then('modelo.aplicado.no_display'), kind: 'info' }
     case 'suspended':
-      return { message: `${saved} Se verá cuando el equipo salga del reposo.`, kind: 'info' }
+      return { message: then('modelo.aplicado.suspended'), kind: 'info' }
     case 'stopped':
-      return { message: `${saved} Se verá cuando Luzeira ponga la pantalla en marcha.`, kind: 'info' }
+      return { message: then('modelo.aplicado.stopped'), kind: 'info' }
     case 'simulado':
-      return { message: `Aplicado «${title}» (modo simulado: no hay pantalla de verdad).`, kind: 'info' }
+      return { message: t('modelo.aplicado.simulado', { tema: title }), kind: 'info' }
     case 'theme_error':
     case 'error':
-      return { message: `${saved} Pero la pantalla tiene un problema: ${info.message}`, kind: 'error' }
+      return { message: then('modelo.aplicado.problema', { mensaje: info.message }), kind: 'error' }
     default:
       return { message: info.message ? `${saved} ${info.message}` : saved, kind: 'info' }
   }
@@ -175,8 +183,8 @@ export const DEFAULT_THEME = 'esencial'
 
 /** Aviso tras mover un tema a la papelera. */
 export function deletedMessage(wasOnScreen: boolean): string {
-  const moved = 'Tema movido a la papelera de Luzeira.'
-  return wasOnScreen ? `${moved} En la pantalla se ha puesto «Esencial».` : moved
+  const moved = t('modelo.borrado')
+  return wasOnScreen ? `${moved} ${t('modelo.borrado.en_pantalla')}` : moved
 }
 
 /** Por qué «Aplicar» pregunta antes (o null si se puede aplicar ya). */
@@ -188,17 +196,7 @@ export function applyBlock(s: { builtin: boolean; dirty: boolean; invalid: boole
   return s.invalid ? 'invalid' : 'pending'
 }
 
-export const APPLY_BLOCK_TEXT: Record<ApplyBlock, { title: string; body: string }> = {
-  pending: {
-    title: 'Hay cambios sin guardar',
-    body: 'Para ponerlo en la pantalla hay que guardar antes tus últimos cambios.',
-  },
-  invalid: {
-    title: 'Hay errores sin corregir',
-    body: 'Los cambios con errores no se pueden guardar. Corrige los campos marcados en rojo, o pon en la pantalla la última versión guardada.',
-  },
-  'builtin-changed': {
-    title: 'Los temas incluidos no se pueden cambiar',
-    body: 'Tus cambios solo se conservan en una copia tuya. Guárdala con «Guardar como…» y se aplicará, o pon en la pantalla el tema original.',
-  },
+/** Título y explicación de la pregunta de «Aplicar» (en el idioma activo). */
+export function applyBlockText(why: ApplyBlock): { title: string; body: string } {
+  return { title: t(`modelo.aplicar.${why}`), body: t(`modelo.aplicar.${why}.texto`) }
 }

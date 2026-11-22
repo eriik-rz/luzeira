@@ -444,3 +444,32 @@ def test_theme_translations_are_short_language_codes_and_short_texts(bad):
 
     with pytest.raises(ValidationError):
         TextWidget.model_validate({"type": "text", "box": box(), "text": "RED", "text_i18n": bad})
+
+
+# --- C-62: fecha y coma decimal en el idioma activo -----------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("fmt", "expected"),
+    [
+        ("HH:MM", "09:05"),
+        ("date-short", "11/07/2026"),  # EE. UU.: mes/día/año
+        ("weekday", "Saturday"),
+        ("date-long", "Saturday, November 7"),
+    ],
+)
+def test_clock_formats_in_english(fmt, expected):
+    from luzeira import idioma
+
+    idioma.set_language("en")
+    assert format_clock(fmt, datetime(2026, 11, 7, 9, 5, 7)) == expected
+
+
+def test_decimal_separator_follows_the_language():
+    from luzeira import idioma
+
+    w = sensor_widget(decimals=1)
+    assert format_reading(w, Reading(14.06, "GB")) == "14,1 GB"
+    idioma.set_language("en")
+    assert format_reading(w, Reading(14.06, "GB")) == "14.1 GB"
+    assert format_reading(w, Reading(14.06, "GB"), decimal_sep=",") == "14,1 GB"  # a mano manda

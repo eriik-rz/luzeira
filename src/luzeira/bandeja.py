@@ -9,8 +9,9 @@ Hilos (y quién toca qué):
 - Avisos de energía y de apagado: llegan en hilos de Windows y solo llaman a métodos
   thread-safe del servicio.
 
-Ningún fallo es silencioso (RQ-09): cada estado de problema muestra un aviso de Windows
-en español, el estado se ve siempre en el menú, y si una acción del menú falla, se avisa.
+Ningún fallo es silencioso (RQ-09): cada estado de problema muestra un aviso de
+Windows en el idioma del usuario, el estado se ve siempre en el menú, y si una acción del
+menú falla, se avisa.
 """
 
 from __future__ import annotations
@@ -47,6 +48,7 @@ from luzeira.config import (
 from luzeira.editor.almacen import EditorError
 from luzeira.editor.conexion import EditorLink
 from luzeira.editor.ventana import EXIT_NO_WEBVIEW2
+from luzeira.idioma import t
 from luzeira.marca import STAR, draw_mark
 from luzeira.pantallas.modelos import (
     REV_C,
@@ -92,77 +94,39 @@ _MAX_INFO = 255
 _MAX_INFO_TITLE = 63
 _MAX_TIP = 127
 
-MSG_NO_WEBVIEW2 = (
-    "Para el editor hace falta Microsoft Edge WebView2 Runtime (gratuito de Microsoft). "
-    "Instálalo y vuelve a abrir el editor."
-)
+# Textos para el usuario: estas constantes guardan la **clave** del catálogo (zona
+# ``bandeja``), no el texto. Se traducen con ``t()`` al usarlas, nunca al importar: si no,
+# se quedarían en el idioma del arranque aunque el usuario cambie de idioma.
+MSG_NO_WEBVIEW2 = "bandeja.sin_webview2"
 
 # --- elegir pantalla (C-44) ---------------------------------------------------------------
-TITLE_BETA = "Luzeira: probar un modelo en beta"
+TITLE_BETA = "bandeja.beta_titulo"
 # Para los modelos con saludo (la prueba puede decir «esa no es»).
-MSG_BETA = (
-    "Vas a probar Luzeira con una {model} en {device}.\n\n"
-    "Este modelo está en beta: todavía no se ha probado con una pantalla de verdad.\n\n"
-    "Luzeira solo le mandará primero un saludo. Si no contesta como debe, cerrará el "
-    "puerto y te avisará, sin probar nada más.\n\n¿Quieres probarlo?"
-)
+MSG_BETA = "bandeja.beta_texto"
 # Para los modelos sin saludo (Kipye): la prueba no puede fallar, así que no se promete.
-MSG_BETA_UNCHECKED = (
-    "Vas a probar Luzeira con una {model} en {device}.\n\n"
-    "Este modelo está en beta: todavía no se ha probado con una pantalla de verdad.\n\n"
-    "Además, este modelo no contesta a ningún saludo, así que Luzeira no puede comprobar "
-    "que sea tu pantalla: le mandará la imagen directamente.\n\n"
-    "Si ves rayas o no se ve nada, desconéctala o elige «Volver a detectarla sola» "
-    "(en «Pantalla», en el menú del icono, o en «Ajustes» del editor).\n\n¿Quieres probarlo?"
-)
-TITLE_LOOKS_RIGHT = "Luzeira: ¿se ve bien?"
-MSG_LOOKS_RIGHT = (
-    "Luzeira está mandando el tema a la {model} de {device}, pero no puede comprobar "
-    "por sí sola que se vea.\n\n"
-    "¿Se ve bien el tema en la pantalla?\n\n"
-    "Si contestas «Sí», la recordaré para la próxima vez. Si ves rayas, colores raros o "
-    "nada, contesta «No» y dejaré de usarla."
-)
-MSG_TRIAL_REJECTED = (
-    "Vale: no la recuerdo y dejo de mandarle nada. Si la pantalla se ha quedado con rayas, "
-    "desconéctala y vuelve a conectarla."
-)
-TITLE_LOOKS_RIGHT_EDITOR = "¿Se ve bien?"
-MSG_DIALOG_OPEN = "Antes contesta la pregunta de Luzeira que tienes abierta."
-TITLE_ADVANCED = "Luzeira: modo avanzado"
-MSG_ADVANCED = (
-    "Cuidado: vas a mandar datos de pantalla a {device} como si fuera una {model}, "
-    "aunque Luzeira no puede comprobar que lo sea.\n\n"
-    "Si en ese puerto hay otra cosa (un módem, un Bluetooth, una placa…), recibirá datos "
-    "que no entiende y podría comportarse de forma rara hasta que la desconectes.\n\n"
-    "Úsalo solo si sabes qué hay conectado en ese puerto. ¿Seguro que quieres probar?"
-)
-MSG_CHOICE_SAVED = "Listo: Luzeira usará tu {model} en {device}. Lo recordaré."
-MSG_BACK_TO_AUTO = "Vale: Luzeira buscará la pantalla ella sola."
+MSG_BETA_UNCHECKED = "bandeja.beta_texto_sin_saludo"
+TITLE_LOOKS_RIGHT = "bandeja.se_ve_bien_titulo"
+MSG_LOOKS_RIGHT = "bandeja.se_ve_bien_texto"
+MSG_TRIAL_REJECTED = "bandeja.prueba_rechazada"
+TITLE_LOOKS_RIGHT_EDITOR = "bandeja.se_ve_bien_titulo_editor"
+MSG_DIALOG_OPEN = "bandeja.dialogo_abierto"
+TITLE_ADVANCED = "bandeja.avanzado_titulo"
+MSG_ADVANCED = "bandeja.avanzado_texto"
+MSG_CHOICE_SAVED = "bandeja.eleccion_guardada"
+MSG_BACK_TO_AUTO = "bandeja.deteccion_sola"
 
 # --- actualizaciones (ADR-006) -------------------------------------------------------------
-MSG_UP_TO_DATE = "Ya tienes la última versión de Luzeira ({version})."
-MSG_UPDATE_AVAILABLE = (
-    "Hay una versión nueva de Luzeira: la {version}. Abre el editor para instalarla "
-    "(o «Actualizar» en el menú de este icono)."
-)
-MSG_UPDATE_BUSY = "Ya estoy buscando o descargando una actualización. Espera un momento."
-MSG_UPDATE_NONE = "No hay ninguna versión nueva pendiente. Busca otra vez."
-MSG_STORE_UPDATES = "En esta versión, las actualizaciones las hace Microsoft Store."
-MSG_AUTOSTART_BLOCKED = (
-    "Quitaste Luzeira del inicio desde Windows, así que solo se puede volver a activar"
-    " allí: Configuración → Aplicaciones → Inicio."
-)
-MSG_AUTOSTART_FAILED = "No he podido cambiar el inicio con Windows."
-MSG_STORE_SHORTCUT = "En la versión de Microsoft Store, Luzeira ya está en el menú Inicio."
-MSG_UPDATE_DOWNLOADING = "Descargando la versión {version}…"
-MSG_UPDATE_INSTALLING = (
-    "Listo: Luzeira se cierra para instalar la versión {version} y se volverá a abrir "
-    "sola en un momento."
-)
-MSG_UPDATE_FAILED = (
-    "No he podido comprobar si hay versión nueva. Los detalles están en el registro."
-)
+MSG_UP_TO_DATE = "bandeja.actualizar_al_dia"
+MSG_UPDATE_AVAILABLE = "bandeja.actualizar_disponible"
+MSG_UPDATE_BUSY = "bandeja.actualizar_ocupado"
+MSG_UPDATE_NONE = "bandeja.actualizar_ninguna"
+MSG_STORE_UPDATES = "bandeja.actualizar_store"
+MSG_AUTOSTART_BLOCKED = "bandeja.autoarranque_bloqueado"
+MSG_AUTOSTART_FAILED = "bandeja.autoarranque_fallo"
+MSG_STORE_SHORTCUT = "bandeja.acceso_store"
+MSG_UPDATE_DOWNLOADING = "bandeja.actualizar_descargando"
+MSG_UPDATE_INSTALLING = "bandeja.actualizar_instalando"
+MSG_UPDATE_FAILED = "bandeja.actualizar_fallo"
 _UPDATE_FIRST_DELAY = 60.0  # s tras arrancar: que la pantalla se encienda primero
 _UPDATE_TICK = 3600.0  # s entre miradas al reloj
 _UPDATE_EVERY = 24 * 3600.0  # s entre comprobaciones automáticas
@@ -186,7 +150,7 @@ def setting_from_choice(choice: DisplayChoice) -> DisplaySetting:
 
 def model_label(key: str) -> str:
     model = model_by_key(key)
-    return model.menu_label if model is not None else "pantalla"
+    return model.menu_label if model is not None else t("bandeja.pantalla_generica")
 
 
 def clip(text: str, limit: int) -> str:
@@ -248,7 +212,7 @@ class EditorSettings:
                         "beta": model.beta,
                         "current": app._is_current(model, port),
                         "warning": (
-                            template.format(device=port.device, model=model.label)
+                            t(template, device=port.device, model=model.label)
                             if model.beta
                             else None
                         ),
@@ -260,7 +224,7 @@ class EditorSettings:
                 closed.append(
                     {
                         "id": None,
-                        "label": f"{port.device}: {REV_C.label} — todavía no compatible",
+                        "label": t("bandeja.no_compatible", device=port.device, model=REV_C.label),
                         "beta": True,
                         "current": False,
                         "warning": None,
@@ -274,7 +238,7 @@ class EditorSettings:
                         "label": f"{port.label}: {model.menu_label}",
                         "beta": model.beta,
                         "current": False,
-                        "warning": MSG_ADVANCED.format(device=port.device, model=model.menu_label),
+                        "warning": t(MSG_ADVANCED, device=port.device, model=model.menu_label),
                         "action": (model, port, True),
                     }
                 )
@@ -317,13 +281,13 @@ class EditorSettings:
         if language is not None and language != "auto" and language not in idioma.available():
             raise EditorError(400, idioma.t("idioma.no_valido"))
         if brightness is not None and brightness not in BRIGHTNESS_LEVELS:
-            raise EditorError(400, "Ese brillo no está entre los que se pueden elegir.")
+            raise EditorError(400, t("bandeja.brillo_no_valido"))
         if autostart is not None:
             result = app._set_autostart(autostart)
             if result is None:
-                raise EditorError(500, MSG_AUTOSTART_FAILED)
+                raise EditorError(500, t(MSG_AUTOSTART_FAILED))
             if autostart and result == StartupState.BLOCKED:
-                raise EditorError(409, MSG_AUTOSTART_BLOCKED)
+                raise EditorError(409, t(MSG_AUTOSTART_BLOCKED))
         changes: dict[str, object] = {}
         if brightness is not None:
             changes["brightness"] = brightness
@@ -359,7 +323,7 @@ class EditorSettings:
     def choose_display(self, choice_id: str | None, *, confirmed: bool) -> None:
         app = self._app
         if app._dialog_open:
-            raise EditorError(409, MSG_DIALOG_OPEN)
+            raise EditorError(409, t(MSG_DIALOG_OPEN))
         if choice_id is None:
             app._post(app._safe(app._back_to_auto))
             return
@@ -367,10 +331,10 @@ class EditorSettings:
         option = next((o for o in closed + advanced if o["id"] == choice_id), None)
         if option is None or option["action"] is None:
             # El puerto ya no está (o nunca se ofreció): que el editor vuelva a leer.
-            raise EditorError(409, "Esa pantalla ya no está en la lista. Vuelve a elegir.")
+            raise EditorError(409, t("bandeja.eleccion_ya_no_esta"))
         model, port, is_advanced = option["action"]
         if option["warning"] is not None and not confirmed:
-            raise EditorError(400, "Falta confirmar el aviso antes de probar esa pantalla.")
+            raise EditorError(400, t("bandeja.falta_confirmar"))
         choice = DisplayChoice.for_port(model, port, advanced=is_advanced)
         app._post(app._safe(lambda: app._try_choice(choice, from_editor=True)))
 
@@ -378,29 +342,29 @@ class EditorSettings:
         choice = self._app.editor_question()
         if choice is None:
             return None
-        text = MSG_LOOKS_RIGHT.format(model=model_label(choice.model), device=choice.device)
-        return {"title": TITLE_LOOKS_RIGHT_EDITOR, "text": text}
+        text = t(MSG_LOOKS_RIGHT, model=model_label(choice.model), device=choice.device)
+        return {"title": t(TITLE_LOOKS_RIGHT_EDITOR), "text": text}
 
     def answer(self, looks_right: bool) -> str:
         app = self._app
         choice = app.editor_question()
         if choice is None:
-            raise EditorError(409, "Esa pregunta ya no está pendiente.")
+            raise EditorError(409, t("bandeja.pregunta_no_pendiente"))
         app._post(app._safe(lambda: app._answer_from_editor(choice, looks_right)))
         if looks_right:
-            return MSG_CHOICE_SAVED.format(model=model_label(choice.model), device=choice.device)
-        return MSG_TRIAL_REJECTED
+            return t(MSG_CHOICE_SAVED, model=model_label(choice.model), device=choice.device)
+        return t(MSG_TRIAL_REJECTED)
 
     def create_shortcut(self) -> str:
         from luzeira.sistema.accesos import ShortcutError, create_shortcut
 
         if self._app._store:
-            raise EditorError(409, MSG_STORE_SHORTCUT)
+            raise EditorError(409, t(MSG_STORE_SHORTCUT))
         try:
             create_shortcut("Desktop")
         except ShortcutError as exc:
             raise EditorError(500, str(exc)) from None
-        return "Listo: tienes Luzeira en el escritorio."
+        return t("bandeja.acceso_creado")
 
     def open_themes_folder(self) -> None:
         self._app._open_themes_folder()
@@ -450,14 +414,15 @@ class TrayApp:
         self._update_notified: str | None = None
         self._update_wake = threading.Event()
         self._closing = False
+        # El idioma, lo primero: el aviso de abajo ya sale en el del usuario.
+        idioma.set_language(config.language)
         if not is_theme_valid(config.theme):
             # Un tema que dejó de funcionar no puede dejar la pantalla apagada para siempre.
-            self._startup_notice = (
-                f"El tema «{config.theme}» no se puede cargar. Uso «{DEFAULT_THEME}»."
+            self._startup_notice = t(
+                "bandeja.tema_no_carga", theme=config.theme, default=DEFAULT_THEME
             )
             config = config.model_copy(update={"theme": DEFAULT_THEME})
         self.config = config
-        idioma.set_language(config.language)
         self.service = self._new_service()
         self._worker: threading.Thread | None = None
         # Tema que el editor acaba de pedir aplicar y la bandeja aún no ha procesado: el
@@ -588,7 +553,7 @@ class TrayApp:
     def _remember(self, choice: DisplayChoice, *, notify: bool = True) -> None:
         self._save(self.config.model_copy(update={"display": setting_from_choice(choice)}))
         if notify:
-            text = MSG_CHOICE_SAVED.format(model=model_label(choice.model), device=choice.device)
+            text = t(MSG_CHOICE_SAVED, model=model_label(choice.model), device=choice.device)
             self._notify(text)
 
     def _ask(self, title: str, text: str, **flags: bool) -> bool:
@@ -619,8 +584,8 @@ class TrayApp:
             return
         self._asking = choice
         self._asking_in_editor = False
-        text = MSG_LOOKS_RIGHT.format(model=model_label(choice.model), device=choice.device)
-        looks_right = self._ask(TITLE_LOOKS_RIGHT, text, default_no=True)
+        text = t(MSG_LOOKS_RIGHT, model=model_label(choice.model), device=choice.device)
+        looks_right = self._ask(t(TITLE_LOOKS_RIGHT), text, default_no=True)
         if self._asking is not choice:
             return  # mientras se preguntaba, el usuario eligió otra cosa en el menú
         self._asking = None
@@ -636,7 +601,7 @@ class TrayApp:
             return
         self.service.choose_display(choice_from_setting(self.config.display))
         if notify:
-            self._notify(MSG_TRIAL_REJECTED)
+            self._notify(t(MSG_TRIAL_REJECTED))
 
     def editor_question(self) -> DisplayChoice | None:
         """La pregunta «¿se ve bien?» que espera respuesta en el editor, si hay."""
@@ -660,7 +625,7 @@ class TrayApp:
                 action()
             except Exception:
                 log.exception("Falló una acción del menú")
-                self._notify("Algo ha fallado. Los detalles están en el registro de Luzeira.")
+                self._notify(t("bandeja.algo_fallo"))
             self.icon.update_menu()
 
         return run
@@ -670,7 +635,7 @@ class TrayApp:
         sea el que ya está en pantalla (cuando lo pide el editor tras guardar cambios)."""
         new = self.config.model_copy(update=changes)
         if "theme" in changes and not is_theme_valid(new.theme):
-            self._notify(f"El tema «{new.theme}» tiene un error y no se puede usar.")
+            self._notify(t("bandeja.tema_con_error", theme=new.theme))
             return  # ni se guarda ni se aplica: el menú sigue diciendo la verdad
         self.service.apply(Settings(theme_path(new.theme), new.brightness, new.flip), reload=reload)
         self._save(new)
@@ -682,6 +647,8 @@ class TrayApp:
         self._change(reload=True, language=code)
         self.icon.menu = self._menu()
         self.icon.update_menu()
+        # La ventana del editor va en otro proceso: su título y su «¿cerrar sin guardar?».
+        self.editor.window.set_language(idioma.current())
 
     def _save(self, new: AppConfig) -> None:
         self.config = new
@@ -689,7 +656,7 @@ class TrayApp:
             save_config(new)
         except OSError:
             log.exception("No se pudo guardar la configuración")
-            self._notify("No he podido guardar la configuración: se perderá al cerrar.")
+            self._notify(t("bandeja.config_no_guardada"))
 
     def _pending(self) -> str | None:
         return self.service.pending_device
@@ -697,8 +664,10 @@ class TrayApp:
     def _confirm_label(self) -> str:
         choice = self.service.pending_choice
         if choice is not None:
-            return f"Sí, es mi {model_label(choice.model)} ({choice.device}): probarla"
-        return f"Sí, es mi pantalla Turing / UsbPCMonitor ({self._pending()})"
+            return t(
+                "bandeja.confirmar_modelo", model=model_label(choice.model), device=choice.device
+            )
+        return t("bandeja.confirmar_rev_a", device=self._pending())
 
     def _confirm(self) -> None:
         choice = self.service.pending_choice
@@ -726,9 +695,11 @@ class TrayApp:
     def _display_text(self) -> str:
         info = self.service.display_info
         if info is None:
-            return "Ninguna pantalla conectada"
-        where = f" en {info.device}" if info.device else ""
-        return f"Conectada: {model_label(info.model_key)}{where}"
+            return t("bandeja.sin_pantalla")
+        model = model_label(info.model_key)
+        if info.device:
+            return t("bandeja.conectada_en", model=model, device=info.device)
+        return t("bandeja.conectada", model=model)
 
     def _is_current(self, model: DisplayModel, port: PortInfo) -> bool:
         info = self.service.display_info
@@ -745,16 +716,16 @@ class TrayApp:
         """El usuario ha elegido modelo y puerto en el menú. Beta → se explica y se
         pregunta; modo avanzado → advertencia y «No» por defecto."""
         if self._dialog_open:  # ya hay una pregunta abierta: no abrir otra encima
-            self._notify(MSG_DIALOG_OPEN)
+            self._notify(t(MSG_DIALOG_OPEN))
             return
         if advanced:
-            text = MSG_ADVANCED.format(device=port.device, model=model.menu_label)
-            if not self._ask(TITLE_ADVANCED, text, warning=True):
+            text = t(MSG_ADVANCED, device=port.device, model=model.menu_label)
+            if not self._ask(t(TITLE_ADVANCED), text, warning=True):
                 return
         elif model.beta:
             template = MSG_BETA if model.has_hello else MSG_BETA_UNCHECKED
-            text = template.format(device=port.device, model=model.label)
-            if not self._ask(TITLE_BETA, text):
+            text = t(template, device=port.device, model=model.label)
+            if not self._ask(t(TITLE_BETA), text):
                 return
         self._try_choice(DisplayChoice.for_port(model, port, advanced=advanced))
 
@@ -764,7 +735,7 @@ class TrayApp:
         self._asking_in_editor = False
         self._save(self.config.model_copy(update={"display": None}))
         self.service.choose_display(None)
-        self._notify(MSG_BACK_TO_AUTO)
+        self._notify(t(MSG_BACK_TO_AUTO))
 
     def _autostart_state(self) -> StartupState:
         """Versión Store: la tarea de inicio del paquete (la clave Run de dentro del paquete
@@ -803,9 +774,9 @@ class TrayApp:
         current = self._autostart_state()
         result = self._set_autostart(current != StartupState.ON)
         if result is None:
-            self._notify(MSG_AUTOSTART_FAILED)
+            self._notify(t(MSG_AUTOSTART_FAILED))
         elif result == StartupState.BLOCKED:
-            self._notify(MSG_AUTOSTART_BLOCKED)
+            self._notify(t(MSG_AUTOSTART_BLOCKED))
             self._open_startup_settings()
 
     def _open_startup_settings(self) -> None:
@@ -819,7 +790,7 @@ class TrayApp:
         except ShortcutError as exc:
             self._notify(str(exc))
             return
-        self._notify("Listo: tienes Luzeira en el escritorio.")
+        self._notify(t("bandeja.acceso_creado"))
 
     def _open_themes_folder(self) -> None:
         folder = user_themes_dir()
@@ -839,9 +810,9 @@ class TrayApp:
             try:
                 dest = import_theme_zip(Path(chosen), user_themes_dir())
             except ThemeError as exc:
-                self._notify(str(exc), "Luzeira: no se pudo importar")
+                self._notify(str(exc), t("bandeja.importar_fallo_titulo"))
                 return
-            self._notify(f"Tema «{dest.name}» importado. Elígelo en «Tema».")
+            self._notify(t("bandeja.importar_hecho", name=dest.name))
         finally:
             self._importing = False
 
@@ -850,7 +821,7 @@ class TrayApp:
         # Diálogo nativo de Windows (C-30: tkinter no viene en el Python embebible).
         from luzeira.sistema.dialogos import ask_open_file
 
-        return ask_open_file("Importar tema de Luzeira", "Temas de Luzeira (*.zip)", "*.zip")
+        return ask_open_file(t("bandeja.importar_titulo"), t("bandeja.importar_filtro"), "*.zip")
 
     # --- editor ---------------------------------------------------------------------
 
@@ -881,7 +852,7 @@ class TrayApp:
     def _on_editor_exit(self, code: int) -> None:
         """La ventana del editor ha terminado (llega desde un hilo vigilante)."""
         if code == EXIT_NO_WEBVIEW2:
-            self._post(lambda: self._notify(MSG_NO_WEBVIEW2))
+            self._post(lambda: self._notify(t(MSG_NO_WEBVIEW2)))
         self._post(self._question_back_to_windows)
 
     def _question_back_to_windows(self) -> None:
@@ -896,13 +867,13 @@ class TrayApp:
 
     def _open_editor(self) -> None:
         if not EditorLink.is_built():
-            self._notify("El editor no está instalado en esta copia de Luzeira.")
+            self._notify(t("bandeja.editor_no_instalado"))
             return
         if self.editor.open_window():
             return
         # Ya estaba abierto: traerlo al frente en vez de solo avisar.
         if not self.editor.window.bring_to_front():
-            self._notify("El editor ya está abierto.")
+            self._notify(t("bandeja.editor_ya_abierto"))
 
     # --- actualizaciones (ADR-006) -------------------------------------------------------
 
@@ -942,9 +913,9 @@ class TrayApp:
         """Busca una versión nueva (bloquea: nunca desde el hilo del icono). Devuelve el
         texto para el usuario. ``manual``: lo ha pedido el usuario ahora mismo."""
         if not self._can_update():
-            return MSG_STORE_UPDATES if self._store else MSG_UPDATE_NONE
+            return t(MSG_STORE_UPDATES) if self._store else t(MSG_UPDATE_NONE)
         if not self._claim_update():
-            return MSG_UPDATE_BUSY
+            return t(MSG_UPDATE_BUSY)
         checked_at = time.time()
         try:
             manifest = actualizar.check(max_seen=self.config.updates_max_seen)
@@ -954,7 +925,7 @@ class TrayApp:
                 text = str(exc)
             else:
                 log.exception("Fallo al comprobar si hay versión nueva")
-                text = MSG_UPDATE_FAILED
+                text = t(MSG_UPDATE_FAILED)
             # También cuenta como la comprobación del día: sin internet, o si GitHub da
             # error, no se reintenta cada hora (revisor, 2026-11-18).
             self._post(self._safe(lambda: self._save_last_check(checked_at)))
@@ -963,8 +934,8 @@ class TrayApp:
             self._release_update()
         self._post(self._safe(lambda: self._update_checked(manifest, checked_at, manual)))
         if manifest is None:
-            return MSG_UP_TO_DATE.format(version=__version__)
-        return MSG_UPDATE_AVAILABLE.format(version=manifest.version)
+            return t(MSG_UP_TO_DATE, version=__version__)
+        return t(MSG_UPDATE_AVAILABLE, version=manifest.version)
 
     def _save_last_check(self, checked_at: float) -> None:
         self._save(self.config.model_copy(update={"updates_last_check": checked_at}))
@@ -979,16 +950,16 @@ class TrayApp:
         self._update = manifest
         if manifest is not None and not manual and manifest.version != self._update_notified:
             self._update_notified = manifest.version
-            self._notify(MSG_UPDATE_AVAILABLE.format(version=manifest.version))
+            self._notify(t(MSG_UPDATE_AVAILABLE, version=manifest.version))
 
     def install_update(self, *, delay: float = 0.0) -> str:
         """Descarga y comprueba la versión ofrecida (bloquea) y después, en el hilo del
         icono, lanza su instalador y cierra Luzeira. Lanza ``UpdateError``."""
         manifest = self._update
         if manifest is None:
-            raise actualizar.UpdateError(MSG_UPDATE_NONE)
+            raise actualizar.UpdateError(t(MSG_UPDATE_NONE))
         if not self._claim_update():
-            raise actualizar.UpdateError(MSG_UPDATE_BUSY)
+            raise actualizar.UpdateError(t(MSG_UPDATE_BUSY))
         # El candado sigue puesto si va bien: hasta que se lanza el instalador (o falla al
         # lanzarlo) no se puede pedir otra descarga ni otro «Actualizar».
         try:
@@ -999,9 +970,7 @@ class TrayApp:
         except Exception:
             self._release_update()
             log.exception("Fallo al descargar la versión nueva")
-            raise actualizar.UpdateError(
-                "No he podido descargar la versión nueva. Los detalles están en el registro."
-            ) from None
+            raise actualizar.UpdateError(t("bandeja.actualizar_fallo_descarga")) from None
 
         def launch() -> None:
             self._post(self._safe(lambda: self._launch_update(installer, manifest)))
@@ -1010,7 +979,7 @@ class TrayApp:
             threading.Timer(delay, launch).start()
         else:
             launch()
-        return MSG_UPDATE_INSTALLING.format(version=manifest.version)
+        return t(MSG_UPDATE_INSTALLING, version=manifest.version)
 
     def _launch_update(self, installer: Path, manifest: actualizar.Manifest) -> None:
         try:
@@ -1023,14 +992,16 @@ class TrayApp:
         except OSError:
             log.exception("No se pudo abrir el instalador de la versión nueva")
             self._release_update()
-            self._notify("No he podido abrir el instalador de la versión nueva.")
+            self._notify(t("bandeja.actualizar_fallo_instalador"))
             return
         log.info("Instalando la versión %s: Luzeira se cierra.", manifest.version)
         self.quit()
 
     def _update_label(self) -> str:
         update = self._update
-        return f"Actualizar a la versión {update.version}" if update else "Actualizar"
+        if update:
+            return t("bandeja.menu_actualizar_a", version=update.version)
+        return t("bandeja.menu_actualizar")
 
     def _check_from_menu(self) -> None:
         def run() -> None:
@@ -1043,7 +1014,7 @@ class TrayApp:
         update = self._update
         if update is None:
             return
-        self._notify(MSG_UPDATE_DOWNLOADING.format(version=update.version))
+        self._notify(t(MSG_UPDATE_DOWNLOADING, version=update.version))
 
         def run() -> None:
             try:
@@ -1097,7 +1068,7 @@ class TrayApp:
         def theme_items():
             for entry in list_themes():
                 title = entry.title or entry.name
-                label = title if entry.builtin else f"{title} (tuyo)"
+                label = title if entry.builtin else t("bandeja.tema_tuyo", title=title)
                 yield Item(
                     label, choose(theme=entry.name), checked=is_theme(entry.name), radio=True
                 )
@@ -1133,12 +1104,12 @@ class TrayApp:
                 if found is not None and found.model is REV_C:
                     offered = True
                     yield Item(
-                        f"{port.device}: {REV_C.label} — todavía no compatible",
+                        t("bandeja.no_compatible", device=port.device, model=REV_C.label),
                         None,
                         enabled=False,
                     )
             if not offered:
-                yield Item("No veo ninguna pantalla compatible conectada", None, enabled=False)
+                yield Item(t("bandeja.menu_sin_compatibles"), None, enabled=False)
 
         def advanced_models(port):
             return Menu(*[Item(m.menu_label, pick(m, port, True)) for m in SUPPORTED])
@@ -1146,17 +1117,17 @@ class TrayApp:
         def advanced_items():
             ports = self._ports()
             if not ports:
-                yield Item("No hay ningún puerto COM", None, enabled=False)
+                yield Item(t("bandeja.menu_sin_puertos"), None, enabled=False)
             for port in ports:
                 yield Item(port.label, advanced_models(port))
 
         display_menu = Menu(
             Item(lambda _item: self._display_text(), None, enabled=False),
             Menu.SEPARATOR,
-            Item("Elegir modelo y puerto", Menu(choice_items)),
-            Item("Modo avanzado (cualquier puerto)", Menu(advanced_items)),
+            Item(t("bandeja.menu_elegir"), Menu(choice_items)),
+            Item(t("bandeja.menu_avanzado"), Menu(advanced_items)),
             Item(
-                "Volver a detectarla sola",
+                t("bandeja.menu_volver_auto"),
                 self._safe(self._back_to_auto),
                 visible=lambda _item: self.config.display is not None or self._trial is not None,
             ),
@@ -1182,9 +1153,13 @@ class TrayApp:
 
         return Menu(
             # default=True: también se abre con un clic en el icono.
-            Item("Abrir editor", self._safe(self._open_editor), default=True),
+            Item(t("bandeja.menu_abrir_editor"), self._safe(self._open_editor), default=True),
             Menu.SEPARATOR,
-            Item(lambda _item: self.service.message or "Arrancando…", None, enabled=False),
+            Item(
+                lambda _item: self.service.message or t("bandeja.menu_arrancando"),
+                None,
+                enabled=False,
+            ),
             # Solo cuando hay una pantalla con el USB de la rev A pero sin su número de serie:
             # podría ser otro modelo, así que no se le envía nada hasta que el usuario diga.
             # Kipye: igual, pero el modelo propuesto viene en ``pending_choice``.
@@ -1194,37 +1169,37 @@ class TrayApp:
                 visible=lambda _item: self._pending() is not None,
             ),
             Item(
-                "Reintentar",
+                t("bandeja.menu_reintentar"),
                 self._safe(self._retry),
                 visible=lambda _item: self.service.status is Status.ERROR,
             ),
             Menu.SEPARATOR,
-            Item("Pantalla", display_menu),
-            Item("Tema", Menu(theme_items)),
+            Item(t("bandeja.menu_pantalla"), display_menu),
+            Item(t("bandeja.menu_tema"), Menu(theme_items)),
             Item(
-                "Importar tema (.zip)…",
+                t("bandeja.menu_importar"),
                 self._safe(self._import_theme),
                 enabled=lambda _item: not self._importing,
             ),
-            Item("Brillo", Menu(brightness_items)),
+            Item(t("bandeja.menu_brillo"), Menu(brightness_items)),
             Item(
-                "Girar 180°",
+                t("bandeja.menu_girar"),
                 self._safe(lambda: self._change(flip=not self.config.flip)),
                 checked=lambda _item: self.config.flip,
             ),
             Item(idioma.t("idioma.menu"), Menu(*language_items)),
             Menu.SEPARATOR,
             Item(
-                "Iniciar con Windows",
+                t("bandeja.menu_iniciar_con_windows"),
                 self._safe(self._toggle_autostart),
                 checked=lambda _item: self._autostart_enabled(),
             ),
             Item(
-                "Crear acceso directo en el escritorio",
+                t("bandeja.menu_acceso_escritorio"),
                 self._safe(self._create_shortcut),
                 visible=lambda _item: not self._store,
             ),
-            Item("Abrir carpeta de temas", self._safe(self._open_themes_folder)),
+            Item(t("bandeja.menu_carpeta_temas"), self._safe(self._open_themes_folder)),
             Menu.SEPARATOR,
             Item(
                 lambda _item: self._update_label(),
@@ -1233,20 +1208,20 @@ class TrayApp:
                 enabled=lambda _item: not self._update_busy,
             ),
             Item(
-                "Buscar actualizaciones ahora",
+                t("bandeja.menu_buscar_actualizaciones"),
                 self._safe(self._check_from_menu),
                 visible=lambda _item: self._can_update(),
                 enabled=lambda _item: not self._update_busy,
             ),
             Item(
-                "Avisarme de versiones nuevas",
+                t("bandeja.menu_avisar_versiones"),
                 self._safe(lambda: self._set_updates(self.config.updates is not True)),
                 checked=lambda _item: self.config.updates is True,
                 visible=lambda _item: self._can_update(),
             ),
             Menu.SEPARATOR,
             Item(f"Luzeira {__version__}", None, enabled=False),
-            Item("Salir", lambda: self.quit()),
+            Item(t("bandeja.menu_salir"), lambda: self.quit()),
         )
 
     # --- arranque ------------------------------------------------------------------
@@ -1298,10 +1273,13 @@ class TrayApp:
 
 def _already_running_message() -> None:
     """Avisar de que ya hay una Luzeira abierta (con doble clic no pasaba nada)."""
+    # Esta copia no ha abierto bandeja: el idioma se lee aquí, para que salga en el suyo.
+    with contextlib.suppress(Exception):
+        idioma.set_language(load_config().language)
     with contextlib.suppress(AttributeError, OSError):  # fuera de Windows no hay MessageBox
         ctypes.windll.user32.MessageBoxW(
             None,
-            "Luzeira ya está abierta. Búscala en la bandeja, junto al reloj.",
+            t("bandeja.ya_abierta"),
             "Luzeira",
             0x40,  # MB_ICONINFORMATION
         )

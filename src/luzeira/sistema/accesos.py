@@ -17,6 +17,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from luzeira.idioma import t
 from luzeira.sistema.identidad import set_shortcut_app_id
 
 ICON = Path(__file__).resolve().parent.parent / "recursos" / "luzeira.ico"
@@ -102,9 +103,9 @@ def create_shortcut(
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
-        raise ShortcutError("No he podido crear el acceso directo.") from exc
+        raise ShortcutError(t("sistema.acceso_fallo")) from exc
     if result.returncode != 0 or not result.stdout.strip():
-        raise ShortcutError("No he podido crear el acceso directo.")
+        raise ShortcutError(t("sistema.acceso_fallo"))
     path = Path(result.stdout.strip().splitlines()[-1])
     mark(path)
     return path

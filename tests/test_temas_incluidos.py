@@ -2,6 +2,7 @@
 
 import pytest
 
+from luzeira import idioma
 from luzeira.config import BUILTIN_THEMES
 from luzeira.render import Renderer
 from luzeira.sensores.base import Reading
@@ -134,10 +135,12 @@ def _sensor_units() -> dict[str, str]:
 def _worst_texts(widget, units: dict[str, str], font) -> list[str]:
     from itertools import product
 
-    from luzeira.render.motor import _MONTHS, _WEEKDAYS, NO_VALUE, format_reading
+    from luzeira.idioma import t
+    from luzeira.render.motor import NO_VALUE, format_reading, month_names, weekday_names
+    from luzeira.temas.modelo import localized
 
     if widget.type == "text":
-        return [widget.text]
+        return [localized(widget.text, widget.text_i18n, idioma.current())]
     if widget.type == "clock":
         if widget.format == "date-long":
             # Los 3 días de la semana y los 3 meses más anchos con esta fuente, con todos los
@@ -145,13 +148,23 @@ def _worst_texts(widget, units: dict[str, str], font) -> list[str]:
             def widest(words):
                 return sorted(words, key=lambda word: font.getlength(word))[-3:]
 
-            weekdays, months = widest(_WEEKDAYS), widest(_MONTHS)
-            return [f"{w}, {d} de {m}" for w, d, m in product(weekdays, range(1, 32), months)]
+            weekdays, months = widest(weekday_names()), widest(month_names())
+            return [
+                t("pantalla.fecha_larga", dia=w, d=d, mes=m)  # lo mismo que format_clock
+                for w, d, m in product(weekdays, range(1, 32), months)
+            ]
         return {
             "HH:MM": ["00:00", "08:08", "23:58", "20:44"],
             "HH:MM:SS": ["00:00:00", "08:08:08", "23:58:58", "20:44:44"],
-            "date-short": ["28/08/2028", "30/09/2030", "00/00/0000"],
-            "weekday": list(_WEEKDAYS),
+            "date-short": [
+                t("pantalla.fecha_corta", dd=dd, mm=mm, aaaa=aaaa)
+                for dd, mm, aaaa in [
+                    ("28", "08", "2028"),
+                    ("30", "09", "2030"),
+                    ("00", "00", "0000"),
+                ]
+            ],
+            "weekday": weekday_names(),
         }[widget.format]
     texts = [format_reading(widget, Reading(None, ""))]  # sin dato: «—»
     if widget.sensor in _LONG_NAMES:
@@ -166,10 +179,14 @@ def _worst_texts(widget, units: dict[str, str], font) -> list[str]:
     return texts
 
 
+@pytest.mark.parametrize("language", ["es", "en"])
 @pytest.mark.parametrize("name", BUILTIN)
-def test_builtin_texts_fit_their_box(name):
+def test_builtin_texts_fit_their_box(name, language):
+    """En los dos idiomas completos: los textos traducidos del tema (``text_i18n``…), la
+    fecha y los días también tienen que caber."""
     from PIL import Image, ImageDraw
 
+    idioma.set_language(language)
     loaded = load_theme(BUILTIN_THEMES / name)
     units = _sensor_units()
     draw = ImageDraw.Draw(Image.new("RGB", (1, 1)))
@@ -235,3 +252,35 @@ def test_builtin_text_is_readable_on_the_panel(name):
     theme = load_theme(BUILTIN_THEMES / name).theme
     small = [w.style.size for w in theme.widgets if hasattr(w, "style") and w.style.size < 14]
     assert small == []
+
+
+def test_builtin_theme_draws_its_english_labels_in_english():
+    """C-62: «RED» de Esencial sale «NET» con Luzeira en inglés (y «RED» en español)."""
+    from datetime import datetime
+
+    loaded = load_theme(BUILTIN_THEMES / "esencial")
+    index = next(
+        i for i, w in enumerate(loaded.theme.widgets) if w.type == "text" and w.text == "RED"
+    )
+    widget = loaded.theme.widgets[index]
+    assert widget.text_i18n == {"en": "NET"}
+    b = widget.box
+    region = (b.x, b.y, b.x + b.width, b.y + b.height)
+
+    def label(theme, language):
+        idioma.set_language(language)
+        frame = Renderer(
+            theme,
+            font_for=lambda s: resolve_font(s, loaded.files),
+            read_sensor=lambda sid: Reading(42.0, "%"),
+            files=loaded.files,
+            now=lambda: datetime(2026, 11, 7, 9, 5),
+        ).full_frame()
+        return frame.crop(region).tobytes()
+
+    # El mismo tema con «NET» escrito a mano, pintado en español: lo que tiene que salir.
+    widgets = list(loaded.theme.widgets)
+    widgets[index] = widget.model_copy(update={"text": "NET", "text_i18n": None})
+    net = label(loaded.theme.model_copy(update={"widgets": widgets}), "es")
+    assert label(loaded.theme, "en") == net
+    assert label(loaded.theme, "es") != net

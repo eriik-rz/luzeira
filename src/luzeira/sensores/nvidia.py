@@ -20,15 +20,17 @@ from typing import Any
 
 import pynvml
 
-from luzeira.sensores.base import Reading, SensorInfo
+from luzeira.idioma import t
+from luzeira.sensores.base import Reading, SensorInfo, gpu_label_key
 
 log = logging.getLogger(__name__)
 
 _GIB = 1024**3
 
-NOT_SUPPORTED = "Esta tarjeta gráfica no informa de este dato."
-NOT_READY = "La GPU aún no está lista."
-NOT_FOUND = "No se encontró una tarjeta gráfica NVIDIA (o su controlador no responde)."
+# Claves del catálogo (zona ``sensores``): el motivo se traduce al crear cada lectura.
+NOT_SUPPORTED = "sensores.gpu_no_informa"
+NOT_READY = "sensores.gpu_no_lista"
+NOT_FOUND = "sensores.nvidia_no_encontrada"
 
 # Cada cuánto se reintenta arrancar NVML mientras no funcione.
 RETRY_SECONDS = 30.0
@@ -91,19 +93,13 @@ class NvidiaSource:
         return f"{self._prefix}.{name}"
 
     def _build_sensors(self) -> list[SensorInfo]:
-        labels = {
-            "temperature": "Temperatura de GPU",
-            "usage": "Uso de GPU",
-            "memory_used": "Memoria de GPU usada",
-            "memory_total": "Memoria de GPU total",
-            "memory_usage": "Uso de memoria de GPU",
-            "power": "Consumo de GPU",
-            "fan": "Ventilador de GPU",
-            "clock": "Frecuencia de GPU",
-        }
-        numbers = [SensorInfo(self._id(n), labels[n], unit, "gpu") for n, unit in _UNITS.items()]
+        # La etiqueta es una clave del catálogo (la misma en la fuente de Windows): se
+        # traduce al servirla, no aquí, que solo se construye una vez.
+        numbers = [
+            SensorInfo(self._id(n), gpu_label_key(n), unit, "gpu") for n, unit in _UNITS.items()
+        ]
         # C-12: sensor de texto. Es el modelo de la tarjeta, no identifica a nadie.
-        return [*numbers, SensorInfo(self._id("name"), "Nombre de la GPU", "", "gpu", "text")]
+        return [*numbers, SensorInfo(self._id("name"), gpu_label_key("name"), "", "gpu", "text")]
 
     def sensors(self) -> list[SensorInfo]:
         return list(self._sensors)
@@ -122,7 +118,7 @@ class NvidiaSource:
                 self._try_start()
             if self._handle is None:
                 waited = now - self._started_at
-                reason = NOT_READY if waited < GIVE_UP_SECONDS else NOT_FOUND
+                reason = t(NOT_READY if waited < GIVE_UP_SECONDS else NOT_FOUND)
                 out = {
                     self._id(name): Reading(None, unit, reason=reason)
                     for name, unit in _UNITS.items()
@@ -157,7 +153,7 @@ class NvidiaSource:
             out[self._id("memory_usage")] = (
                 Reading(round(pct, 1), "%")
                 if pct is not None
-                else Reading(None, "%", reason=NOT_SUPPORTED)
+                else Reading(None, "%", reason=t(NOT_SUPPORTED))
             )
 
         # NVML da el consumo en milivatios.
@@ -199,8 +195,8 @@ class NvidiaSource:
 def _failure(exc: Exception) -> str:
     """Traduce un error de NVML a un motivo en español para el usuario."""
     if isinstance(exc, pynvml.NVMLError_NotSupported):
-        return NOT_SUPPORTED
-    return f"No se pudo leer ({type(exc).__name__})."
+        return t(NOT_SUPPORTED)
+    return t("sensores.no_se_pudo_leer", kind=type(exc).__name__)
 
 
 def _safe(unit: str, fn: Callable[[], float]) -> Reading:

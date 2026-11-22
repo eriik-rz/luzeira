@@ -5,15 +5,17 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { ApiError, errorMessage, type EditorApi, type Info, type MissingGlyphs, type SensorInfo, type ThemeSummary } from './api.ts'
 import { initialState, reducer, selectedWidget, indexOfId } from './model/editorState.ts'
-import { APPLY_BLOCK_TEXT, applyBlock, appliedMessage, deletedMessage, DEFAULT_THEME, type ApplyBlock, flushOutcome, isDroppableImage, missingGlyphsMessage, type FlushResult, type SaveOutcome } from './model/contract.ts'
+import { applyBlock, applyBlockText, appliedMessage, deletedMessage, DEFAULT_THEME, type ApplyBlock, flushOutcome, isDroppableImage, missingGlyphsMessage, type FlushResult, type SaveOutcome } from './model/contract.ts'
 import { formatClock } from './model/format.ts'
-import { baseName, createWidget, normalizeTheme, CLOCK_FORMAT_INFO } from './model/theme.ts'
+import { baseName, clockFormatLabel, createWidget, normalizeTheme } from './model/theme.ts'
+import { localized } from './model/format.ts'
+import { t } from './model/i18n.ts'
 import { LIMITS, MAX_WIDGETS, type Theme, type Widget, type WidgetType } from './model/types.ts'
 import { validateTheme, widgetIndexOf, type Issue } from './model/validate.ts'
 import { CanvasArea, type ZoomMode } from './components/CanvasArea.tsx'
 import { Dialog, Toasts, type ToastItem } from './components/Dialog.tsx'
 import { SettingsDialog } from './components/SettingsDialog.tsx'
-import { useIdioma } from './i18n/contexto.ts'
+import { useIdioma, useT } from './i18n/contexto.ts'
 import { LayersPanel } from './components/LayersPanel.tsx'
 import { PropertiesPanel } from './components/PropertiesPanel.tsx'
 import { ThemePanel } from './components/ThemePanel.tsx'
@@ -75,7 +77,8 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
   )
   // El idioma lo manda Luzeira: si cambia (desde Ajustes o desde el menú del icono), el
   // editor se traduce al momento.
-  const { follow } = useIdioma()
+  const { follow, lang } = useIdioma()
+  const tr = useT()
   useEffect(() => follow(info?.language), [follow, info?.language])
   useEffect(() => {
     aliveRef.current = true
@@ -335,7 +338,7 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
   // --- Subidas ------------------------------------------------------------------------
   /** En un tema incluido no se puede subir nada: se pide antes «Guardar como». */
   const askSaveAsForUpload = useCallback(() => {
-    setDialog({ kind: 'saveAs', reason: 'Para añadir tus imágenes o letras, primero guarda una copia del tema con tu nombre.' })
+    setDialog({ kind: 'saveAs', reason: t('editor.subir.guarda_antes') })
   }, [])
 
   const uploadFile = useCallback(
@@ -347,13 +350,13 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
         return null
       }
       if (file.size > 10 * 1024 * 1024) {
-        toast('El fichero pasa de 10 MB. Prueba con uno más pequeño.', 'error')
+        toast(t('editor.subir.grande'), 'error')
         return null
       }
       try {
         const path = await api.uploadResource(c.name, file)
         setCurrent((cur) => (cur && cur.name === c.name && !cur.files.includes(path) ? { ...cur, files: [...cur.files, path] } : cur))
-        toast(`Subido: ${baseName(path)}`, 'ok')
+        toast(t('editor.subir.ok', { fichero: baseName(path) }), 'ok')
         return { path, file }
       } catch (e) {
         toast(errorMessage(e), 'error')
@@ -381,11 +384,11 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
   const dropImage = useCallback(
     async (file: File, point: { x: number; y: number }) => {
       if (!isDroppableImage(file.name)) {
-        toast('Aquí solo se pueden soltar imágenes PNG, JPG o GIF. Las letras se eligen en el panel de la derecha.', 'error')
+        toast(t('editor.soltar.no_imagen'), 'error')
         return
       }
       if (latest.current.theme.widgets.length >= MAX_WIDGETS) {
-        toast(`Un tema admite como mucho ${MAX_WIDGETS} elementos.`, 'error')
+        toast(t('editor.soltar.lleno', { max: MAX_WIDGETS }), 'error')
         return
       }
       const r = await uploadFile(file)
@@ -427,7 +430,7 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
       dispatch({ type: 'remove', id })
       // «Deshacer» devuelve justo este elemento (no deshace el último paso, que podría
       // ser otro cambio hecho después).
-      toast('Elemento borrado.', 'info', { label: 'Deshacer', run: () => dispatch({ type: 'restore', id, widget, index }) })
+      toast(t('editor.borrado'), 'info', { label: t('comun.deshacer'), run: () => dispatch({ type: 'restore', id, widget, index }) })
     },
     [toast],
   )
@@ -454,8 +457,8 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
       await api.updateSettings({ updates: enabled })
       toast(
         enabled
-          ? 'Vale: te avisaré cuando haya una versión nueva. Puedes cambiarlo en «Ajustes».'
-          : 'Vale: no buscaré versiones nuevas. Puedes cambiarlo en «Ajustes».',
+          ? t('editor.avisos.si')
+          : t('editor.avisos.no'),
         'info',
       )
     } catch (e) {
@@ -475,8 +478,8 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
       setUpdateLater(info?.update_available ?? null)
       toast(
         saved.pending === 'builtin'
-          ? 'Antes de actualizar, guarda tus cambios con «Guardar como…»: estás editando un tema incluido.'
-          : 'Antes de actualizar, corrige los campos marcados en rojo para que se pueda guardar el tema.',
+          ? t('editor.actualizar.incluido')
+          : t('editor.actualizar.errores'),
         'error',
       )
       return
@@ -508,7 +511,7 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
     const issues = validateTheme(edited)
     if (issues.length) {
       setDialog(null)
-      toast('Corrige primero los campos marcados en rojo y vuelve a «Guardar como…».', 'error')
+      toast(t('editor.guardar_como.errores'), 'error')
       return
     }
     try {
@@ -524,7 +527,7 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
       setCurrent({ name: newName, builtin: false, files: current.files })
       dispatch({ type: 'replaceTheme', theme: edited })
       setDialog(null)
-      toast(`Guardado en «Mis temas» como «${title}».`, 'ok')
+      toast(t('editor.guardar_como.ok', { tema: title }), 'ok')
       if (thenApply) await applyNow(newName, edited)
     } catch (e) {
       if (e instanceof ApiError && e.details.length) {
@@ -569,15 +572,15 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
   /** «Guardar»: guarda ya, sin esperar al guardado automático. */
   const saveNow = async () => {
     const result = await flush()
-    if (result.saved) toast('Guardado.', 'ok')
-    else toast('No se ha podido guardar: corrige los campos marcados en rojo.', 'error')
+    if (result.saved) toast(t('editor.guardado'), 'ok')
+    else toast(t('editor.guardado.errores'), 'error')
   }
 
   /** «Restaurar»: el tema vuelve a como estaba al abrirlo (se puede deshacer). */
   const restore = () => {
     setDialog(null)
     if (openedRef.current) dispatch({ type: 'replaceTheme', theme: openedRef.current })
-    toast('Restaurado como estaba al abrirlo. Puedes deshacerlo con Ctrl+Z.', 'ok')
+    toast(t('editor.restaurado'), 'ok')
   }
 
   const deleteTheme = async (onScreen: boolean) => {
@@ -632,17 +635,18 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
   }, [])
 
   // --- Render -------------------------------------------------------------------------
-  const labels = useMemo(() => theme.widgets.map((w) => widgetLabel(w, sensors)), [theme.widgets, sensors])
+  // `lang`: al cambiar de idioma, los nombres de las capas («Barra · …», el reloj) también.
+  const labels = useMemo(() => theme.widgets.map((w) => widgetLabel(w, sensors, lang)), [theme.widgets, sensors, lang])
 
   if (loadError && !current) {
     return (
       <div className="fullscreen-msg">
         <div className="card">
           <IconWarn />
-          <h1>No se ha podido abrir el tema</h1>
+          <h1>{tr('editor.no_abre')}</h1>
           <p>{loadError}</p>
           <button type="button" className="btn primary" onClick={() => void loadTheme(initialName)}>
-            Reintentar
+            {tr('comun.reintentar')}
           </button>
         </div>
       </div>
@@ -651,7 +655,7 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
   if (!current) {
     return (
       <div className="fullscreen-msg">
-        <div className="spinner" aria-label="Cargando" />
+        <div className="spinner" aria-label={tr('comun.cargando')} />
       </div>
     )
   }
@@ -693,10 +697,10 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
           <div className="banner" role="note">
             <IconWarn />
             <p>
-              <strong>Los temas incluidos no se pueden cambiar.</strong> Puedes probar cambios aquí, pero para guardarlos crea tu copia con «Guardar como…».
+              <strong>{tr('editor.aviso.incluido')}</strong> {tr('editor.aviso.incluido.texto')}
             </p>
             <button type="button" className="btn primary small" onClick={() => setDialog({ kind: 'saveAs' })}>
-              Guardar como…
+              {tr('comun.guardar_como')}
             </button>
           </div>
         )}
@@ -704,7 +708,7 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
           <div className="banner" role="note">
             <IconWarn />
             <p>
-              <strong>Faltan letras en la fuente:</strong> {missingGlyphsMessage(missingGlyphs, labels)}. En la pantalla se verán como cuadros: cambia el texto o elige otra fuente.
+              <strong>{tr('editor.aviso.letras')}</strong> {missingGlyphsMessage(missingGlyphs, labels)}. {tr('editor.aviso.letras.texto')}
             </p>
           </div>
         )}
@@ -712,7 +716,7 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
           <div className="banner error" role="alert">
             <IconWarn />
             <p>
-              <strong>La vista previa no se ha actualizado:</strong> {previewError} Se muestra la última que salió bien.
+              <strong>{tr('editor.aviso.vista_previa')}</strong> {previewError} {tr('editor.aviso.vista_previa.texto')}
             </p>
           </div>
         )}
@@ -728,7 +732,7 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
         onAdd={(t) => void addWidget(t)}
       />
 
-      <main className="center" aria-label="Lienzo">
+      <main className="center" aria-label={tr('editor.lienzo')}>
         <CanvasArea
           theme={theme}
           ids={ids}
@@ -745,21 +749,21 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
           onDropFile={(file, point) => void dropImage(file, point)}
         />
         <div className="canvas-bar">
-          <span className="coords" aria-live="off" title="Posición del ratón en píxeles de la pantalla">
-            {pointer ? `x ${pointer.x} · y ${pointer.y}` : 'x — · y —'}
+          <span className="coords" aria-live="off" title={tr('editor.raton')}>
+            {tr('editor.raton.valor', { x: pointer?.x ?? '—', y: pointer?.y ?? '—' })}
           </span>
-          <label className="toggle" title="Al mover y redimensionar, los bordes caen en múltiplos de 4 píxeles. Mantén Alt para soltarlo un momento.">
+          <label className="toggle" title={tr('editor.iman.ayuda')}>
             <input type="checkbox" role="switch" checked={snap} onChange={(e) => setSnap(e.target.checked)} />
-            <IconGrid /> <span className="long">Rejilla e imán (4 px)</span><span className="short">Imán</span>
+            <IconGrid /> <span className="long">{tr('editor.iman')}</span><span className="short">{tr('editor.iman.corto')}</span>
           </label>
-          <label className="toggle" title="Dibuja el contorno de todos los elementos para encontrarlos aunque estén vacíos.">
+          <label className="toggle" title={tr('editor.contornos.ayuda')}>
             <input type="checkbox" role="switch" checked={outlines} onChange={(e) => setOutlines(e.target.checked)} />
-            Contornos
+            {tr('editor.contornos')}
           </label>
-          <label title="Tamaño del lienzo en tu monitor (no cambia la pantalla real)">
-            <span className="zoom-word">Zoom </span>
-            <select className="input" aria-label="Zoom" style={{ width: 92, height: 26, display: 'inline-block' }} value={String(zoom)} onChange={(e) => setZoom(e.target.value === 'fit' ? 'fit' : (Number(e.target.value) as ZoomMode))}>
-              <option value="fit">Ajustar</option>
+          <label title={tr('editor.zoom.ayuda')}>
+            <span className="zoom-word">{tr('editor.zoom')} </span>
+            <select className="input" aria-label={tr('editor.zoom')} style={{ width: 92, height: 26, display: 'inline-block' }} value={String(zoom)} onChange={(e) => setZoom(e.target.value === 'fit' ? 'fit' : (Number(e.target.value) as ZoomMode))}>
+              <option value="fit">{tr('editor.zoom.ajustar')}</option>
               <option value={1}>×1</option>
               <option value={2}>×2</option>
               <option value={3}>×3</option>
@@ -767,21 +771,21 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
           </label>
           <span className="spacer" />
           <span className="help-keys">
-            <kbd>←↑→↓</kbd> mover (<kbd>Mayús</kbd> 10 px) · <kbd>Supr</kbd> borrar · <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicar · <kbd>Ctrl</kbd>+<kbd>Z</kbd>/<kbd>Y</kbd> · <kbd>Alt</kbd>+clic capa de debajo
+            <kbd>←↑→↓</kbd> {tr('editor.teclas.mover')} (<kbd>{tr('editor.tecla.mayus')}</kbd> 10 px) · <kbd>{tr('editor.tecla.supr')}</kbd> {tr('editor.teclas.borrar')} · <kbd>Ctrl</kbd>+<kbd>D</kbd> {tr('editor.teclas.duplicar')} · <kbd>Ctrl</kbd>+<kbd>Z</kbd>/<kbd>Y</kbd> · <kbd>Alt</kbd>+{tr('editor.teclas.alt')}
           </span>
           <span
             className="btn small icon ghost keys-button"
             role="note"
             tabIndex={0}
-            aria-label="Atajos de teclado: flechas para mover (Mayús, 10 píxeles), Supr para borrar, Ctrl+D para duplicar, Ctrl+Z y Ctrl+Y para deshacer y rehacer, Alt+clic para seleccionar la capa de debajo"
-            title={'Atajos de teclado\n←↑→↓  mover (Mayús: 10 px)\nSupr  borrar\nCtrl+D  duplicar\nCtrl+Z / Ctrl+Y  deshacer / rehacer\nAlt+clic  seleccionar la capa de debajo'}
+            aria-label={tr('editor.teclas.etiqueta')}
+            title={tr('editor.teclas.ayuda')}
           >
             ?
           </span>
         </div>
       </main>
 
-      <aside className="right" aria-label="Propiedades">
+      <aside className="right" aria-label={tr('editor.propiedades')}>
         {sel && state.selectedId ? (
           <PropertiesPanel
             key={state.selectedId}
@@ -801,7 +805,7 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
 
       {dialog?.kind === 'saveAs' && (
         <SaveAsDialog
-          initial={current.builtin ? `${theme.name} (mío)` : `${theme.name} (copia)`}
+          initial={current.builtin ? tr('editor.guardar_como.mio', { tema: theme.name }) : tr('editor.guardar_como.copia', { tema: theme.name })}
           reason={dialog.reason}
           note={saveAsNote(current.builtin, theme.name, status.kind)}
           onCancel={() => setDialog(null)}
@@ -836,10 +840,10 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
           actions={
             <>
               <button type="button" className="btn primary" disabled={answering} onClick={() => void answerQuestion(false)}>
-                No
+                {tr('comun.no')}
               </button>
               <button type="button" className="btn" disabled={answering} onClick={() => void answerQuestion(true)}>
-                Sí, se ve bien
+                {tr('editor.pregunta.si')}
               </button>
             </>
           }
@@ -849,110 +853,108 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
       )}
       {info?.update_available && info.update_available !== updateLater && !info.question && !dialog && (
         <Dialog
-          title="Hay una versión nueva de Luzeira"
+          title={tr('editor.nueva.titulo')}
           onClose={() => setUpdateLater(info.update_available ?? null)}
           actions={
             <>
               <button type="button" className="btn" disabled={installing} onClick={() => setUpdateLater(info.update_available ?? null)}>
-                Más tarde
+                {tr('editor.nueva.luego')}
               </button>
               <button type="button" className="btn primary" disabled={installing} onClick={() => void installUpdate()}>
-                {installing ? 'Descargando…' : `Actualizar a la ${info.update_available}`}
+                {installing ? tr('editor.nueva.descargando') : tr('comun.actualizar_a', { version: info.update_available })}
               </button>
             </>
           }
         >
           <p className="settings-confirm">
-            Tienes la {info.version} y ya está lista la <strong>{info.update_available}</strong>, comprobada con la firma de Luzeira.
+            {strong(tr('editor.nueva.texto1', { version: info.version, nueva: MARK }), info.update_available)}
           </p>
           <p className="settings-confirm">
-            Al actualizar, Luzeira se cierra unos segundos (la pantalla se apaga), se instala sola y se vuelve a abrir. Tus temas y tus
-            ajustes se quedan como están, y lo que estés editando se guarda antes.
+            {tr('editor.nueva.texto2')}
           </p>
         </Dialog>
       )}
       {info?.updates_question && !info.question && !info.update_available && !updatesAsked && !dialog && (
         <Dialog
-          title="¿Te aviso de las versiones nuevas?"
+          title={tr('editor.avisos.titulo')}
           onClose={() => setUpdatesAsked(true)}
           actions={
             <>
               <button type="button" className="btn" onClick={() => void answerUpdates(false)}>
-                No, gracias
+                {tr('editor.avisos.no_gracias')}
               </button>
               <button type="button" className="btn primary" onClick={() => void answerUpdates(true)}>
-                Sí, avísame
+                {tr('editor.avisos.si_avisame')}
               </button>
             </>
           }
         >
           <p className="settings-confirm">
-            Luzeira puede mirar una vez al día en GitHub si hay una versión nueva y avisarte. Nunca instala nada sin que pulses
-            «Actualizar», y cada versión va firmada: si la firma no es la de Luzeira, no se instala.
+            {tr('editor.avisos.texto1')}
           </p>
-          <p className="settings-confirm">Para mirarlo no envía nada tuyo: solo pide la lista de versiones, como un navegador.</p>
+          <p className="settings-confirm">{tr('editor.avisos.texto2')}</p>
         </Dialog>
       )}
       {dialog?.kind === 'restore' && (
         <Dialog
-          title="¿Restaurar el tema?"
+          title={tr('editor.restaurar.titulo')}
           onClose={() => setDialog(null)}
           actions={
             <>
               <button type="button" className="btn" onClick={() => setDialog(null)}>
-                Cancelar
+                {tr('comun.cancelar')}
               </button>
               <button type="button" className="btn primary" onClick={restore}>
-                Restaurar
+                {tr('comun.restaurar')}
               </button>
             </>
           }
         >
-          <p>Vuelve a como estaba al abrirlo. Si te arrepientes, Ctrl+Z lo deshace.</p>
+          <p>{tr('editor.restaurar.texto')}</p>
         </Dialog>
       )}
       {dialog?.kind === 'applyFirst' && (
         <Dialog
-          title={APPLY_BLOCK_TEXT[dialog.why].title}
+          title={applyBlockText(dialog.why).title}
           onClose={() => setDialog(null)}
           actions={
             <>
               <button type="button" className="btn" onClick={() => setDialog(null)}>
-                Cancelar
+                {tr('comun.cancelar')}
               </button>
               {dialog.why === 'builtin-changed' && (
                 <button type="button" className="btn" onClick={() => void applyNow(current.name, savedRef.current ?? theme)}>
-                  Aplicar el original
+                  {tr('editor.aplicar.original')}
                 </button>
               )}
               {dialog.why === 'invalid' && (
                 <button type="button" className="btn" onClick={() => void applyNow(current.name, savedRef.current ?? theme)}>
-                  Aplicar lo último guardado
+                  {tr('editor.aplicar.ultimo')}
                 </button>
               )}
               {dialog.why === 'builtin-changed' ? (
                 <button type="button" className="btn primary" onClick={() => setDialog({ kind: 'saveAs', thenApply: true })}>
-                  Guardar como… y aplicar
+                  {tr('editor.aplicar.guardar_como')}
                 </button>
               ) : dialog.why === 'pending' ? (
                 <button type="button" className="btn primary" onClick={() => void applyNow(current.name, theme)}>
-                  Guardar y aplicar
+                  {tr('editor.aplicar.guardar')}
                 </button>
               ) : null}
             </>
           }
         >
-          <p>{APPLY_BLOCK_TEXT[dialog.why].body}</p>
+          <p>{applyBlockText(dialog.why).body}</p>
         </Dialog>
       )}
       {dialog?.kind === 'removeWidget' && (
         <Dialog
-          title="¿Borrar este elemento?"
+          title={tr('editor.borrar.titulo')}
           onClose={() => setDialog(null)}
           actions={
             <>
               <button type="button" className="btn" onClick={() => setDialog(null)}>
-                Cancelar
+                {tr('comun.cancelar')}
               </button>
               <button
                 type="button"
@@ -962,43 +964,41 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
                   setDialog(null)
                 }}
               >
-                Borrar
+                {tr('comun.borrar')}
               </button>
             </>
           }
         >
-          <p>
-            Se quitará «{labels[ids.indexOf(dialog.id)] ?? 'elemento'}» de la pantalla. Puedes recuperarlo con Deshacer (Ctrl+Z).
-          </p>
+          <p>{tr('editor.borrar.texto', { elemento: labels[ids.indexOf(dialog.id)] ?? tr('editor.borrar.elemento') })}</p>
         </Dialog>
       )}
       {dialog?.kind === 'deleteTheme' && (
         <Dialog
-          title={`¿Mover «${theme.name}» a la papelera?`}
+          title={tr('editor.papelera.titulo', { tema: theme.name })}
           onClose={() => setDialog(null)}
           actions={
             <>
               <button type="button" className="btn" onClick={() => setDialog(null)}>
-                Cancelar
+                {tr('comun.cancelar')}
               </button>
               <button type="button" className="btn danger solid" onClick={() => void deleteTheme(dialog.onScreen)}>
-                Mover a la papelera
+                {tr('editor.papelera.mover')}
               </button>
             </>
           }
         >
-          <p>Desaparece de la lista, pero no se borra del todo: queda en la carpeta «papelera» de Luzeira por si lo quieres recuperar.</p>
-          {dialog.onScreen && <p>Es el tema que está ahora en la pantalla: se pondrá «Esencial» en su lugar.</p>}
+          <p>{tr('editor.papelera.texto')}</p>
+          {dialog.onScreen && <p>{tr('editor.papelera.en_pantalla')}</p>}
         </Dialog>
       )}
       {dialog?.kind === 'discard' && (
         <Dialog
-          title="¿Dejar los cambios sin guardar?"
+          title={tr('editor.descartar.titulo')}
           onClose={() => setDialog(null)}
           actions={
             <>
               <button type="button" className="btn" onClick={() => setDialog({ kind: 'saveAs' })}>
-                Guardar como…
+                {tr('comun.guardar_como')}
               </button>
               <button
                 type="button"
@@ -1009,12 +1009,12 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
                   void loadTheme(next)
                 }}
               >
-                Descartar cambios
+                {tr('editor.descartar.boton')}
               </button>
             </>
           }
         >
-          <p>Has cambiado un tema incluido y esos cambios no se pueden guardar en él. Si sales ahora se pierden.</p>
+          <p>{tr('editor.descartar.texto')}</p>
         </Dialog>
       )}
       <Toasts items={toasts} onDismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
@@ -1036,20 +1036,21 @@ function SaveAsDialog({
   onCancel: () => void
   onSave: (title: string) => void
 }) {
+  const tr = useT()
   const [title, setTitle] = useState(initial.slice(0, LIMITS.nameMax))
   const clean = title.trim()
   const valid = clean.length >= 1 && clean.length <= LIMITS.nameMax
   return (
     <Dialog
-      title="Guardar como…"
+      title={tr('comun.guardar_como')}
       onClose={onCancel}
       actions={
         <>
           <button type="button" className="btn" onClick={onCancel}>
-            Cancelar
+            {tr('comun.cancelar')}
           </button>
           <button type="button" className="btn primary" disabled={!valid} onClick={() => onSave(clean)}>
-            Guardar en «Mis temas»
+            {tr('editor.guardar_como.boton')}
           </button>
         </>
       }
@@ -1063,7 +1064,7 @@ function SaveAsDialog({
       >
         <div className="field">
           <label htmlFor="save-as-title">
-            <span>Nombre del tema nuevo</span>
+            <span>{tr('editor.guardar_como.nombre')}</span>
             <span className="counter">
               {title.length}/{LIMITS.nameMax}
             </span>
@@ -1077,30 +1078,49 @@ function SaveAsDialog({
 
 // --- Utilidades ---------------------------------------------------------------------
 
+/** Hueco en un texto traducido donde va una parte en negrita (ver `strong`). */
+const MARK = '\u0000'
+
+/** El texto con `value` en negrita donde estaba `MARK` (el orden lo decide cada idioma). */
+function strong(text: string, value: string) {
+  const [before, after = ''] = text.split(MARK)
+  return (
+    <>
+      {before}
+      <strong>{value}</strong>
+      {after}
+    </>
+  )
+}
+
 /**
  * Texto de «Guardar como…». En un tema incluido el original no cambia; en uno del
  * usuario el guardado automático ya ha escrito los cambios en él, así que decir «el
  * original no cambia» sería falso.
  */
 function saveAsNote(builtin: boolean, title: string, status: SaveStatus['kind']): string {
-  if (builtin) return 'Se crea una copia con sus imágenes en «Mis temas». El tema incluido no cambia.'
+  if (builtin) return t('editor.guardar_como.nota.incluido')
   if (status === 'saved' || status === 'pending' || status === 'saving') {
-    return `Tus cambios ya están guardados en «${title}». Esto crea una copia nueva con sus imágenes.`
+    return t('editor.guardar_como.nota.guardado', { tema: title })
   }
-  return `Se crea una copia nueva con sus imágenes y con lo que ves ahora. «${title}» se queda con lo último que se guardó.`
+  return t('editor.guardar_como.nota.sin_guardar', { tema: title })
 }
 
-function widgetLabel(w: Widget, sensors: SensorInfo[]): string {
+// `lang` solo está para que useMemo vuelva a calcular las etiquetas al cambiar de idioma.
+function widgetLabel(w: Widget, sensors: SensorInfo[], lang: string): string {
   const sensorName = (id: string) => sensors.find((s) => s.id === id)?.label ?? id
   switch (w.type) {
     case 'text':
-      return w.text.trim() ? `«${w.text.trim().slice(0, 40)}»` : '(texto vacío)'
+    {
+      const text = localized(w.text, w.text_i18n, lang).trim()
+      return text ? t('editor.capa.texto', { texto: text.slice(0, 40) }) : t('editor.capa.vacio')
+    }
     case 'clock':
-      return `${CLOCK_FORMAT_INFO[w.format]} · ${formatClock(w.format, new Date())}`
+      return `${clockFormatLabel(w.format)} · ${formatClock(w.format, new Date())}`
     case 'sensor':
       return sensorName(w.sensor)
     case 'bar':
-      return `Barra · ${sensorName(w.sensor)}`
+      return t('editor.capa.barra', { sensor: sensorName(w.sensor) })
     case 'image':
       return baseName(w.file)
   }

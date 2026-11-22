@@ -63,7 +63,7 @@ class SingleInstance:
 
     def __init__(self, name: str = APP_MUTEX) -> None:
         if not name or "\\" in name:
-            raise ValueError("El nombre del mutex no puede estar vacío ni llevar '\\'.")
+            raise ValueError("El nombre del mutex no puede estar vacío ni llevar '\\'.")  # i18n: no
         self.mutex_name = _PREFIX + name
         if len(self.mutex_name) > MAX_PATH:
             raise ValueError("El nombre del mutex es demasiado largo.")
@@ -89,7 +89,7 @@ class SingleInstance:
         handle = kernel32.CreateMutexW(None, False, self.mutex_name)
         error = ctypes.get_last_error()
         if not handle:
-            raise OSError(error, f"CreateMutexW falló (código {error})")
+            raise OSError(error, f"CreateMutexW falló (código {error})")  # i18n: no
         if error == ERROR_ALREADY_EXISTS:
             kernel32.CloseHandle(handle)
             log.info("Ya hay otra Luzeira en marcha en esta sesión")

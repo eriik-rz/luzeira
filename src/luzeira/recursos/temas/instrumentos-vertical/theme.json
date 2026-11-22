@@ -24,7 +24,7 @@
     {"type": "text", "text": "TEMP", "box": {"x": 232, "y": 338, "width": 72, "height": 16}, "style": {"size": 14, "bold": true, "color": "#c9ccd1", "align": "center"}},
     {"type": "sensor", "sensor": "gpu.temperature", "box": {"x": 232, "y": 356, "width": 72, "height": 22}, "style": {"size": 15, "bold": true, "color": "#ffa640", "align": "center"}},
 
-    {"type": "text", "text": "RED", "box": {"x": 26, "y": 400, "width": 120, "height": 16}, "style": {"size": 14, "bold": true, "color": "#c9ccd1", "align": "left"}},
+    {"type": "text", "text": "RED", "text_i18n": { "en": "NET" }, "box": {"x": 26, "y": 400, "width": 120, "height": 16}, "style": {"size": 14, "bold": true, "color": "#c9ccd1", "align": "left"}},
     {"type": "sensor", "sensor": "network.download", "decimals": 1, "prefix": "↓ ", "box": {"x": 26, "y": 416, "width": 124, "height": 20}, "style": {"size": 15, "bold": true, "color": "#4ade80", "align": "left"}},
     {"type": "sensor", "sensor": "network.upload", "decimals": 1, "prefix": "↑ ", "box": {"x": 26, "y": 438, "width": 124, "height": 20}, "style": {"size": 15, "color": "#4ade80", "align": "left"}},
 

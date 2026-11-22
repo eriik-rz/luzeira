@@ -6,14 +6,18 @@ import {
   COLOR_RE,
   FONT_EXTENSIONS,
   IMAGE_EXTENSIONS,
+  LANG_CODE_RE,
   LIMITS,
   MAX_WIDGETS,
   REL_PATH_RE,
   SENSOR_ID_RE,
   screenSize,
   type Theme,
+  type Translations,
   type Widget,
 } from './types.ts'
+import { localNumber } from './format.ts'
+import { t } from './i18n.ts'
 
 export interface Issue {
   path: string // «name», «widgets.3.box.x», «» (general)
@@ -25,13 +29,13 @@ const RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i
 
 function checkPath(path: string, allowed: readonly string[]): string | null {
   if (path.length < 1 || path.length > LIMITS.pathMax || !REL_PATH_RE.test(path)) {
-    return 'Nombre de fichero no válido.'
+    return t('modelo.validar.fichero')
   }
   if (path.split('/').some((part) => RESERVED.test(part.split('.')[0]))) {
-    return 'El fichero usa un nombre reservado de Windows (CON, NUL, COM1…).'
+    return t('modelo.validar.reservado')
   }
   const ext = path.slice(path.lastIndexOf('.') + 1).toLowerCase()
-  if (!allowed.includes(ext)) return `Extensión no permitida (solo ${allowed.join(', ')}).`
+  if (!allowed.includes(ext)) return t('modelo.validar.extension', { lista: allowed.join(', ') })
   return null
 }
 
@@ -44,27 +48,47 @@ function range(
   integer = true,
 ) {
   if (!Number.isFinite(value) || (integer && !Number.isInteger(value))) {
-    out.push({ path, message: integer ? 'Tiene que ser un número entero.' : 'Tiene que ser un número.' })
+    out.push({ path, message: integer ? t('modelo.validar.entero') : t('modelo.validar.numero') })
   } else if (value < min || value > max) {
-    out.push({ path, message: `Tiene que estar entre ${fmt(min)} y ${fmt(max)}.` })
+    out.push({ path, message: t('modelo.validar.entre', { min: localNumber(min), max: localNumber(max) }) })
   }
 }
 
-const fmt = (n: number) => String(n).replace('.', ',')
-
 function color(out: Issue[], path: string, value: string | null) {
   if (value !== null && !COLOR_RE.test(value)) {
-    out.push({ path, message: 'Color no válido (formato #rrggbb).' })
+    out.push({ path, message: t('modelo.validar.color') })
   }
 }
 
 function maxLen(out: Issue[], path: string, value: string, max: number) {
-  if (value.length > max) out.push({ path, message: `Como mucho ${max} caracteres.` })
+  if (value.length > max) out.push({ path, message: t('modelo.validar.largo', { max }) })
 }
 
 function sensorId(out: Issue[], path: string, value: string) {
   if (!SENSOR_ID_RE.test(value) || value.length > LIMITS.sensorIdMax) {
-    out.push({ path, message: 'Elige un sensor de la lista.' })
+    out.push({ path, message: t('modelo.validar.sensor') })
+  }
+}
+
+/** Traducciones de un texto (C-62): las mismas reglas que `TextTranslations` en modelo.py. */
+function translations(out: Issue[], path: string, value: Translations | undefined, max: number) {
+  if (value === undefined || value === null) return
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    out.push({ path, message: t('modelo.validar.traducciones') })
+    return
+  }
+  const entries = Object.entries(value)
+  if (entries.length > LIMITS.translationsMax) {
+    out.push({ path, message: t('modelo.validar.traducciones_muchas', { max: LIMITS.translationsMax }) })
+  }
+  for (const [code, text] of entries) {
+    if (!LANG_CODE_RE.test(code)) {
+      out.push({ path, message: t('modelo.validar.traduccion_codigo', { codigo: code }) })
+    } else if (typeof text !== 'string') {
+      out.push({ path, message: t('modelo.validar.traducciones') })
+    } else if (text.length > max) {
+      out.push({ path, message: t('modelo.validar.traduccion_larga', { codigo: code, max }) })
+    }
   }
 }
 
@@ -78,10 +102,10 @@ export function validateWidget(w: Widget, index: number, theme: Theme): Issue[] 
   range(out, `${p}.box.width`, b.width, 1, LIMITS.boxCoordMax)
   range(out, `${p}.box.height`, b.height, 1, LIMITS.boxCoordMax)
   if (b.x + b.width > width) {
-    out.push({ path: `${p}.box.width`, message: `Se sale por la derecha (la pantalla mide ${width} de ancho).` })
+    out.push({ path: `${p}.box.width`, message: t('modelo.validar.derecha', { ancho: width }) })
   }
   if (b.y + b.height > height) {
-    out.push({ path: `${p}.box.height`, message: `Se sale por abajo (la pantalla mide ${height} de alto).` })
+    out.push({ path: `${p}.box.height`, message: t('modelo.validar.abajo', { alto: height }) })
   }
 
   const s = w.style
@@ -96,6 +120,7 @@ export function validateWidget(w: Widget, index: number, theme: Theme): Issue[] 
   switch (w.type) {
     case 'text':
       maxLen(out, `${p}.text`, w.text, LIMITS.textMax)
+      translations(out, `${p}.text_i18n`, w.text_i18n, LIMITS.textMax)
       break
     case 'clock':
       break
@@ -104,6 +129,8 @@ export function validateWidget(w: Widget, index: number, theme: Theme): Issue[] 
       range(out, `${p}.decimals`, w.decimals, LIMITS.decimalsMin, LIMITS.decimalsMax)
       maxLen(out, `${p}.prefix`, w.prefix, LIMITS.shortTextMax)
       maxLen(out, `${p}.suffix`, w.suffix, LIMITS.shortTextMax)
+      translations(out, `${p}.prefix_i18n`, w.prefix_i18n, LIMITS.shortTextMax)
+      translations(out, `${p}.suffix_i18n`, w.suffix_i18n, LIMITS.shortTextMax)
       range(out, `${p}.interval`, w.interval, LIMITS.intervalMin, LIMITS.intervalMax, false)
       range(out, `${p}.max_chars`, w.max_chars, LIMITS.maxCharsMin, LIMITS.maxCharsMax)
       break
@@ -111,7 +138,7 @@ export function validateWidget(w: Widget, index: number, theme: Theme): Issue[] 
       sensorId(out, `${p}.sensor`, w.sensor)
       range(out, `${p}.min`, w.min, -1e12, 1e12, false)
       range(out, `${p}.max`, w.max, -1e12, 1e12, false)
-      if (w.max <= w.min) out.push({ path: `${p}.max`, message: 'El máximo tiene que ser mayor que el mínimo.' })
+      if (w.max <= w.min) out.push({ path: `${p}.max`, message: t('modelo.validar.max_min') })
       color(out, `${p}.fill`, w.fill)
       color(out, `${p}.track`, w.track)
       range(out, `${p}.interval`, w.interval, LIMITS.intervalMin, LIMITS.intervalMax, false)
@@ -128,7 +155,7 @@ export function validateWidget(w: Widget, index: number, theme: Theme): Issue[] 
 export function validateTheme(theme: Theme): Issue[] {
   const out: Issue[] = []
   const name = theme.name
-  if (name.trim().length < 1) out.push({ path: 'name', message: 'El tema necesita un nombre.' })
+  if (name.trim().length < 1) out.push({ path: 'name', message: t('modelo.validar.nombre') })
   maxLen(out, 'name', name, LIMITS.nameMax)
   if (theme.author !== null) maxLen(out, 'author', theme.author, LIMITS.authorMax)
   color(out, 'background.color', theme.background.color)
@@ -137,7 +164,7 @@ export function validateTheme(theme: Theme): Issue[] {
     if (err) out.push({ path: 'background.image', message: err })
   }
   if (theme.widgets.length > MAX_WIDGETS) {
-    out.push({ path: 'widgets', message: `Como mucho ${MAX_WIDGETS} elementos por tema.` })
+    out.push({ path: 'widgets', message: t('modelo.validar.elementos', { max: MAX_WIDGETS }) })
   }
   theme.widgets.forEach((w, i) => out.push(...validateWidget(w, i, theme)))
   return out

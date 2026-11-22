@@ -22,6 +22,7 @@ from collections.abc import Callable
 
 import psutil
 
+from luzeira.idioma import t
 from luzeira.sensores.base import Reading, SensorInfo
 
 log = logging.getLogger(__name__)
@@ -31,15 +32,10 @@ log = logging.getLogger(__name__)
 _GIB = 1024**3
 _MB = 1_000_000
 
-MEASURING = "Midiendo…"
-CPU_TEMPERATURE_REASON = (
-    "La temperatura de la CPU necesita el módulo de sensores avanzados "
-    "(llegará en una versión futura)."
-)
-CPU_FREQUENCY_REASON = (
-    "Windows solo informa de la frecuencia nominal de la CPU; la real necesita el módulo "
-    "de sensores avanzados (llegará en una versión futura)."
-)
+# Claves del catálogo (zona ``sensores``): el motivo se traduce al crear cada lectura.
+MEASURING = "sensores.midiendo"
+CPU_TEMPERATURE_REASON = "sensores.cpu_temperatura_avanzado"
+CPU_FREQUENCY_REASON = "sensores.cpu_frecuencia_nominal"
 
 # Bucle local: no es tráfico real hacia fuera. Se compara el nombre exacto «lo» (Linux)
 # o el prefijo de Windows; un prefijo corto como «lo» excluiría también «Local Area
@@ -85,7 +81,7 @@ def _windows_memory() -> tuple[int, int]:
     status = MEMORYSTATUSEX()
     status.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
     if not ctypes.WinDLL("kernel32").GlobalMemoryStatusEx(ctypes.byref(status)):
-        raise OSError("GlobalMemoryStatusEx falló")
+        raise OSError("GlobalMemoryStatusEx falló")  # i18n: no
     return status.ullTotalPhys, status.ullAvailPhys
 
 
@@ -195,25 +191,32 @@ class SystemSource:
 
     def _build_sensors(self) -> list[SensorInfo]:
         sensors = [
-            SensorInfo("cpu.usage", "Uso de CPU", "%", "cpu"),
-            SensorInfo("cpu.frequency", "Frecuencia de CPU", "MHz", "cpu"),
-            SensorInfo("cpu.temperature", "Temperatura de CPU", "°C", "cpu"),
-            SensorInfo("memory.usage", "Uso de memoria", "%", "memory"),
-            SensorInfo("memory.used", "Memoria usada", "GB", "memory"),
-            SensorInfo("memory.total", "Memoria total", "GB", "memory"),
-            SensorInfo("network.upload", "Subida de red", "MB/s", "network"),
-            SensorInfo("network.download", "Bajada de red", "MB/s", "network"),
+            # La etiqueta es una clave del catálogo: se traduce al servirla (``label``).
+            SensorInfo("cpu.usage", "sensores.cpu.usage", "%", "cpu"),
+            SensorInfo("cpu.frequency", "sensores.cpu.frequency", "MHz", "cpu"),
+            SensorInfo("cpu.temperature", "sensores.cpu.temperature", "°C", "cpu"),
+            SensorInfo("memory.usage", "sensores.memory.usage", "%", "memory"),
+            SensorInfo("memory.used", "sensores.memory.used", "GB", "memory"),
+            SensorInfo("memory.total", "sensores.memory.total", "GB", "memory"),
+            SensorInfo("network.upload", "sensores.network.upload", "MB/s", "network"),
+            SensorInfo("network.download", "sensores.network.download", "MB/s", "network"),
         ]
         sensors += [
-            SensorInfo(f"disk.usage.{letter}", f"Uso del disco {letter.upper()}:", "%", "disk")
+            SensorInfo(
+                f"disk.usage.{letter}",
+                "sensores.disk.usage",
+                "%",
+                "disk",
+                label_vars=(("letter", letter.upper()),),
+            )
             for letter, _ in self._drives
         ]
         sensors += [
-            SensorInfo("disk.read", "Lectura de disco", "MB/s", "disk"),
-            SensorInfo("disk.write", "Escritura de disco", "MB/s", "disk"),
-            SensorInfo("system.uptime", "Tiempo encendido", "h", "system"),
+            SensorInfo("disk.read", "sensores.disk.read", "MB/s", "disk"),
+            SensorInfo("disk.write", "sensores.disk.write", "MB/s", "disk"),
+            SensorInfo("system.uptime", "sensores.system.uptime", "h", "system"),
             # C-12: sensor de texto. Es el modelo del procesador, no identifica a nadie.
-            SensorInfo("cpu.name", "Nombre del procesador", "", "cpu", "text"),
+            SensorInfo("cpu.name", "sensores.cpu.name", "", "cpu", "text"),
         ]
         return sensors
 
@@ -231,7 +234,7 @@ class SystemSource:
         # Cada bloque va protegido por separado: si falla uno, los demás siguen.
         self._guard(out, ("cpu.usage",), lambda: self._read_cpu(out, elapsed))
         self._guard(out, ("cpu.frequency",), lambda: self._read_freq(out))
-        out["cpu.temperature"] = Reading(None, "°C", reason=CPU_TEMPERATURE_REASON)
+        out["cpu.temperature"] = Reading(None, "°C", reason=t(CPU_TEMPERATURE_REASON))
         self._guard(
             out, ("memory.usage", "memory.used", "memory.total"), lambda: self._read_memory(out)
         )
@@ -244,7 +247,11 @@ class SystemSource:
         self._guard(out, ("disk.read", "disk.write"), lambda: self._read_disk(out, elapsed))
         self._guard(out, ("system.uptime",), lambda: self._read_uptime(out))
 
-        out["cpu.name"] = _CPU_NAME_READING
+        out["cpu.name"] = (
+            Reading(None, "", text=_CPU_NAME)
+            if _CPU_NAME
+            else Reading(None, "", reason=t("sensores.cpu_nombre_desconocido"))
+        )
         self._prev_time = now
         return out
 
@@ -258,7 +265,7 @@ class SystemSource:
         try:
             fn()
         except Exception as exc:
-            reason = f"No se pudo leer ({type(exc).__name__})."
+            reason = t("sensores.no_se_pudo_leer", kind=type(exc).__name__)
             for sid in ids:
                 out[sid] = Reading(None, self._units[sid], reason=reason)
 
@@ -273,11 +280,11 @@ class SystemSource:
         prev = self._prev_cpu
         self._prev_cpu = (busy, total)
         if prev is None or elapsed is None:
-            out["cpu.usage"] = Reading(None, "%", reason=MEASURING)
+            out["cpu.usage"] = Reading(None, "%", reason=t(MEASURING))
             return
         d_total = total - prev[1]
         if d_total <= 0:
-            out["cpu.usage"] = Reading(None, "%", reason=MEASURING)
+            out["cpu.usage"] = Reading(None, "%", reason=t(MEASURING))
             return
         pct = (busy - prev[0]) / d_total * 100.0
         out["cpu.usage"] = Reading(round(min(max(pct, 0.0), 100.0), 1), "%")
@@ -286,11 +293,11 @@ class SystemSource:
         if sys.platform == "win32":
             # Medido en el equipo de pruebas: psutil devuelve siempre 3001 MHz (la nominal)
             # aunque la CPU esté a plena carga. Un valor fijo y falso es peor que ninguno.
-            out["cpu.frequency"] = Reading(None, "MHz", reason=CPU_FREQUENCY_REASON)
+            out["cpu.frequency"] = Reading(None, "MHz", reason=t(CPU_FREQUENCY_REASON))
             return
         freq = psutil.cpu_freq()
         if freq is None or not freq.current:
-            out["cpu.frequency"] = Reading(None, "MHz", reason="Este sistema no la informa.")
+            out["cpu.frequency"] = Reading(None, "MHz", reason=t("sensores.frecuencia_no_informa"))
             return
         out["cpu.frequency"] = Reading(round(freq.current), "MHz")
 
@@ -316,7 +323,7 @@ class SystemSource:
         # Por disco (como la red): conectar un disco USB no debe dar un pico falso.
         io = psutil.disk_io_counters(perdisk=True)
         if not io:
-            reason = "Este sistema no informa de la actividad del disco."
+            reason = t("sensores.disco_no_informa")
             out["disk.read"] = Reading(None, "MB/s", reason=reason)
             out["disk.write"] = Reading(None, "MB/s", reason=reason)
             return
@@ -332,9 +339,9 @@ class SystemSource:
         out["system.uptime"] = Reading(round(hours, 2), "h")
 
 
-def _read_cpu_name() -> Reading:
-    """Modelo del procesador, leído una vez. En Windows está en el registro (solo lectura,
-    sin admin); en otros sistemas, lo que diga ``platform``."""
+def _read_cpu_name() -> str:
+    """Modelo del procesador, leído una vez ("" si no se sabe). En Windows está en el
+    registro (solo lectura, sin admin); en otros sistemas, lo que diga ``platform``."""
     name = ""
     try:
         import winreg
@@ -347,13 +354,12 @@ def _read_cpu_name() -> Reading:
         import platform
 
         name = platform.processor()
-    name = " ".join(name.split())  # el registro trae espacios de relleno
-    if not name:
-        return Reading(None, "", reason="No se pudo saber el modelo del procesador.")
-    return Reading(None, "", text=name)
+    return " ".join(name.split())  # el registro trae espacios de relleno
 
 
-_CPU_NAME_READING = _read_cpu_name()
+# Solo el nombre: la lectura (y su motivo, si no hay nombre) se hace en cada ``read_all``,
+# en el idioma de ese momento.
+_CPU_NAME = _read_cpu_name()
 
 
 def _rates(
@@ -367,7 +373,7 @@ def _rates(
     válido, o no hay lectura anterior, el valor es «Midiendo…».
     """
     if prev is None or elapsed is None or elapsed <= 0:
-        none = Reading(None, "MB/s", reason=MEASURING)
+        none = Reading(None, "MB/s", reason=t(MEASURING))
         return none, none
     readings = []
     for pos in (0, 1):
@@ -383,7 +389,7 @@ def _rates(
             total += delta
             valid += 1
         if valid == 0:
-            readings.append(Reading(None, "MB/s", reason=MEASURING))
+            readings.append(Reading(None, "MB/s", reason=t(MEASURING)))
         else:
             readings.append(Reading(round(total / elapsed / _MB, 3), "MB/s"))
     return readings[0], readings[1]

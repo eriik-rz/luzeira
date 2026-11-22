@@ -26,6 +26,7 @@ from enum import IntEnum
 
 from PIL import Image
 
+from luzeira.idioma import t
 from luzeira.pantallas.comun import (
     DisplayError,
     NoAnswer,
@@ -149,9 +150,7 @@ class XuanFangRevB:
         try:
             self._transport.write(data)
         except OSError as exc:
-            raise DisplayError(
-                "Se ha perdido la conexión con la pantalla. ¿Se ha desenchufado el USB?"
-            ) from exc
+            raise DisplayError(t("pantallas.conexion_perdida")) from exc
 
     def _send(self, command: Command, data: bytes = b"") -> None:
         self._write(packet(command, data))
@@ -226,7 +225,9 @@ class XuanFangRevB:
         """Pinta ``image`` con su esquina superior izquierda en (x, y); lo que se salga
         se recorta."""
         if not (0 <= x < self.width and 0 <= y < self.height):
-            raise ValueError(f"({x}, {y}) está fuera de la pantalla {self.width}x{self.height}")
+            raise ValueError(
+                f"({x}, {y}) está fuera de la pantalla {self.width}x{self.height}"  # i18n: no
+            )
         w = min(image.width, self.width - x)
         h = min(image.height, self.height - y)
         if (w, h) != image.size:

@@ -1,6 +1,7 @@
 // Diálogo modal sencillo: atrapa el foco, Esc cierra, el clic fuera también.
 
 import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { useT } from '../i18n/contexto.ts'
 
 interface Props {
   title: string
@@ -69,6 +70,7 @@ export interface ToastItem {
 }
 
 export function Toasts({ items, onDismiss }: { items: ToastItem[]; onDismiss: (id: number) => void }) {
+  const tr = useT()
   return (
     <div className="toasts" role="status" aria-live="polite">
       {items.map((t) => (
@@ -86,7 +88,7 @@ export function Toasts({ items, onDismiss }: { items: ToastItem[]; onDismiss: (i
               {t.action.label}
             </button>
           )}
-          <button type="button" className="btn ghost small icon" aria-label="Cerrar aviso" onClick={() => onDismiss(t.id)}>
+          <button type="button" className="btn ghost small icon" aria-label={tr('comun.cerrar_aviso')} onClick={() => onDismiss(t.id)}>
             ×
           </button>
         </div>

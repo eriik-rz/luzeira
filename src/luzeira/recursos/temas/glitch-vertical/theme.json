@@ -25,7 +25,7 @@
     {"type": "bar", "sensor": "memory.usage", "fill": "#00e1f0", "track": "#0c3438", "box": {"x": 166, "y": 376, "width": 130, "height": 12}},
     {"type": "image", "file": "segmentos.png", "box": {"x": 166, "y": 376, "width": 130, "height": 12}},
 
-    {"type": "text", "text": "RED", "box": {"x": 22, "y": 434, "width": 44, "height": 24}, "style": {"size": 15, "bold": true, "color": "#c6ff00", "align": "left"}},
+    {"type": "text", "text": "RED", "text_i18n": { "en": "NET" }, "box": {"x": 22, "y": 434, "width": 44, "height": 24}, "style": {"size": 15, "bold": true, "color": "#c6ff00", "align": "left"}},
     {"type": "sensor", "sensor": "network.download", "decimals": 1, "prefix": "↓ ", "box": {"x": 68, "y": 434, "width": 116, "height": 24}, "style": {"size": 16, "bold": true, "color": "#ffffff", "align": "left"}},
     {"type": "sensor", "sensor": "network.upload", "decimals": 1, "prefix": "↑ ", "box": {"x": 186, "y": 434, "width": 112, "height": 24}, "style": {"size": 16, "color": "#00e1f0", "align": "right"}}
   ]
