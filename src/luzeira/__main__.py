@@ -7,6 +7,7 @@ uv run luzeira demo       -> pinta una pantalla de prueba y mide la velocidad
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import time
 from collections.abc import Iterable
@@ -233,18 +234,25 @@ def _editor(dev: bool) -> int:
 def _saved_language() -> str | None:
     """El idioma que eligió el usuario (``None``: el de Windows). Sin configuración que
     leer, el de Windows: la línea de órdenes no debe fallar por esto."""
-    from luzeira.config import load_config
+    # Solo se lee: ``load_config`` apartaría un fichero dañado, y eso le toca a la bandeja
+    # (con su log), no a una ayuda de la línea de órdenes ni al proceso de la ventana.
+    from luzeira.config import config_dir
 
     try:
-        return load_config().language
-    except Exception:
+        data = json.loads((config_dir() / "config.json").read_text(encoding="utf-8-sig"))
+        code = data.get("language") if isinstance(data, dict) else None
+    except (OSError, ValueError):
         return None
+    return code if isinstance(code, str) and code in idioma.available() else None
 
 
 def main(argv: list[str] | None = None) -> int:
     # Antes de la ayuda de argparse, que ya sale traducida. La bandeja y la ventana del
     # editor vuelven a fijarlo luego con lo suyo.
-    idioma.set_language(_saved_language())
+    args_in = sys.argv[1:] if argv is None else argv
+    # La ventana del editor recibe el idioma por stdin: no lee la configuración.
+    if args_in[:1] != ["editor-ventana"]:
+        idioma.set_language(_saved_language())
     parser = argparse.ArgumentParser(prog="luzeira", description=t("cli.descripcion"))
     # metavar fijo: así la orden interna «editor-ventana» no sale en la ayuda (con
     # help=SUPPRESS argparse seguía listándola como «==SUPPRESS==»).

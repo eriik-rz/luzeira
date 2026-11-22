@@ -1,0 +1,6 @@
+{
+  "lienzo.etiqueta": "Arbeitsfläche von {ancho} × {alto} Pixeln",
+  "lienzo.medida": "{ancho} × {alto} · Zoom ×{zoom}",
+  "lienzo.vista_previa": "Vorschau des Displays",
+  "lienzo.preparando": "Vorschau wird vorbereitet…"
+}

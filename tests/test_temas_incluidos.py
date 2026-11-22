@@ -1,5 +1,7 @@
 """Los temas que vienen con Luzeira tienen que cargar y pintarse siempre (RQ-11)."""
 
+import functools
+
 import pytest
 
 from luzeira import idioma
@@ -122,7 +124,9 @@ _LONG_NAMES = {
 }
 
 
+@functools.cache
 def _sensor_units() -> dict[str, str]:
+    # En caché: abrir los sensores cuesta ~0,2 s y el test de abajo lo pide 32 x 9 veces.
     from luzeira.sensores import default_hub
 
     hub = default_hub()
@@ -179,14 +183,20 @@ def _worst_texts(widget, units: dict[str, str], font) -> list[str]:
     return texts
 
 
-@pytest.mark.parametrize("language", ["es", "en"])
+@pytest.mark.parametrize("language", list(idioma.NATIVE_NAMES))
 @pytest.mark.parametrize("name", BUILTIN)
-def test_builtin_texts_fit_their_box(name, language):
-    """En los dos idiomas completos: los textos traducidos del tema (``text_i18n``…), la
-    fecha y los días también tienen que caber."""
+def test_builtin_texts_fit_their_box(name, language, monkeypatch):
+    """En todos los idiomas de Luzeira: los textos traducidos del tema (``text_i18n``…), la
+    fecha y los días también tienen que caber, y la fuente tiene que tener sus letras.
+
+    El idioma se fija a mano y no con ``set_language``: así se comprueban las etiquetas del
+    tema aunque ese idioma aún no tenga catálogo (lo que falte del catálogo sale en inglés).
+    """
     from PIL import Image, ImageDraw
 
-    idioma.set_language(language)
+    from luzeira.temas.fuentes import missing_glyphs
+
+    monkeypatch.setattr(idioma, "_active", language)
     loaded = load_theme(BUILTIN_THEMES / name)
     units = _sensor_units()
     draw = ImageDraw.Draw(Image.new("RGB", (1, 1)))
@@ -200,7 +210,12 @@ def test_builtin_texts_fit_their_box(name, language):
         x, anchor = {"left": (0, "lm"), "center": (w // 2, "mm"), "right": (w, "rm")}[
             widget.style.align
         ]
-        for text in _worst_texts(widget, units, font):
+        texts = _worst_texts(widget, units, font)
+        # Sin cuadros: un texto ruso o turco con una fuente sin esas letras se vería «□□□□».
+        missing = missing_glyphs(font, "".join(sorted(set("".join(texts)))))
+        if missing:
+            overflow.append(f"#{i} sin las letras {missing}")
+        for text in texts:
             left, top, right, bottom = draw.textbbox((x, h // 2), text, font=font, anchor=anchor)
             # 1 px de margen: el trazo de algunas letras (la «j» de «jueves») asoma 1 px
             # por fuera de su origen; no se nota en la pantalla.
@@ -263,7 +278,7 @@ def test_builtin_theme_draws_its_english_labels_in_english():
         i for i, w in enumerate(loaded.theme.widgets) if w.type == "text" and w.text == "RED"
     )
     widget = loaded.theme.widgets[index]
-    assert widget.text_i18n == {"en": "NET"}
+    assert widget.text_i18n["en"] == "NET"
     b = widget.box
     region = (b.x, b.y, b.x + b.width, b.y + b.height)
 

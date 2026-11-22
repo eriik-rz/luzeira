@@ -28,7 +28,7 @@ from collections.abc import Callable
 
 from PIL import Image
 
-from luzeira.idioma import t
+from luzeira.idioma import Text
 from luzeira.pantallas.comun import (
     DisplayError,
     Orientation,
@@ -38,7 +38,6 @@ from luzeira.pantallas.comun import (
 )
 from luzeira.pantallas.rgb565 import to_rgb565_be
 
-LABEL = 'Kipye Qiye 3,5"'
 WIDTH, HEIGHT = 320, 480  # en vertical (orientación nativa)
 
 # Las órdenes que usa Luzeira. No hay más: ni rellenar de color, ni espejos, ni pedir
@@ -111,7 +110,7 @@ class KipyeRevD:
         try:
             self._transport.write(data)
         except OSError as exc:
-            raise DisplayError(t("pantallas.conexion_perdida")) from exc
+            raise DisplayError(Text("pantallas.conexion_perdida")) from exc
 
     def _command(self, data: bytes) -> None:
         """Una orden y, después, tirar la confirmación que manda la pantalla."""

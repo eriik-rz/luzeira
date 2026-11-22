@@ -30,7 +30,7 @@ from typing import Protocol
 
 from PIL import Image
 
-from luzeira.idioma import t
+from luzeira.idioma import Joined, Text, again, ident, message_of, t
 from luzeira.pantallas import (
     ChosenDisplayMissing,
     ConfirmationNeeded,
@@ -158,9 +158,10 @@ def open_once(port: str | None) -> Display:
 
 
 # --- mensajes para el usuario -----------------------------------------------------------
-# Claves del catálogo (zona ``pantallas``), no textos: se traducen con ``t()`` al cambiar
-# de estado, en el idioma de ese momento. Tras cambiar de idioma, la bandeja recarga el
-# tema y el estado vuelve a escribirse en el nuevo.
+# Claves del catálogo (zona ``pantallas``), no textos. El estado guarda su mensaje como
+# :class:`~luzeira.idioma.Text` (clave + variables): ``message`` lo escribe en el idioma de
+# ahora, y dos mensajes iguales en distinto idioma cuentan como el mismo (C-62: cambiar de
+# idioma no repite el aviso de «No encuentro la pantalla»).
 
 MSG_STARTING = "pantallas.estado_arrancando"
 MSG_CONNECTING = "pantallas.estado_conectando"
@@ -170,14 +171,14 @@ MSG_RETRYING = "pantallas.estado_reintentando"
 MSG_ERROR = "pantallas.estado_error"
 
 
-def _with_retrying(text: str) -> str:
-    return f"{text} {t(MSG_RETRYING)}"
+def _with_retrying(text: str) -> Text:
+    return Joined(text, Text(MSG_RETRYING))
 
 
 def _no_display_message(exc: DisplayError) -> str:
     """El mensaje del driver ya es para el usuario (la causa técnica va en ``__cause__``).
     «Ocupada» (``DisplayBusy``) dice qué hacer; se añade que se sigue intentando."""
-    text = str(exc)
+    text = message_of(exc)
     if isinstance(exc, UnsupportedModel):
         return text  # ya dice qué pasa: no se le manda nada, se sigue buscando otra
     if isinstance(exc, DisplayBusy) or not exc.says_retrying:
@@ -187,10 +188,12 @@ def _no_display_message(exc: DisplayError) -> str:
 
 def _theme_message(theme_dir: Path, exc: Exception) -> str:
     if isinstance(exc, ThemeError):
-        return t("pantallas.estado_tema_con_error", theme=theme_dir.name, error=exc)
+        return Text("pantallas.estado_tema_con_error", theme=theme_dir.name, error=exc)
     # Un fallo que no es ThemeError es un bug nuestro: no se enseña su texto (puede
     # llevar rutas con el nombre de usuario), solo el tipo.
-    return t("pantallas.estado_tema_error_interno", theme=theme_dir.name, kind=type(exc).__name__)
+    return Text(
+        "pantallas.estado_tema_error_interno", theme=theme_dir.name, kind=type(exc).__name__
+    )
 
 
 class DisplayService:
@@ -232,7 +235,7 @@ class DisplayService:
         self._started = False
         self._running = False
         self._status = Status.STARTING
-        self._message = t(MSG_STARTING)
+        self._message: str = Text(MSG_STARTING)  # un Text casi siempre (ver _set)
         self._pending_device: str | None = None
         self._pending_choice: DisplayChoice | None = None  # propuesta que espera un «sí»
         self._new_choice: tuple[DisplayChoice | None] | None = None  # de choose_display()
@@ -247,7 +250,7 @@ class DisplayService:
         self._theme_name = ""
         self._loaded_dir: Path | None = None
         self._orientation = Orientation.PORTRAIT
-        self._theme_error: str | None = None  # error del último tema que se intentó
+        self._theme_error: Text | None = None  # error del último tema que se intentó
         self._needs_full = False
         self._full_at = 0.0
         self._next_tick = 0.0
@@ -263,8 +266,10 @@ class DisplayService:
 
     @property
     def message(self) -> str:
+        """El mensaje del estado, en el idioma activo (aunque se cambiara después)."""
         with self._cond:
-            return self._message
+            message = self._message
+        return str(again(message))
 
     @property
     def pending_device(self) -> str | None:
@@ -388,7 +393,7 @@ class DisplayService:
             # hilo principal), que ``sistema.registro`` manda al log pasando por su
             # filtro de privacidad (borra rutas de perfil, usuario y equipo).
             log.error("El servicio de la pantalla ha fallado (%s).", type(exc).__name__)
-            self._set(Status.ERROR, t(MSG_ERROR, kind=type(exc).__name__))
+            self._set(Status.ERROR, Text(MSG_ERROR, kind=type(exc).__name__))
             raise
         finally:
             self._disconnect(screen_off=True)
@@ -398,7 +403,7 @@ class DisplayService:
                 except Exception as exc:
                     log.warning("No se pudieron cerrar los sensores (%s).", type(exc).__name__)
             if not failed:
-                self._set(Status.STOPPED, t(MSG_STOPPED))
+                self._set(Status.STOPPED, Text(MSG_STOPPED))
             with self._cond:
                 self._running = False
                 self._cond.notify_all()
@@ -429,14 +434,14 @@ class DisplayService:
                 with self._cond:
                     self._suspend_ack = self._seen
                     self._cond.notify_all()
-                self._set(Status.SUSPENDED, t(MSG_SUSPENDED))
+                self._set(Status.SUSPENDED, Text(MSG_SUSPENDED))
                 self._wait(None)
                 continue
             if kick:
                 self._retry_at = 0.0
                 self._backoff = self._t.backoff_start
             if self._renderer is None:
-                error = self._theme_error or t("pantallas.estado_tema_no_vale")
+                error = self._theme_error or Text("pantallas.estado_tema_no_vale")
                 self._set(Status.THEME_ERROR, error)
                 self._wait(None)  # hasta que apply() traiga un tema (o stop/suspend)
                 continue
@@ -468,12 +473,16 @@ class DisplayService:
             # buscando (enumerar puertos no manda nada). Si mientras tanto aparece una rev A
             # con su serie, se abre sola; la propuesta sigue en pie con el mismo aviso.
             self._schedule_retry()
-            self._set(Status.NEEDS_CONFIRMATION, str(exc), device=exc.device, choice=exc.choice)
+            self._set(
+                Status.NEEDS_CONFIRMATION, message_of(exc), device=exc.device, choice=exc.choice
+            )
             return
         except ConfirmationNeeded as exc:
             # Podría ser otro modelo: no se reintenta hasta que el usuario responda.
             self._retry_at = math.inf
-            self._set(Status.NEEDS_CONFIRMATION, str(exc), device=exc.device, choice=exc.choice)
+            self._set(
+                Status.NEEDS_CONFIRMATION, message_of(exc), device=exc.device, choice=exc.choice
+            )
             return
         except WrongModel as exc:
             # La elegida ha contestado otra cosa que ese modelo y el driver ya cerró el
@@ -484,7 +493,7 @@ class DisplayService:
             with self._cond:
                 self._confirmed.discard(exc.device)  # un «sí» que resultó no ser: se olvida
             self._retry_at = math.inf
-            self._set(Status.NEEDS_CONFIRMATION, str(exc))
+            self._set(Status.NEEDS_CONFIRMATION, message_of(exc))
             return
         except DisplayError as exc:
             self._schedule_retry()
@@ -508,7 +517,7 @@ class DisplayService:
         self._hub_poll()
         self._needs_full = True
         self._full_at = self._monotonic() + self._t.warmup
-        self._set(Status.STARTING, t(MSG_CONNECTING))
+        self._set(Status.STARTING, Text(MSG_CONNECTING))
 
     def _open(self) -> tuple[Display, DisplayChoice | None]:
         """Abre una pantalla. Devuelve también la elección con la que se abrió (None si
@@ -573,7 +582,7 @@ class DisplayService:
         cada escritura esperaría el WRITE_TIMEOUT) y reintentar con espera creciente."""
         self._disconnect(screen_off=False)
         self._schedule_retry()
-        self._set(Status.NO_DISPLAY, _with_retrying(str(exc)))
+        self._set(Status.NO_DISPLAY, _with_retrying(message_of(exc)))
 
     def _disconnect(self, *, screen_off: bool) -> None:
         display, self._display = self._display, None
@@ -630,14 +639,14 @@ class DisplayService:
         orientation = ORIENTATIONS[self._renderer.theme.orientation]
         return FLIPPED[orientation] if settings.flip else orientation
 
-    def _running_message(self) -> str:
+    def _running_message(self) -> Text:
         if self._theme_error:
-            return t(
+            return Text(
                 "pantallas.estado_mostrando_con_error",
                 theme=self._theme_name,
                 error=self._theme_error,
             )
-        return t("pantallas.estado_mostrando", theme=self._theme_name)
+        return Text("pantallas.estado_mostrando", theme=self._theme_name)
 
     def _apply_now(self, new: Settings, *, reload: bool = False) -> None:
         old, self._settings = self._settings, new
@@ -695,6 +704,10 @@ class DisplayService:
     ) -> None:
         """Cambia el estado y avisa solo si ha cambiado algo (nada de avisos en bucle).
         La callback se llama fuera del candado para que pueda llamar al servicio.
+
+        «Ha cambiado» se mira con :func:`~luzeira.idioma.ident`, no con el texto: el mismo
+        mensaje escrito en otro idioma (al reintentar tras cambiar de idioma) no es un
+        aviso nuevo, pero se guarda el nuevo para que se lea en el idioma de ahora.
         ``device``: el puerto que espera confirmación (solo con NEEDS_CONFIRMATION);
         ``choice``: el modelo propuesto para él, si no es la rev A."""
         with self._cond:
@@ -702,9 +715,10 @@ class DisplayService:
             asking = status == Status.NEEDS_CONFIRMATION
             self._pending_device = device if asking else None
             self._pending_choice = choice if asking else None
-            if (status, message) == (self._status, self._message):
-                return
+            same = (status, ident(message)) == (self._status, ident(self._message))
             self._status, self._message = status, message
+            if same:
+                return
             self._cond.notify_all()
         try:
             self._on_status(status, message)

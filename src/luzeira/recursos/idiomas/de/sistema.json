@@ -1,0 +1,19 @@
+{
+  "sistema.acceso_fallo": "Ich konnte die Verknüpfung nicht erstellen.",
+  "sistema.actualizar_firma_no_valida": "Die Signatur der neuen Version ist ungültig.",
+  "sistema.actualizar_info_no_valida": "Die Angaben zur neuen Version sind ungültig.",
+  "sistema.actualizar_fuera_de_github": "Der Download wollte auf eine Seite außerhalb von GitHub.",
+  "sistema.actualizar_sin_versiones": "Es gibt noch keine Versionen mit Update-Hinweis.",
+  "sistema.actualizar_error_github": "GitHub hat mit einem Fehler geantwortet ({code}).",
+  "sistema.actualizar_sin_conexion": "Ich konnte GitHub nicht erreichen. Bist du online?",
+  "sistema.actualizar_respuesta_grande": "Die Antwort von GitHub ist größer als erwartet.",
+  "sistema.actualizar_descarga_grande": "Der Download ist größer als erwartet.",
+  "sistema.actualizar_no_puede": "Diese Luzeira-Kopie kann nicht nach Updates suchen.",
+  "sistema.actualizar_instalador_distinto": "Das heruntergeladene Setup stimmt nicht mit dem signierten überein. Ich öffne es nicht.",
+  "sistema.ventana_titulo": "Luzeira – Design-Editor",
+  "sistema.ventana_sin_guardar": "Es gibt ungespeicherte Änderungen ({reason}). Trotzdem schließen?",
+  "sistema.ventana_pendiente_errores": "es gibt rot markierte Fehler",
+  "sistema.ventana_pendiente_incluido": "es sind Änderungen an einem mitgelieferten Design; nutze „Speichern unter“, um sie zu behalten",
+  "sistema.ventana_pendiente_fallo": "das Speichern ist fehlgeschlagen",
+  "sistema.ventana_pendiente_desconocido": "ich konnte nicht prüfen, ob noch etwas zu speichern ist"
+}

@@ -617,3 +617,44 @@ test('validate: códigos de idioma de dos letras, 20 como mucho, 200 y 20 caract
   assert.deepEqual(paths(sensorWith({ en: 'x'.repeat(21) })), ['widgets.0.prefix_i18n'])
   assert.ok(validateTheme(withText({ EN: 'x' }))[0].message.includes('«EN»'))
 })
+
+import { editTranslatable, localized, translationMode } from '../src/model/format.ts'
+import type { Translations } from '../src/model/types.ts'
+
+test('propiedades: el campo traducido se edita en el idioma que se ve (C-62)', () => {
+  const text: { type: 'text'; text: string; text_i18n?: Translations } = { type: 'text', text: 'RED', text_i18n: { en: 'NET', de: 'NETZ' } }
+  // En inglés el campo enseña «NET» (lo mismo que el lienzo) y solo cambia esa traducción.
+  assert.equal(localized(text.text, text.text_i18n, 'en'), 'NET')
+  assert.equal(translationMode(text.text_i18n, 'en'), 'translation')
+  const english = editTranslatable(text, 'text', 'NETWORK', 'en')
+  assert.deepEqual(english, { type: 'text', text: 'RED', text_i18n: { en: 'NETWORK', de: 'NETZ' } })
+  assert.deepEqual(text.text_i18n, { en: 'NET', de: 'NETZ' }) // no toca el que recibe
+  // En un idioma sin traducción cambia el original y se quitan las de ese campo.
+  assert.equal(translationMode(text.text_i18n, 'es'), 'drops')
+  assert.deepEqual(editTranslatable(text, 'text', 'RED LOCAL', 'es'), { type: 'text', text: 'RED LOCAL' })
+  // Sin traducciones, el original y nada más.
+  assert.equal(translationMode(undefined, 'en'), 'base')
+  assert.equal(translationMode({}, 'en'), 'base')
+  assert.deepEqual(editTranslatable({ type: 'text', text: 'A' }, 'text', 'B', 'en'), { type: 'text', text: 'B' })
+  // «constructor» no es un idioma del tema aunque `in` diga que está.
+  assert.equal(translationMode({ en: 'x' }, 'constructor'), 'drops')
+})
+
+test('propiedades: «Antes» y «Después» van cada uno con sus traducciones', () => {
+  const sensor: { type: 'sensor'; prefix: string; suffix: string; prefix_i18n?: Translations; suffix_i18n?: Translations } = {
+    type: 'sensor',
+    prefix: 'CPU ',
+    suffix: ' uso',
+    prefix_i18n: { en: 'CPU ' },
+    suffix_i18n: { de: ' Last' },
+  }
+  // En inglés: el prefijo tiene inglés (cambia solo ese); el sufijo no (cambia el original y pierde el alemán).
+  const prefix = editTranslatable(sensor, 'prefix', 'Processor ', 'en')
+  assert.deepEqual(prefix.prefix_i18n, { en: 'Processor ' })
+  assert.equal(prefix.prefix, 'CPU ')
+  assert.deepEqual(prefix.suffix_i18n, { de: ' Last' })
+  const suffix = editTranslatable(sensor, 'suffix', ' load', 'en')
+  assert.equal(suffix.suffix, ' load')
+  assert.ok(!('suffix_i18n' in suffix))
+  assert.deepEqual(suffix.prefix_i18n, { en: 'CPU ' })
+})

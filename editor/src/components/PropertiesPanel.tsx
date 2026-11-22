@@ -3,11 +3,11 @@
 
 import type { Dispatch } from 'react'
 import type { Action } from '../model/editorState.ts'
-import { formatClock, formatReading } from '../model/format.ts'
+import { editTranslatable, formatClock, formatReading, localized, translationMode } from '../model/format.ts'
 import { clockFormatLabel, widgetTypeInfo } from '../model/theme.ts'
 import { LIMITS, screenSize, type Align, type ClockFormat, type Theme, type Translations, type Widget } from '../model/types.ts'
 import { fieldOf, type Issue } from '../model/validate.ts'
-import { useT } from '../i18n/contexto.ts'
+import { useIdioma, useT } from '../i18n/contexto.ts'
 import { ColorField, InfoTip, NumberField, Segmented as SegmentedField, SelectField, TextField, Toggle } from './fields.tsx'
 import { FontPicker, ImagePicker } from './ResourcePicker.tsx'
 import { SensorPicker } from './SensorPicker.tsx'
@@ -27,17 +27,6 @@ interface Props {
 
 const CLOCK_FORMATS: ClockFormat[] = ['HH:MM', 'HH:MM:SS', 'date-short', 'date-long', 'weekday']
 
-/**
- * Quita las traducciones de un campo (C-62). Se hace al editar ese texto: si no, en otro
- * idioma seguiría saliendo la traducción vieja del texto de antes.
- */
-function dropTranslations<W extends Widget>(w: W, key: 'text_i18n' | 'prefix_i18n' | 'suffix_i18n'): W {
-  if (!(key in w)) return w
-  const copy = { ...w } as W & Record<string, unknown>
-  delete copy[key]
-  return copy
-}
-
 /** Los idiomas de unas traducciones, para el aviso («en, de»); null si no hay. */
 function languagesOf(tr: Translations | undefined): string | null {
   const codes = tr ? Object.keys(tr) : []
@@ -46,6 +35,7 @@ function languagesOf(tr: Translations | undefined): string | null {
 
 export function PropertiesPanel({ theme, widget, id, issues, services, dispatch, onDuplicate, onRemove }: Props) {
   const t = useT()
+  const { lang } = useIdioma()
   const screen = screenSize(theme)
   const err = (field: string) => issues.find((i) => fieldOf(i.path) === field)?.message ?? null
   const general = issues.filter((i) => fieldOf(i.path) === '')
@@ -58,8 +48,11 @@ export function PropertiesPanel({ theme, widget, id, issues, services, dispatch,
   const setStyle = (patch: Partial<Widget['style']>, field: string) =>
     update({ ...widget, style: { ...widget.style, ...patch } } as Widget, `style.${field}`)
 
-  /** Aviso bajo un texto que trae traducciones: al cambiarlo se quitan. */
-  const translatedNote = (tr: Translations | undefined, key = 'propiedades.traducido') => {
+  /**
+   * Aviso bajo un texto que trae traducciones (C-62): el campo enseña el del idioma activo;
+   * si lo tiene, se cambia solo ese, y si no, el original y se quitan las traducciones.
+   */
+  const translatedNote = (tr: Translations | undefined, key: string) => {
     const langs = languagesOf(tr)
     return langs ? (
       <p className="hint" style={{ marginTop: -6, marginBottom: 10 }}>
@@ -67,6 +60,8 @@ export function PropertiesPanel({ theme, widget, id, issues, services, dispatch,
       </p>
     ) : null
   }
+  const textNote = (tr: Translations | undefined) =>
+    translatedNote(tr, translationMode(tr, lang) === 'translation' ? 'propiedades.traducido' : 'propiedades.traducido.quitar')
 
   const info = widgetTypeInfo(widget.type)
   const b = widget.box
@@ -134,13 +129,13 @@ export function PropertiesPanel({ theme, widget, id, issues, services, dispatch,
             <TextField
               label={t('propiedades.texto')}
               multiline
-              value={widget.text}
+              value={localized(widget.text, widget.text_i18n, lang)}
               maxLength={LIMITS.textMax}
-              onChange={(text) => update({ ...dropTranslations(widget, 'text_i18n'), text }, 'text')}
+              onChange={(text) => update(editTranslatable(widget, 'text', text, lang), 'text')}
               hint={t('propiedades.texto.ayuda')}
               error={err('text') ?? err('text_i18n')}
             />
-            {translatedNote(widget.text_i18n)}
+            {textNote(widget.text_i18n)}
           </section>
         )}
 
@@ -185,8 +180,8 @@ export function PropertiesPanel({ theme, widget, id, issues, services, dispatch,
               <NumberField label={t('propiedades.largo')} value={widget.max_chars} min={LIMITS.maxCharsMin} max={LIMITS.maxCharsMax} onChange={(max_chars) => update({ ...widget, max_chars }, 'max_chars')} hint={t('propiedades.largo.ayuda')} error={err('max_chars')} />
             )}
             <div className="row">
-              <TextField label={t('propiedades.antes')} value={widget.prefix} maxLength={LIMITS.shortTextMax} onChange={(prefix) => update({ ...dropTranslations(widget, 'prefix_i18n'), prefix }, 'prefix')} placeholder="CPU " hint={t('propiedades.antes.ayuda')} error={err('prefix') ?? err('prefix_i18n')} />
-              <TextField label={t('propiedades.despues')} value={widget.suffix} maxLength={LIMITS.shortTextMax} onChange={(suffix) => update({ ...dropTranslations(widget, 'suffix_i18n'), suffix }, 'suffix')} placeholder="" hint={t('propiedades.despues.ayuda')} error={err('suffix') ?? err('suffix_i18n')} />
+              <TextField label={t('propiedades.antes')} value={localized(widget.prefix, widget.prefix_i18n, lang)} maxLength={LIMITS.shortTextMax} onChange={(prefix) => update(editTranslatable(widget, 'prefix', prefix, lang), 'prefix')} placeholder="CPU " hint={t('propiedades.antes.ayuda')} error={err('prefix') ?? err('prefix_i18n')} />
+              <TextField label={t('propiedades.despues')} value={localized(widget.suffix, widget.suffix_i18n, lang)} maxLength={LIMITS.shortTextMax} onChange={(suffix) => update(editTranslatable(widget, 'suffix', suffix, lang), 'suffix')} placeholder="" hint={t('propiedades.despues.ayuda')} error={err('suffix') ?? err('suffix_i18n')} />
             </div>
             {translatedNote(widget.prefix_i18n || widget.suffix_i18n ? { ...widget.prefix_i18n, ...widget.suffix_i18n } : undefined, 'propiedades.traducido.sensor')}
             <NumberField label={t('propiedades.intervalo')} integer={false} step={0.5} value={widget.interval} min={LIMITS.intervalMin} max={LIMITS.intervalMax} onChange={(interval) => update({ ...widget, interval }, 'interval')} hint={t('propiedades.intervalo.ayuda')} error={err('interval')} />

@@ -6,7 +6,7 @@
   "background": {"color": "#0e0802", "image": "fondo.png"},
   "widgets": [
     {"type": "clock", "format": "date-long", "box": {"x": 24, "y": 10, "width": 280, "height": 24}, "style": {"size": 16, "color": "#d08a10", "align": "left"}},
-    {"type": "sensor", "sensor": "system.uptime", "decimals": 1, "prefix": "encendido ", "prefix_i18n": { "en": "uptime " }, "interval": 60, "box": {"x": 300, "y": 10, "width": 156, "height": 24}, "style": {"size": 15, "color": "#d08a10", "align": "right"}},
+    {"type": "sensor", "sensor": "system.uptime", "decimals": 1, "prefix": "encendido ", "prefix_i18n": { "en": "uptime ", "de": "laufzeit ", "fr": "allumé ", "it": "acceso ", "pt": "ligado ", "pl": "czas pracy ", "tr": "çalışma ", "ru": "в работе " }, "interval": 60, "box": {"x": 300, "y": 10, "width": 156, "height": 24}, "style": {"size": 15, "color": "#d08a10", "align": "right"}},
 
     {"type": "clock", "format": "HH:MM", "box": {"x": 16, "y": 44, "width": 448, "height": 108}, "style": {"size": 104, "bold": true, "color": "#ffb000", "align": "center"}},
 
@@ -24,7 +24,7 @@
     {"type": "sensor", "sensor": "memory.usage", "box": {"x": 328, "y": 190, "width": 128, "height": 52}, "style": {"size": 42, "bold": true, "color": "#ffb000", "align": "left"}},
     {"type": "bar", "sensor": "memory.usage", "fill": "#ffb000", "track": "#3a2304", "box": {"x": 328, "y": 248, "width": 128, "height": 10}},
 
-    {"type": "text", "text": "RED", "text_i18n": { "en": "NET" }, "box": {"x": 24, "y": 282, "width": 50, "height": 26}, "style": {"size": 16, "bold": true, "color": "#d08a10", "align": "left"}},
+    {"type": "text", "text": "RED", "text_i18n": { "en": "NET", "de": "NETZ", "fr": "RÉS.", "it": "RETE", "pt": "REDE", "pl": "SIEĆ", "tr": "AĞ", "ru": "СЕТЬ" }, "box": {"x": 24, "y": 282, "width": 50, "height": 26}, "style": {"size": 16, "bold": true, "color": "#d08a10", "align": "left"}},
     {"type": "sensor", "sensor": "network.download", "decimals": 1, "prefix": "↓ ", "box": {"x": 76, "y": 282, "width": 180, "height": 26}, "style": {"size": 18, "bold": true, "color": "#ffb000", "align": "left"}},
     {"type": "sensor", "sensor": "network.upload", "decimals": 1, "prefix": "↑ ", "box": {"x": 266, "y": 282, "width": 190, "height": 26}, "style": {"size": 18, "color": "#ffb000", "align": "right"}},
 

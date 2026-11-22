@@ -492,8 +492,10 @@ def _target_name(rel: str) -> str | None:
         return None
     ext = rel.rsplit(".", 1)[-1].lower() if "." in rel else ""
     allowed = set(IMAGE_SIGNATURES) | set(FONT_SIGNATURES) | ZIP_EXTRA_EXTENSIONS
+    if not ext:
+        return t("temas.zip.sin_extension")  # antes salía «tipo no permitido (.sin extensión)»
     if ext not in allowed:
-        return t("temas.zip.tipo", ext=ext or t("temas.zip.sin_extension"))
+        return t("temas.zip.tipo", ext=ext)
     try:
         _relpath_adapter.validate_python(rel)
     except ValidationError:

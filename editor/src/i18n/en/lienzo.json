@@ -1,6 +1,6 @@
 {
   "lienzo.etiqueta": "Canvas of {ancho} by {alto} pixels",
   "lienzo.medida": "{ancho} × {alto} · zoom ×{zoom}",
-  "lienzo.vista_previa": "Screen preview",
+  "lienzo.vista_previa": "Display preview",
   "lienzo.preparando": "Preparing the preview…"
 }

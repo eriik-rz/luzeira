@@ -1,0 +1,17 @@
+{
+  "capas.titulo": "Calques",
+  "capas.lleno": "Un thème peut contenir au maximum {max} éléments",
+  "capas.anadir": "Ajouter",
+  "capas.anadir.ayuda": "Ajouter un nouvel élément à l’écran",
+  "capas.tipo": "Type d’élément",
+  "capas.pista": "Ce qui est en haut passe devant. Faites glisser pour changer l’ordre.",
+  "capas.vacia": "L’écran est vide.",
+  "capas.vacia.pista": "Cliquez sur « Ajouter » pour placer le premier élément.",
+  "capas.con_errores": "(contient des erreurs)",
+  "capas.alt": "Alt + ↑/↓ pour monter ou descendre le calque",
+  "capas.delante": "Avancer",
+  "capas.delante.ayuda": "Avancer (monter dans la liste)",
+  "capas.atras": "Reculer",
+  "capas.atras.ayuda": "Reculer (descendre dans la liste)",
+  "capas.cuenta": "Éléments : {n} sur {max}"
+}

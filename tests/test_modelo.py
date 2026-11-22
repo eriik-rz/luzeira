@@ -47,7 +47,7 @@ def test_validator_messages_follow_the_language():
     image = {"type": "image", "file": "a.bmp", "box": {"x": 0, "y": 0, "width": 9, "height": 9}}
     cases = [
         ({**bar(0, 0), "min": 5, "max": 5}, "max must be greater than min"),
-        (bar(470, 0), "widget 1 [(]bar[)] goes off the 480x320 screen"),
+        (bar(470, 0), "element 1 [(]bar[)] goes off the 480x320 screen"),
         (image, "extension not allowed [(]only png, jpg, jpeg, gif[)]"),
     ]
     for widget, message in cases:

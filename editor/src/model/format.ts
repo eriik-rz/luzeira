@@ -28,6 +28,38 @@ export function localized(text: string, translations: Translations | null | unde
   return translations?.[lang] ?? text
 }
 
+/** Campos de texto que un tema puede traer traducidos (`text_i18n`, `prefix_i18n`…). */
+export type TranslatableField = 'text' | 'prefix' | 'suffix'
+
+/**
+ * Qué cambia al editar un campo traducible en el idioma `lang` (C-62):
+ * - `'translation'`: el campo tiene traducción a ese idioma, y solo se cambia esa;
+ * - `'drops'`: tiene traducciones, pero no a ese idioma: se cambia el texto original y se
+ *   quitan las traducciones (dirían lo de antes);
+ * - `'base'`: no tiene traducciones: se cambia el texto original y ya está.
+ */
+export function translationMode(translations: Translations | null | undefined, lang: string): 'translation' | 'drops' | 'base' {
+  if (!translations || Object.keys(translations).length === 0) return 'base'
+  // hasOwnProperty y no `in`: «constructor» o «toString» no son idiomas del tema.
+  return Object.prototype.hasOwnProperty.call(translations, lang) ? 'translation' : 'drops'
+}
+
+/**
+ * Edita un campo traducible tal como lo ve el usuario: el campo enseña el texto del idioma
+ * activo (`localized`), así que lo que escribe es para ese idioma. Ver `translationMode`.
+ * Devuelve un elemento nuevo (no toca el que recibe).
+ */
+export function editTranslatable<W extends object>(widget: W, field: TranslatableField, value: string, lang = currentLanguage()): W {
+  const key = `${field}_i18n`
+  const translations = (widget as Record<string, unknown>)[key] as Translations | undefined
+  if (translationMode(translations, lang) === 'translation') {
+    return { ...widget, [key]: { ...translations, [lang]: value } }
+  }
+  const copy: Record<string, unknown> = { ...widget, [field]: value }
+  delete copy[key]
+  return copy as W
+}
+
 // JS: getDay() da 0 = domingo; el catálogo empieza en lunes (como weekday() de Python).
 const weekday = (d: Date) => t(`pantalla.dia.${(d.getDay() + 6) % 7}`)
 

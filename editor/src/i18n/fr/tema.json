@@ -1,0 +1,18 @@
+{
+  "tema.titulo": "Thème",
+  "tema.pista": "Cliquez sur un élément du canevas pour le modifier.",
+  "tema.datos": "Informations",
+  "tema.nombre": "Nom",
+  "tema.nombre.ayuda": "Son nom dans la liste des thèmes.",
+  "tema.autor": "Auteur (facultatif)",
+  "tema.autor.ayuda": "Si vous partagez le thème, qui l’a créé. Un pseudo suffit.",
+  "tema.pantalla": "Écran",
+  "tema.orientacion": "Orientation",
+  "tema.orientacion.ayuda": "Comment votre écran est placé. Si un élément ne tient plus après rotation, il est replacé à l’intérieur.",
+  "tema.fondo": "Fond",
+  "tema.fondo.color": "Couleur de fond",
+  "tema.fondo.color.ayuda": "Visible là où il n’y a pas d’image de fond.",
+  "tema.fondo.imagen": "Image de fond",
+  "tema.fondo.imagen.ayuda": "Remplit tout l’écran ; si elle n’a pas la même forme, elle est rognée sur les côtés.",
+  "tema.fondo.solo_color": "Couleur unie"
+}

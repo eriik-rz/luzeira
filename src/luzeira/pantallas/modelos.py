@@ -23,7 +23,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from luzeira.idioma import t
+from luzeira.idioma import Text, t
 
 VID_PID_CH552 = (0x1A86, 0x5722)  # rev A, UsbPCMonitor y XuanFang rev B
 VID_PID_KIPYE = (0x454D, 0x4E41)
@@ -58,12 +58,24 @@ class DisplayModel:
         return t(self.label_key) if self.label_key else self.name
 
     @property
+    def label_text(self) -> str:
+        """Como ``label``, pero un :class:`~luzeira.idioma.Text` si tiene clave: para los
+        mensajes de error, que se pueden reescribir si se cambia de idioma."""
+        return Text(self.label_key) if self.label_key else self.name
+
+    @property
     def menu_label(self) -> str:
         return t("pantallas.modelo_beta", model=self.label) if self.beta else self.label
 
 
+# Los nombres llevan una medida con decimales: van al catálogo por el separador decimal
+# («3,5"» en español, «3.5"» en inglés).
 REV_A = DisplayModel(
-    "turing-rev-a", 'Turing / UsbPCMonitor 3,5"', frozenset({VID_PID_CH552}), beta=False
+    "turing-rev-a",
+    'Turing / UsbPCMonitor 3,5"',
+    frozenset({VID_PID_CH552}),
+    beta=False,
+    label_key="pantallas.modelo_rev_a",
 )
 REV_B = DisplayModel(
     "xuanfang-rev-b",
@@ -73,7 +85,12 @@ REV_B = DisplayModel(
     label_key="pantallas.modelo_xuanfang",
 )
 KIPYE = DisplayModel(
-    "kipye-rev-d", 'Kipye Qiye 3,5"', frozenset({VID_PID_KIPYE}), beta=True, has_hello=False
+    "kipye-rev-d",
+    'Kipye Qiye 3,5"',
+    frozenset({VID_PID_KIPYE}),
+    beta=True,
+    has_hello=False,
+    label_key="pantallas.modelo_kipye",
 )
 REV_C = DisplayModel(
     "turing-rev-c",

@@ -1,0 +1,19 @@
+{
+  "sistema.acceso_fallo": "Kısayol oluşturulamadı.",
+  "sistema.actualizar_firma_no_valida": "Yeni sürümün imzası geçerli değil.",
+  "sistema.actualizar_info_no_valida": "Yeni sürümün bilgileri geçerli değil.",
+  "sistema.actualizar_fuera_de_github": "İndirme, GitHub olmayan bir siteye gitmeye çalıştı.",
+  "sistema.actualizar_sin_versiones": "Henüz güncelleme bildirimi olan bir sürüm yok.",
+  "sistema.actualizar_error_github": "GitHub bir hatayla yanıt verdi ({code}).",
+  "sistema.actualizar_sin_conexion": "GitHub'a bağlanılamadı. İnternet var mı?",
+  "sistema.actualizar_respuesta_grande": "GitHub'ın yanıtı beklenenden büyük.",
+  "sistema.actualizar_descarga_grande": "İndirilen dosya beklenenden büyük.",
+  "sistema.actualizar_no_puede": "Luzeira'nın bu kopyası güncellemeleri denetleyemez.",
+  "sistema.actualizar_instalador_distinto": "İndirilen yükleyici imzalı olanla eşleşmiyor. Açmıyorum.",
+  "sistema.ventana_titulo": "Luzeira — Tema düzenleyici",
+  "sistema.ventana_sin_guardar": "Kaydedilmemiş değişiklikler var ({reason}). Yine de kapatılsın mı?",
+  "sistema.ventana_pendiente_errores": "kırmızıyla işaretli hatalar var",
+  "sistema.ventana_pendiente_incluido": "bunlar yerleşik bir temadaki değişiklikler; saklamak için “Farklı kaydet” kullan",
+  "sistema.ventana_pendiente_fallo": "kaydedilemedi",
+  "sistema.ventana_pendiente_desconocido": "kaydedilecek bir şey kalıp kalmadığı kontrol edilemedi"
+}

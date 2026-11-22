@@ -1,0 +1,17 @@
+{
+  "capas.titulo": "Livelli",
+  "capas.lleno": "Un tema può avere al massimo {max} elementi",
+  "capas.anadir": "Aggiungi",
+  "capas.anadir.ayuda": "Aggiungi un nuovo elemento allo schermo",
+  "capas.tipo": "Tipo di elemento",
+  "capas.pista": "Ciò che sta in alto si vede davanti. Trascina per cambiare l'ordine.",
+  "capas.vacia": "Lo schermo è vuoto.",
+  "capas.vacia.pista": "Premi «Aggiungi» per inserire il primo elemento.",
+  "capas.con_errores": "(contiene errori)",
+  "capas.alt": "Alt + ↑/↓ per spostare il livello su o giù",
+  "capas.delante": "Porta avanti",
+  "capas.delante.ayuda": "Porta avanti (sali nell'elenco)",
+  "capas.atras": "Porta indietro",
+  "capas.atras.ayuda": "Porta indietro (scendi nell'elenco)",
+  "capas.cuenta": "{n} di {max} elementi"
+}

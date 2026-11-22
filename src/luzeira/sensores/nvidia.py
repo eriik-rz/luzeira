@@ -20,7 +20,7 @@ from typing import Any
 
 import pynvml
 
-from luzeira.idioma import t
+from luzeira.idioma import Text, t
 from luzeira.sensores.base import Reading, SensorInfo, gpu_label_key
 
 log = logging.getLogger(__name__)
@@ -28,6 +28,8 @@ log = logging.getLogger(__name__)
 _GIB = 1024**3
 
 # Claves del catálogo (zona ``sensores``): el motivo se traduce al crear cada lectura.
+# «No lo da esta tarjeta» va como ``Text`` (recuerda su clave): ``gpu.GpuSource`` lo
+# reconoce por la clave, no comparando textos traducidos.
 NOT_SUPPORTED = "sensores.gpu_no_informa"
 NOT_READY = "sensores.gpu_no_lista"
 NOT_FOUND = "sensores.nvidia_no_encontrada"
@@ -153,7 +155,7 @@ class NvidiaSource:
             out[self._id("memory_usage")] = (
                 Reading(round(pct, 1), "%")
                 if pct is not None
-                else Reading(None, "%", reason=t(NOT_SUPPORTED))
+                else Reading(None, "%", reason=Text(NOT_SUPPORTED))
             )
 
         # NVML da el consumo en milivatios.
@@ -195,7 +197,7 @@ class NvidiaSource:
 def _failure(exc: Exception) -> str:
     """Traduce un error de NVML a un motivo en español para el usuario."""
     if isinstance(exc, pynvml.NVMLError_NotSupported):
-        return t(NOT_SUPPORTED)
+        return Text(NOT_SUPPORTED)
     return t("sensores.no_se_pudo_leer", kind=type(exc).__name__)
 
 

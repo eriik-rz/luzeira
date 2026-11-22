@@ -1,0 +1,17 @@
+{
+  "capas.titulo": "Katmanlar",
+  "capas.lleno": "Bir temada en fazla {max} öğe olabilir",
+  "capas.anadir": "Ekle",
+  "capas.anadir.ayuda": "Ekrana yeni bir öğe ekle",
+  "capas.tipo": "Öğe türü",
+  "capas.pista": "Üstteki önde görünür. Sırayı değiştirmek için sürükle.",
+  "capas.vacia": "Ekran boş.",
+  "capas.vacia.pista": "İlk öğeyi koymak için “Ekle”ye bas.",
+  "capas.con_errores": "(hatalı)",
+  "capas.alt": "Alt + ↑/↓: katmanı yukarı/aşağı taşı",
+  "capas.delante": "Öne getir",
+  "capas.delante.ayuda": "Öne getir (listede yukarı)",
+  "capas.atras": "Geriye gönder",
+  "capas.atras.ayuda": "Geriye gönder (listede aşağı)",
+  "capas.cuenta": "{n} / {max} öğe"
+}

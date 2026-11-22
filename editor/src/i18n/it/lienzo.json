@@ -1,0 +1,6 @@
+{
+  "lienzo.etiqueta": "Tela di {ancho} per {alto} pixel",
+  "lienzo.medida": "{ancho} × {alto} · zoom ×{zoom}",
+  "lienzo.vista_previa": "Anteprima dello schermo",
+  "lienzo.preparando": "Preparazione dell'anteprima…"
+}

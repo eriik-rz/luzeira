@@ -1615,7 +1615,8 @@ def test_loader_errors_say_element_in_the_editor_in_any_language(tmp_path):
     (folder / "theme.json").write_text(json.dumps(theme), encoding="utf-8")
     for language, loader, editor in [
         ("es", "La imagen del widget 1 «no.png»", "La imagen del elemento 1 «no.png»"),
-        ("en", "The image of widget 1 “no.png”", "The image of element 1 “no.png”"),
+        # En inglés el cargador ya dice «element» (C-62): el editor lo deja igual.
+        ("en", "The image of element 1 “no.png”", "The image of element 1 “no.png”"),
     ]:
         idioma.set_language(language)
         with pytest.raises(ThemeError) as info:

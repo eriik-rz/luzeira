@@ -26,7 +26,7 @@ from enum import IntEnum
 
 from PIL import Image
 
-from luzeira.idioma import t
+from luzeira.idioma import Text
 from luzeira.pantallas.comun import (
     DisplayError,
     NoAnswer,
@@ -39,7 +39,6 @@ from luzeira.pantallas.comun import (
 from luzeira.pantallas.rgb565 import to_rgb565_be
 from luzeira.pantallas.turing_rev_a import aligned_rect
 
-LABEL = 'XuanFang 3,5"'
 WIDTH, HEIGHT = 320, 480  # en vertical (orientación nativa)
 # La referencia espera 50 ms tras cada imagen porque no lee respuestas: «reduce mucho
 # las imágenes corruptas» (informe, rev B).
@@ -150,7 +149,7 @@ class XuanFangRevB:
         try:
             self._transport.write(data)
         except OSError as exc:
-            raise DisplayError(t("pantallas.conexion_perdida")) from exc
+            raise DisplayError(Text("pantallas.conexion_perdida")) from exc
 
     def _send(self, command: Command, data: bytes = b"") -> None:
         self._write(packet(command, data))
@@ -171,7 +170,7 @@ class XuanFangRevB:
                 continue  # no ha llegado nada: otro saludo, hasta el tope
             sub = self.parse_hello(answer)
             if sub is None:
-                raise WrongModel(self.device or "?", LABEL)
+                raise WrongModel(self.device or "?", Text("pantallas.modelo_xuanfang"))
             self.flagship, self.full_range_brightness = SUB_REVISIONS[sub]
             return
         raise NoAnswer(self.device or "?")

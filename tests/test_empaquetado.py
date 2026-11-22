@@ -72,9 +72,63 @@ def test_app_id_is_a_fixed_guid():
     assert _define("AppGuid") == "5E01DD71-2E73-46B3-9498-C53B2D1E1AB7"
 
 
-def test_spanish_and_64_bit():
-    assert 'MessagesFile: "compiler:Languages\\Spanish.isl"' in ISS
+def test_64_bit():
     assert _setup("ArchitecturesInstallIn64BitMode") == "x64compatible"
+
+
+#: El fichero de Inno Setup 6.7.4 de cada idioma de la app (C-62).
+INNO_LANGUAGES = {
+    "en": "compiler:Default.isl",
+    "es": "compiler:Languages\\Spanish.isl",
+    "de": "compiler:Languages\\German.isl",
+    "fr": "compiler:Languages\\French.isl",
+    "it": "compiler:Languages\\Italian.isl",
+    "pt": "compiler:Languages\\BrazilianPortuguese.isl",
+    "pl": "compiler:Languages\\Polish.isl",
+    "tr": "compiler:Languages\\Turkish.isl",
+    "ru": "compiler:Languages\\Russian.isl",
+}
+
+
+def _languages() -> list[tuple[str, str]]:
+    return re.findall(r'^Name: "(\w+)"; MessagesFile: "([^"]+)"$', _section("Languages"), re.M)
+
+
+def test_installer_speaks_every_language_of_the_app():
+    from luzeira import idioma
+
+    assert dict(_languages()) == INNO_LANGUAGES
+    assert set(INNO_LANGUAGES) == set(idioma.NATIVE_NAMES)
+    # El primero es el que queda marcado si Windows está en otro idioma: el de reserva de
+    # la app.
+    assert _languages()[0][0] == idioma.FALLBACK
+
+
+def test_installer_picks_the_windows_language_without_asking():
+    # «auto»: solo pregunta si el idioma de Windows no es ninguno de los nueve.
+    assert _setup("ShowLanguageDialog") == "auto"
+    assert _setup("LanguageDetectionMethod") == "uilanguage"
+
+
+def test_every_custom_message_exists_in_every_language():
+    messages = {}
+    for line in _section("CustomMessages").splitlines():
+        if line and not line.startswith(";"):
+            key, text = line.split("=", 1)
+            lang, name = key.split(".", 1)
+            assert text.strip(), key
+            messages.setdefault(lang, set()).add(name)
+    used = set(re.findall(r"\{cm:(\w+)\}", ISS)) | set(re.findall(r"CustomMessage\('(\w+)'\)", ISS))
+    assert set(messages) == set(INNO_LANGUAGES)
+    for lang, names in messages.items():
+        assert names == used, lang
+
+
+def test_language_files_ship_with_the_verified_inno():
+    if not emp.DEFAULT_ISCC.is_file():
+        pytest.skip("Inno Setup no está instalado")
+    for path in INNO_LANGUAGES.values():
+        assert (emp.DEFAULT_ISCC.parent / path.removeprefix("compiler:")).is_file(), path
 
 
 def test_app_mutex_matches_the_app():
@@ -225,6 +279,7 @@ def test_unpack_python_writes_our_pth(tmp_path, monkeypatch):
 
 def test_inno_binaries_are_checked(tmp_path, monkeypatch):
     for name in emp.INNO_SHA256:
+        (tmp_path / name).parent.mkdir(exist_ok=True)  # las traducciones van en Languages/
         (tmp_path / name).write_bytes(name.encode())
     with pytest.raises(SystemExit, match="verificado"):
         emp.check_inno(tmp_path / "ISCC.exe")
@@ -235,6 +290,12 @@ def test_inno_binaries_are_checked(tmp_path, monkeypatch):
     (tmp_path / "Setup.e32").unlink()
     with pytest.raises(SystemExit, match="Falta"):
         emp.check_inno(tmp_path / "ISCC.exe")
+
+
+def test_the_language_files_of_the_installer_are_pinned_too():
+    iss = (ROOT / "instalador" / "luzeira.iss").read_text(encoding="utf-8")
+    used = set(re.findall(r'MessagesFile: "compiler:([^"]+)"', iss))
+    assert used and {u.replace("\\", "/") for u in used} <= set(emp.INNO_SHA256)
 
 
 def test_installer_is_never_built_with_unchecked_inno(tmp_path, monkeypatch):

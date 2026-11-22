@@ -11,7 +11,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from luzeira.idioma import t
+from luzeira import idioma
+from luzeira.idioma import Text, t
 from luzeira.sensores import nvidia, windows_gpu
 from luzeira.sensores.base import Reading, SensorInfo
 from luzeira.sensores.gpu import GpuSource
@@ -494,7 +495,7 @@ class FakeNvml:
         }
         for name in self.unsupported:
             out[f"gpu.{name}"] = Reading(
-                None, out[f"gpu.{name}"].unit, reason=t(nvidia.NOT_SUPPORTED)
+                None, out[f"gpu.{name}"].unit, reason=Text(nvidia.NOT_SUPPORTED)
             )
         return out
 
@@ -529,6 +530,32 @@ def test_windows_fills_only_what_nvml_does_not_support():
     assert r["gpu.fan"] == Reading(42.0, "%")
     assert r["gpu.usage"] == Reading(40.0, "%")  # el resto sigue siendo de NVML
     assert r["gpu.temperature"] == Reading(55.0, "°C")
+
+
+def test_fill_recognises_not_supported_by_its_key_not_its_text():
+    # C-62: antes se comparaba el motivo con ``t(NOT_SUPPORTED)``. Si el idioma cambia entre
+    # la lectura de NVML y la comparación, los textos ya no casan y no se rellenaba.
+    class SwitchingNvml(FakeNvml):
+        def read_all(self):
+            out = super().read_all()
+            idioma.set_language("en")  # el usuario cambia de idioma justo ahora
+            return out
+
+    src = GpuSource(SwitchingNvml(has_gpu=True, unsupported=("fan",)), make(FakeApi()))
+    assert src.read_all()["gpu.fan"] == Reading(42.0, "%")
+
+
+def test_a_plain_reason_with_the_same_words_is_not_filled():
+    # Un motivo que no es «no lo da esta tarjeta» (aquí: el mismo texto, sin su clave) no
+    # se rellena con Windows: podría ser un fallo pasajero, y su motivo se tiene que ver.
+    class PlainNvml(FakeNvml):
+        def read_all(self):
+            out = super().read_all()
+            out["gpu.fan"] = Reading(None, "%", reason=str(out["gpu.fan"].reason))
+            return out
+
+    src = GpuSource(PlainNvml(has_gpu=True, unsupported=("fan",)), make(FakeApi()))
+    assert src.read_all()["gpu.fan"].value is None
 
 
 def test_fill_needs_the_same_vendor():

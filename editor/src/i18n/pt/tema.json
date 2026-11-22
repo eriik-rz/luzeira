@@ -1,0 +1,18 @@
+{
+  "tema.titulo": "Tema",
+  "tema.pista": "Clique em um elemento da área de desenho para editá-lo.",
+  "tema.datos": "Dados",
+  "tema.nombre": "Nome",
+  "tema.nombre.ayuda": "É assim que aparece na lista de temas.",
+  "tema.autor": "Autor (opcional)",
+  "tema.autor.ayuda": "Se você compartilhar o tema, quem o fez. Pode ser um apelido.",
+  "tema.pantalla": "Tela",
+  "tema.orientacion": "Orientação",
+  "tema.orientacion.ayuda": "Como a tela está posicionada. Se ao girar algo não couber, é reposicionado para dentro.",
+  "tema.fondo": "Fundo",
+  "tema.fondo.color": "Cor de fundo",
+  "tema.fondo.color.ayuda": "Aparece onde não há imagem de fundo.",
+  "tema.fondo.imagen": "Imagem de fundo",
+  "tema.fondo.imagen.ayuda": "Preenche a tela toda; se não tiver o mesmo formato, é cortada nas laterais.",
+  "tema.fondo.solo_color": "Só cor"
+}

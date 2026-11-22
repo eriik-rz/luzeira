@@ -1,0 +1,6 @@
+{
+  "lienzo.etiqueta": "Área de desenho de {ancho} por {alto} pixels",
+  "lienzo.medida": "{ancho} × {alto} · zoom ×{zoom}",
+  "lienzo.vista_previa": "Prévia da tela",
+  "lienzo.preparando": "Preparando a prévia…"
+}

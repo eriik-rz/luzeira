@@ -1,0 +1,6 @@
+{
+  "lienzo.etiqueta": "Canevas de {ancho} sur {alto} pixels",
+  "lienzo.medida": "{ancho} × {alto} · zoom ×{zoom}",
+  "lienzo.vista_previa": "Aperçu de l’écran",
+  "lienzo.preparando": "Préparation de l’aperçu…"
+}

@@ -139,3 +139,90 @@ def test_screen_formats_are_the_same_in_the_app_and_in_the_editor_preview():
         editor = CATALOG_SETS["editor"] / code / "pantalla.json"
         if app.exists() and editor.exists():
             assert json.loads(app.read_text("utf-8")) == json.loads(editor.read_text("utf-8"))
+
+
+def test_automatic_language_says_the_same_in_the_app_and_in_the_editor():
+    # C-62: el menú del icono y los Ajustes del editor dicen lo mismo («el de Windows»).
+    app, editor = _catalogs(CATALOG_SETS["app"]), _catalogs(CATALOG_SETS["editor"])
+    different = {
+        code: (app[code]["idioma.automatico"], editor[code]["ajustes.idioma.automatico"])
+        for code in app
+        if app[code]["idioma.automatico"] != editor[code]["ajustes.idioma.automatico"]
+    }
+    assert different == {}
+
+
+MODEL_NAME_KEYS = (
+    "pantallas.modelo_rev_a",
+    "pantallas.modelo_xuanfang",
+    "pantallas.modelo_kipye",
+    "pantallas.modelo_rev_c",
+)
+
+
+def test_model_names_use_the_decimal_separator_of_each_language():
+    # C-62: en inglés «3.5"», no «3,5"». El separador es el de la pantalla (``pantalla.decimal``).
+    for code, cat in _catalogs(CATALOG_SETS["app"]).items():
+        sep = cat["pantalla.decimal"]
+        other = "." if sep == "," else ","
+        for key in MODEL_NAME_KEYS:
+            assert re.search(rf"\d{re.escape(sep)}\d", cat[key]), (code, key)
+            assert not re.search(rf"\d{re.escape(other)}\d", cat[key]), (code, key)
+
+
+def test_no_english_text_has_a_decimal_comma():
+    for which, folder in CATALOG_SETS.items():
+        en = _catalogs(folder).get("en", {})
+        assert [k for k, v in en.items() if re.search(r"\d,\d", v)] == [], which
+
+
+def test_every_display_model_has_its_name_in_the_catalog():
+    from luzeira.pantallas.modelos import MODELS
+
+    es, en = (_catalogs(CATALOG_SETS["app"])[code] for code in ("es", "en"))
+    for model in MODELS:
+        assert model.label_key in es and model.label_key in en, model.key
+    idioma.set_language("en")
+    assert [m.label for m in MODELS if "3,5" in m.label] == []
+
+
+# --- Text: textos que recuerdan su clave (C-62) --------------------------------------------
+
+
+def test_text_is_a_str_that_can_be_written_again_in_another_language(fake_catalogs):
+    idioma.set_language("es")
+    hello = idioma.Text("saludo", nombre="Ana")
+    assert hello == "Hola, Ana" and isinstance(hello, str)
+    idioma.set_language("en")
+    assert hello == "Hola, Ana"  # el str no cambia: es el de cuando se creó
+    assert hello.again() == "Hi, Ana" and idioma.again(hello) == "Hi, Ana"
+    assert idioma.again("suelto") == "suelto"
+
+
+def test_the_same_text_in_two_languages_is_the_same_message(fake_catalogs):
+    idioma.set_language("es")
+    spanish = idioma.Text("saludo", nombre="Ana")
+    idioma.set_language("en")
+    english = idioma.Text("saludo", nombre="Ana")
+    assert spanish != english
+    assert idioma.ident(spanish) == idioma.ident(english)
+    assert idioma.ident(idioma.Text("saludo", nombre="Eva")) != idioma.ident(english)
+    assert idioma.ident("Hola") != idioma.ident("Hi")  # un str suelto cuenta por su texto
+
+
+def test_joined_texts_and_errors_are_written_again_too(fake_catalogs):
+    idioma.set_language("es")
+    error = ValueError(idioma.Text("saludo", nombre="Ana"))
+    joined = idioma.Joined(idioma.message_of(error), idioma.Text("solo_es"))
+    assert joined == "Hola, Ana Solo en español"
+    assert idioma.message_of(ValueError("tal cual")) == "tal cual"
+    idioma.set_language("en")
+    assert joined.again() == "Hi, Ana Solo en español"  # «solo_es» no está en inglés
+    nested = idioma.Text("saludo", nombre=error)  # un error dentro de otro texto
+    idioma.set_language("de")
+    assert nested.again() == "Hallo, Hallo, Ana"
+    assert idioma.ident(joined) == idioma.ident(
+        idioma.Joined(idioma.Text("saludo", nombre="Ana"), idioma.Text("solo_es"))
+    )
+    # Un error sin Text cuenta por su tipo: su texto ya viene traducido.
+    assert idioma.ident(KeyError("a")) == idioma.ident(KeyError("b")) == "KeyError"

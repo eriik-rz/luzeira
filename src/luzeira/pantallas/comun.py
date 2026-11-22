@@ -14,7 +14,7 @@ from collections.abc import Callable
 from enum import IntEnum
 from typing import TYPE_CHECKING, Protocol
 
-from luzeira.idioma import t
+from luzeira.idioma import Text
 
 if TYPE_CHECKING:
     from luzeira.pantallas.modelos import DisplayChoice
@@ -44,7 +44,9 @@ class Orientation(IntEnum):
 class DisplayError(Exception):
     """Error al hablar con la pantalla, con un mensaje que se puede enseñar al usuario.
 
-    El mensaje se escribe en el idioma activo al crear el error (con ``t()``)."""
+    El mensaje se escribe en el idioma activo al crear el error. Se crea con un
+    :class:`~luzeira.idioma.Text` (clave + variables) para que el servicio pueda reescribirlo
+    si se cambia de idioma mientras se ve (C-62); un ``str`` suelto también vale."""
 
     #: True si el mensaje ya dice que se sigue intentando: el servicio no lo repite.
     #: (Antes se buscaba la palabra «intentando» en el texto, que en otro idioma no está.)
@@ -57,7 +59,7 @@ class DisplayBusy(DisplayError):
 
     def __init__(self, device: str) -> None:
         self.device = device
-        super().__init__(t("pantallas.en_uso", device=device))
+        super().__init__(Text("pantallas.en_uso", device=device))
 
 
 class ConfirmationNeeded(DisplayError):
@@ -71,7 +73,7 @@ class ConfirmationNeeded(DisplayError):
 
     def __init__(self, device: str, message: str | None = None) -> None:
         self.device = device
-        super().__init__(message or t("pantallas.confirmar_rev_a", device=device))
+        super().__init__(message or Text("pantallas.confirmar_rev_a", device=device))
 
 
 class ModelToConfirm(ConfirmationNeeded):
@@ -81,7 +83,7 @@ class ModelToConfirm(ConfirmationNeeded):
     def __init__(self, choice: DisplayChoice, label: str) -> None:
         self.choice = choice
         super().__init__(
-            choice.device, t("pantallas.confirmar_modelo", device=choice.device, model=label)
+            choice.device, Text("pantallas.confirmar_modelo", device=choice.device, model=label)
         )
 
 
@@ -91,7 +93,7 @@ class WrongModel(DisplayError):
 
     def __init__(self, device: str, label: str) -> None:
         self.device = device
-        super().__init__(t("pantallas.modelo_equivocado", device=device, model=label))
+        super().__init__(Text("pantallas.modelo_equivocado", device=device, model=label))
 
 
 class NoAnswer(DisplayError):
@@ -103,7 +105,7 @@ class NoAnswer(DisplayError):
 
     def __init__(self, device: str) -> None:
         self.device = device
-        super().__init__(t("pantallas.no_contesta", device=device))
+        super().__init__(Text("pantallas.no_contesta", device=device))
 
 
 class UnsupportedModel(DisplayError):
@@ -114,14 +116,14 @@ class UnsupportedModel(DisplayError):
 
     def __init__(self, device: str, label: str) -> None:
         self.device = device
-        super().__init__(t("pantallas.no_compatible", device=device, model=label))
+        super().__init__(Text("pantallas.no_compatible", device=device, model=label))
 
 
 class ChosenDisplayMissing(DisplayError):
     """La pantalla elegida a mano no está conectada ahora (o su USB ya no coincide)."""
 
     def __init__(self) -> None:
-        super().__init__(t("pantallas.elegida_no_esta"))
+        super().__init__(Text("pantallas.elegida_no_esta"))
 
 
 class Transport(Protocol):
@@ -159,7 +161,7 @@ def open_error(device: str, exc: BaseException) -> DisplayError:
     if is_access_denied(exc):
         error: DisplayError = DisplayBusy(device)
     else:
-        error = DisplayError(t("pantallas.no_puedo_abrir_reintento", device=device))
+        error = DisplayError(Text("pantallas.no_puedo_abrir_reintento", device=device))
         error.says_retrying = True
     error.__cause__ = exc  # para el log; el mensaje es para el usuario
     return error
@@ -182,7 +184,7 @@ def open_probed(
       puerto y se para ahí: ni otro intento ni otro modelo.
     """
     factory = serial_factory or default_serial_factory
-    last_error: DisplayError = DisplayError(t("pantallas.no_puedo_abrir", device=device))
+    last_error: DisplayError = DisplayError(Text("pantallas.no_puedo_abrir", device=device))
     for attempt in range(max(1, retries)):
         transport = None
         try:

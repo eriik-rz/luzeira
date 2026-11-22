@@ -26,7 +26,7 @@
     {"type": "bar", "sensor": "memory.usage", "fill": "#00e1f0", "track": "#0c3438", "box": {"x": 24, "y": 288, "width": 198, "height": 10}},
     {"type": "image", "file": "segmentos.png", "box": {"x": 24, "y": 288, "width": 198, "height": 10}},
 
-    {"type": "text", "text": "RED", "text_i18n": { "en": "NET" }, "box": {"x": 256, "y": 224, "width": 52, "height": 22}, "style": {"size": 15, "bold": true, "color": "#0b0b10", "align": "center"}},
+    {"type": "text", "text": "RED", "text_i18n": { "en": "NET", "de": "NETZ", "fr": "RÉS.", "it": "RETE", "pt": "REDE", "pl": "SIEĆ", "tr": "AĞ", "ru": "СЕТЬ" }, "box": {"x": 256, "y": 224, "width": 52, "height": 22}, "style": {"size": 15, "bold": true, "color": "#0b0b10", "align": "center"}},
     {"type": "sensor", "sensor": "network.download", "decimals": 1, "prefix": "↓ ", "box": {"x": 258, "y": 250, "width": 198, "height": 28}, "style": {"size": 20, "bold": true, "color": "#ffffff", "align": "left"}},
     {"type": "sensor", "sensor": "network.upload", "decimals": 1, "prefix": "↑ ", "box": {"x": 258, "y": 278, "width": 198, "height": 24}, "style": {"size": 18, "color": "#c6ff00", "align": "left"}}
   ]

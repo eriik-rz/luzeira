@@ -7,7 +7,7 @@ import { connect, errorMessage, type EditorApi, type Info, type ThemeSummary } f
 import { Editor } from './Editor.tsx'
 import { pickInitialTheme } from './model/contract.ts'
 import { IconWarn } from './components/icons.tsx'
-import { useT } from './i18n/contexto.ts'
+import { useIdioma, useT } from './i18n/contexto.ts'
 
 type Boot =
   | { kind: 'loading' }
@@ -18,6 +18,12 @@ export default function App() {
   const [boot, setBoot] = useState<Boot>({ kind: 'loading' })
   const [attempt, setAttempt] = useState(0)
   const t = useT()
+  // Los textos de arranque, en el idioma de Luzeira en cuanto se sabe (C-62). Antes de
+  // tener `info` («Conectando…», un fallo al conectar) vale el `?lang=` con el que la
+  // ventana abre la página; sin él (la demo web), el del navegador.
+  const { follow } = useIdioma()
+  const language = boot.kind === 'ready' ? boot.info?.language : undefined
+  useEffect(() => follow(language), [follow, language])
 
   useEffect(() => {
     let alive = true

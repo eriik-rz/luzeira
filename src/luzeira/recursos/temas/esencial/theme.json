@@ -7,7 +7,7 @@
   "widgets": [
     { "type": "clock", "format": "HH:MM", "box": { "x": 16, "y": 8, "width": 200, "height": 64 },
       "style": { "size": 52, "bold": true, "color": "#ff8c00", "align": "left" } },
-    { "type": "clock", "format": "date-long", "box": { "x": 216, "y": 14, "width": 248, "height": 28 },
+    { "type": "clock", "format": "date-long", "box": { "x": 180, "y": 14, "width": 284, "height": 28 },
       "style": { "size": 18, "color": "#e6e6e6", "align": "right" } },
     { "type": "clock", "format": "date-short", "box": { "x": 216, "y": 42, "width": 248, "height": 24 },
       "style": { "size": 15, "color": "#8a93a6", "align": "right" } },
@@ -35,7 +35,7 @@
       "style": { "size": 42, "bold": true, "align": "left" } },
     { "type": "bar", "sensor": "memory.usage", "box": { "x": 16, "y": 282, "width": 216, "height": 10 } },
 
-    { "type": "text", "text": "RED", "text_i18n": { "en": "NET" }, "box": { "x": 248, "y": 200, "width": 216, "height": 24 },
+    { "type": "text", "text": "RED", "text_i18n": { "en": "NET", "de": "NETZ", "fr": "RÉSEAU", "it": "RETE", "pt": "REDE", "pl": "SIEĆ", "tr": "AĞ", "ru": "СЕТЬ" }, "box": { "x": 248, "y": 200, "width": 216, "height": 24 },
       "style": { "size": 16, "bold": true, "color": "#8a93a6", "align": "left" } },
     { "type": "sensor", "sensor": "network.download", "decimals": 1, "prefix": "↓ ",
       "box": { "x": 248, "y": 228, "width": 216, "height": 30 },

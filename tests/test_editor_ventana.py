@@ -326,7 +326,8 @@ def test_window_process_gets_token_through_the_bridge_not_the_url(monkeypatch):
     )
     assert ventana.run_window_from_stdin() == 0
     assert created["args"][0] == "Luzeira — Editor de temas"  # sin «language»: el de Windows
-    assert created["args"][1] == "http://127.0.0.1:5000/"
+    # Con el idioma en la query, para los textos de antes de hablar con la API (C-62).
+    assert created["args"][1] == "http://127.0.0.1:5000/?lang=es"
     assert created["kwargs"]["js_api"].token() == "secreto"
     start = dict(created["start"])
     # El icono de Luzeira en la barra de tareas, no el de pythonw.exe.
@@ -343,6 +344,15 @@ def test_window_process_takes_the_language_of_the_tray(monkeypatch):
     monkeypatch.setattr(sys, "stdin", io.StringIO(config))
     assert ventana.run_window_from_stdin() == 0
     assert created["args"][0] == "Luzeira — Theme editor"
+    assert created["args"][1] == "http://127.0.0.1:5000/?lang=en"
+
+
+def test_window_url_carries_only_a_language_we_have(monkeypatch):
+    created = _fake_webview(monkeypatch)
+    config = '{"url": "http://127.0.0.1:5000/", "token": "t", "language": "x&token=1"}\n'
+    monkeypatch.setattr(sys, "stdin", io.StringIO(config))
+    assert ventana.run_window_from_stdin() == 0
+    assert created["args"][1] == "http://127.0.0.1:5000/?lang=es"  # el de «Windows»
 
 
 def test_window_process_without_webview2_exits_with_its_own_code(monkeypatch):

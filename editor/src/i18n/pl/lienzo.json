@@ -1,0 +1,6 @@
+{
+  "lienzo.etiqueta": "Płótno: {ancho} na {alto} pikseli",
+  "lienzo.medida": "{ancho} × {alto} · powiększenie ×{zoom}",
+  "lienzo.vista_previa": "Podgląd ekranu",
+  "lienzo.preparando": "Przygotowywanie podglądu…"
+}

@@ -1,6 +1,8 @@
 {
   "pantallas.modelo_beta": "{model} (beta)",
+  "pantallas.modelo_rev_a": "Turing / UsbPCMonitor 3,5\"",
   "pantallas.modelo_xuanfang": "XuanFang 3,5\" (también «flagship»)",
+  "pantallas.modelo_kipye": "Kipye Qiye 3,5\"",
   "pantallas.modelo_rev_c": "Turing de 2,1\", 5\" u 8,8\" (revisión C)",
   "pantallas.en_uso": "La pantalla ({device}) está en uso por otro programa, como UsbPCMonitor. Ciérralo para que Luzeira pueda usarla.",
   "pantallas.confirmar_rev_a": "He encontrado una pantalla en {device}, pero no puedo asegurar qué modelo es. Confirma que es una Turing / UsbPCMonitor de 3,5\" (revisión A) para continuar, o elige otro modelo en «Pantalla».",

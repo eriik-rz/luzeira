@@ -1,0 +1,18 @@
+{
+  "tema.titulo": "Motyw",
+  "tema.pista": "Kliknij element na płótnie, żeby go edytować.",
+  "tema.datos": "Informacje",
+  "tema.nombre": "Nazwa",
+  "tema.nombre.ayuda": "Tak pojawia się na liście motywów.",
+  "tema.autor": "Autor (opcjonalnie)",
+  "tema.autor.ayuda": "Jeśli udostępniasz motyw: kto go zrobił. Może być pseudonim.",
+  "tema.pantalla": "Ekran",
+  "tema.orientacion": "Orientacja",
+  "tema.orientacion.ayuda": "Jak ustawiony jest twój ekran. Jeśli po obróceniu coś się nie mieści, zostanie przesunięte do środka.",
+  "tema.fondo": "Tło",
+  "tema.fondo.color": "Kolor tła",
+  "tema.fondo.color.ayuda": "Widać go tam, gdzie nie ma obrazu tła.",
+  "tema.fondo.imagen": "Obraz tła",
+  "tema.fondo.imagen.ayuda": "Wypełnia cały ekran; jeśli ma inny kształt, boki zostaną przycięte.",
+  "tema.fondo.solo_color": "Tylko kolor"
+}

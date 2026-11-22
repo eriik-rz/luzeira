@@ -477,7 +477,7 @@ textarea.input { height: auto; min-height: 60px; padding: 6px 8px; resize: verti
 .topbar > .btn, .topbar > .status-pill, .topbar > .brand { flex: none; }
 
 .topbar { container-type: inline-size; container-name: barra; }
-@container barra (max-width: 1360px) {
+@container barra (max-width: 1500px) {
   .topbar .brand-text { display: none; }
   .topbar .btn .btn-label { display: none; }
   .topbar .btn:has(.btn-label) { width: 32px; padding: 0; }
@@ -491,12 +491,12 @@ textarea.input { height: auto; min-height: 60px; padding: 6px 8px; resize: verti
   display: block; line-height: 18px;
 }
 /* «Aplicar a la pantalla» es la acción principal: conserva su texto hasta que de verdad
-   no cabe (la regla de 1360 px recoge los secundarios primero). */
-@container barra (max-width: 1360px) {
+   no cabe (la regla de 1500 px recoge los secundarios primero; hay idiomas largos, como el alemán). */
+@container barra (max-width: 1500px) {
   .topbar .btn.keep-label .btn-label { display: inline; }
   .topbar .btn.keep-label:has(.btn-label) { width: auto; padding: 0 12px; }
 }
-@container barra (max-width: 1120px) {
+@container barra (max-width: 1220px) {
   .topbar .btn.keep-label .btn-label { display: none; }
   .topbar .btn.keep-label:has(.btn-label) { width: 32px; padding: 0; }
 }

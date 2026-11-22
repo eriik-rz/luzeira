@@ -107,9 +107,25 @@ SolidCompression=yes
 TimeStampsInUTC=yes
 ; La licencia es GPL: no hay que «aceptarla» para usar el programa, así que no hay página
 ; de licencia. Va como LICENSE.txt en la carpeta del programa.
+; Idioma (C-62): el de la interfaz de Windows si es uno de los nueve, sin preguntar. Solo si
+; no lo es (p. ej. japonés) sale la lista, con el inglés marcado (el primero de [Languages]),
+; igual que la app, que cae al inglés. Instalando en silencio (/VERYSILENT, actualizaciones)
+; nunca pregunta: usa el de Windows o el inglés.
+ShowLanguageDialog=auto
+LanguageDetectionMethod=uilanguage
 
 [Languages]
+; Los mismos idiomas que la app (luzeira.idioma.NATIVE_NAMES), con las traducciones
+; oficiales que trae Inno Setup 6.7.4. Los nombres cortos son los códigos de la app.
+Name: "en"; MessagesFile: "compiler:Default.isl"
 Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"
+Name: "de"; MessagesFile: "compiler:Languages\German.isl"
+Name: "fr"; MessagesFile: "compiler:Languages\French.isl"
+Name: "it"; MessagesFile: "compiler:Languages\Italian.isl"
+Name: "pt"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
+Name: "pl"; MessagesFile: "compiler:Languages\Polish.isl"
+Name: "tr"; MessagesFile: "compiler:Languages\Turkish.isl"
+Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
 
 [CustomMessages]
 es.GrupoAccesos=Accesos directos:
@@ -120,6 +136,78 @@ es.AbrirAhora=Abrir Luzeira ahora
 es.Descripcion=Luzeira: tu pantalla USB del PC
 es.FaltaWebView2=Para el editor de temas hace falta «Microsoft Edge WebView2 Runtime» (gratuito, de Microsoft) y en este equipo no está.%n%nLa pantalla y el icono junto al reloj funcionan sin él.%n%n¿Abrir ahora la página oficial de descarga de Microsoft?
 es.BorrarDatos=¿Borrar también tus temas, tu configuración y los registros de Luzeira?%n%nSi vas a volver a instalar Luzeira, pulsa «No» para conservarlos.
+
+en.GrupoAccesos=Shortcuts:
+en.TareaEscritorio=Create a &desktop shortcut
+en.GrupoArranque=Startup:
+en.TareaAutoarranque=Start Luzeira with &Windows (the screen turns on by itself)
+en.AbrirAhora=Open Luzeira now
+en.Descripcion=Luzeira: your PC's USB screen
+en.FaltaWebView2=The theme editor needs "Microsoft Edge WebView2 Runtime" (free, from Microsoft), and it is not installed on this computer.%n%nThe screen and the icon next to the clock work without it.%n%nOpen Microsoft's official download page now?
+en.BorrarDatos=Also delete your Luzeira themes, settings and logs?%n%nIf you are going to install Luzeira again, click "No" to keep them.
+
+de.GrupoAccesos=Verknüpfungen:
+de.TareaEscritorio=Verknüpfung auf dem &Desktop erstellen
+de.GrupoArranque=Autostart:
+de.TareaAutoarranque=Luzeira mit &Windows starten (das Display schaltet sich von selbst ein)
+de.AbrirAhora=Luzeira jetzt öffnen
+de.Descripcion=Luzeira: das USB-Display für deinen PC
+de.FaltaWebView2=Für den Theme-Editor brauchst du „Microsoft Edge WebView2 Runtime“ (kostenlos, von Microsoft), und auf diesem Computer ist es nicht installiert.%n%nDas Display und das Symbol neben der Uhr funktionieren auch ohne.%n%nJetzt die offizielle Download-Seite von Microsoft öffnen?
+de.BorrarDatos=Auch deine Themes, Einstellungen und Protokolle von Luzeira löschen?%n%nWenn du Luzeira wieder installieren willst, klicke auf „Nein“, um sie zu behalten.
+
+fr.GrupoAccesos=Raccourcis :
+fr.TareaEscritorio=Créer un raccourci sur le &Bureau
+fr.GrupoArranque=Démarrage :
+fr.TareaAutoarranque=Lancer Luzeira au démarrage de &Windows (l’écran s’allume tout seul)
+fr.AbrirAhora=Ouvrir Luzeira maintenant
+fr.Descripcion=Luzeira : l’écran USB de votre PC
+fr.FaltaWebView2=L’éditeur de thèmes a besoin de « Microsoft Edge WebView2 Runtime » (gratuit, de Microsoft), qui n’est pas installé sur cet ordinateur.%n%nL’écran et l’icône près de l’horloge fonctionnent sans lui.%n%nOuvrir maintenant la page de téléchargement officielle de Microsoft ?
+fr.BorrarDatos=Supprimer aussi vos thèmes, vos paramètres et les journaux de Luzeira ?%n%nSi vous comptez réinstaller Luzeira, cliquez sur « Non » pour les conserver.
+
+it.GrupoAccesos=Collegamenti:
+it.TareaEscritorio=Crea un collegamento sul &desktop
+it.GrupoArranque=Avvio:
+it.TareaAutoarranque=Avvia Luzeira con &Windows (lo schermo si accende da solo)
+it.AbrirAhora=Apri Luzeira ora
+it.Descripcion=Luzeira: lo schermo USB del tuo PC
+it.FaltaWebView2=Per l'editor dei temi serve «Microsoft Edge WebView2 Runtime» (gratuito, di Microsoft), che non è installato su questo computer.%n%nLo schermo e l'icona accanto all'orologio funzionano anche senza.%n%nAprire ora la pagina ufficiale di download di Microsoft?
+it.BorrarDatos=Eliminare anche i tuoi temi, le impostazioni e i registri di Luzeira?%n%nSe pensi di reinstallare Luzeira, premi «No» per conservarli.
+
+pt.GrupoAccesos=Atalhos:
+pt.TareaEscritorio=Criar um atalho na área de &trabalho
+pt.GrupoArranque=Inicialização:
+pt.TareaAutoarranque=Iniciar a Luzeira com o &Windows (a tela liga sozinha)
+pt.AbrirAhora=Abrir a Luzeira agora
+pt.Descripcion=Luzeira: a tela USB do seu PC
+pt.FaltaWebView2=O editor de temas precisa do “Microsoft Edge WebView2 Runtime” (gratuito, da Microsoft), que não está instalado neste computador.%n%nA tela e o ícone ao lado do relógio funcionam sem ele.%n%nAbrir agora a página oficial de download da Microsoft?
+pt.BorrarDatos=Apagar também seus temas, suas configurações e os registros da Luzeira?%n%nSe você for instalar a Luzeira de novo, clique em “Não” para mantê-los.
+
+pl.GrupoAccesos=Skróty:
+pl.TareaEscritorio=Utwórz skrót na &pulpicie
+pl.GrupoArranque=Uruchamianie:
+pl.TareaAutoarranque=Uruchamiaj Luzeirę razem z systemem &Windows (ekran włączy się sam)
+pl.AbrirAhora=Otwórz Luzeirę teraz
+pl.Descripcion=Luzeira: ekran USB do Twojego komputera
+pl.FaltaWebView2=Edytor motywów potrzebuje środowiska „Microsoft Edge WebView2 Runtime” (bezpłatnego, od Microsoftu), którego nie ma na tym komputerze.%n%nEkran i ikona obok zegara działają bez niego.%n%nCzy otworzyć teraz oficjalną stronę pobierania Microsoftu?
+pl.BorrarDatos=Czy usunąć również Twoje motywy, ustawienia i dzienniki Luzeiry?%n%nJeśli zamierzasz ponownie zainstalować Luzeirę, kliknij „Nie”, aby je zachować.
+
+tr.GrupoAccesos=Kısayollar:
+tr.TareaEscritorio=&Masaüstünde kısayol oluştur
+tr.GrupoArranque=Başlangıç:
+tr.TareaAutoarranque=Luzeira'yı &Windows ile başlat (ekran kendiliğinden açılır)
+tr.AbrirAhora=Luzeira'yı şimdi aç
+tr.Descripcion=Luzeira: bilgisayarının USB ekranı
+tr.FaltaWebView2=Tema düzenleyicisi için “Microsoft Edge WebView2 Runtime” (Microsoft'tan, ücretsiz) gerekiyor ve bu bilgisayarda yüklü değil.%n%nEkran ve saatin yanındaki simge onsuz da çalışır.%n%nMicrosoft'un resmî indirme sayfası şimdi açılsın mı?
+tr.BorrarDatos=Temaların, ayarların ve Luzeira kayıtları da silinsin mi?%n%nLuzeira'yı yeniden kuracaksan, saklamak için “Hayır”a tıkla.
+
+ru.GrupoAccesos=Ярлыки:
+ru.TareaEscritorio=Создать ярлык на &рабочем столе
+ru.GrupoArranque=Автозапуск:
+ru.TareaAutoarranque=Запускать Luzeira вместе с &Windows (экран включается сам)
+ru.AbrirAhora=Открыть Luzeira сейчас
+ru.Descripcion=Luzeira: USB-экран для вашего ПК
+ru.FaltaWebView2=Для редактора тем нужен «Microsoft Edge WebView2 Runtime» (бесплатно, от Microsoft), а на этом компьютере его нет.%n%nЭкран и значок рядом с часами работают и без него.%n%nОткрыть официальную страницу загрузки Microsoft?
+ru.BorrarDatos=Удалить также ваши темы, настройки и журналы Luzeira?%n%nЕсли вы собираетесь снова установить Luzeira, нажмите «Нет», чтобы сохранить их.
 
 [Tasks]
 ; Escritorio desmarcado: Luzeira vive junto al reloj y arranca con Windows; el acceso del

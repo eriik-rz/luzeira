@@ -28,11 +28,11 @@
     {"type": "sensor", "sensor": "gpu.memory_usage", "box": {"x": 176, "y": 266, "width": 116, "height": 44}, "style": {"size": 34, "bold": true, "color": "#ffffff", "align": "left"}},
     {"type": "bar", "sensor": "gpu.memory_usage", "fill": "#ff8c00", "track": "#2a2f3a", "box": {"x": 176, "y": 320, "width": 116, "height": 8}},
 
-    {"type": "text", "text": "DISCO C:", "text_i18n": { "en": "DISK C:" }, "box": {"x": 28, "y": 362, "width": 70, "height": 18}, "style": {"size": 14, "bold": true, "color": "#8a93a6", "align": "left"}},
+    {"type": "text", "text": "DISCO C:", "text_i18n": { "en": "DISK C:", "de": "LW C:", "fr": "DISQUE C:", "it": "DISCO C:", "pt": "DISCO C:", "pl": "DYSK C:", "tr": "DİSK C:", "ru": "ДИСК C:" }, "box": {"x": 28, "y": 362, "width": 70, "height": 18}, "style": {"size": 14, "bold": true, "color": "#8a93a6", "align": "left"}},
     {"type": "sensor", "sensor": "disk.usage.c", "interval": 10, "box": {"x": 28, "y": 386, "width": 116, "height": 44}, "style": {"size": 34, "bold": true, "color": "#ffffff", "align": "left"}},
     {"type": "bar", "sensor": "disk.usage.c", "interval": 10, "fill": "#ff8c00", "track": "#2a2f3a", "box": {"x": 28, "y": 440, "width": 116, "height": 8}},
 
-    {"type": "text", "text": "RED", "text_i18n": { "en": "NET" }, "box": {"x": 176, "y": 362, "width": 70, "height": 18}, "style": {"size": 14, "bold": true, "color": "#8a93a6", "align": "left"}},
+    {"type": "text", "text": "RED", "text_i18n": { "en": "NET", "de": "NETZ", "fr": "RÉSEAU", "it": "RETE", "pt": "REDE", "pl": "SIEĆ", "tr": "AĞ", "ru": "СЕТЬ" }, "box": {"x": 176, "y": 362, "width": 70, "height": 18}, "style": {"size": 14, "bold": true, "color": "#8a93a6", "align": "left"}},
     {"type": "sensor", "sensor": "network.download", "decimals": 1, "prefix": "↓ ", "box": {"x": 176, "y": 388, "width": 116, "height": 30}, "style": {"size": 16, "bold": true, "color": "#ffffff", "align": "left"}},
     {"type": "sensor", "sensor": "network.upload", "decimals": 1, "prefix": "↑ ", "box": {"x": 176, "y": 420, "width": 116, "height": 30}, "style": {"size": 16, "color": "#c8ccd6", "align": "left"}}
   ]

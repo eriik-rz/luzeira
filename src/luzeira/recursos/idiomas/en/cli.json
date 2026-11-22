@@ -11,7 +11,7 @@
   "cli.ayuda_editor": "opens the theme editor without the tray icon",
   "cli.ayuda_desarrollo": "doesn't open a window: prints the address for “npm run dev” (Vite, port 5173)",
   "cli.detectar_ninguna": "I can't find any supported display connected.",
-  "cli.detectar_rev_a_o_b": "a Turing / UsbPCMonitor 3,5\" display (revision A) or a XuanFang 3,5\" (beta): it has the USB of both and no known serial number. Nothing will be sent to it without your confirmation.",
+  "cli.detectar_rev_a_o_b": "a Turing / UsbPCMonitor 3.5\" display (revision A) or a XuanFang 3.5\" (beta): it has the USB of both and no known serial number. Nothing will be sent to it without your confirmation.",
   "cli.detectar_no_compatible": "{model}, not supported yet. Nothing will be sent to it.",
   "cli.detectar_segura": "{model}. Recognized by its serial number.",
   "cli.detectar_segura_beta": "{model} (beta: not tested with a real display yet). Recognized by its serial number.",

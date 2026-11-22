@@ -1,0 +1,19 @@
+{
+  "sistema.acceso_fallo": "Не удалось создать ярлык.",
+  "sistema.actualizar_firma_no_valida": "Подпись новой версии недействительна.",
+  "sistema.actualizar_info_no_valida": "Сведения о новой версии недействительны.",
+  "sistema.actualizar_fuera_de_github": "Загрузка попыталась перейти на сайт, который не является GitHub.",
+  "sistema.actualizar_sin_versiones": "Версий с уведомлением об обновлении пока нет.",
+  "sistema.actualizar_error_github": "GitHub ответил ошибкой ({code}).",
+  "sistema.actualizar_sin_conexion": "Не удалось связаться с GitHub. Есть ли интернет?",
+  "sistema.actualizar_respuesta_grande": "Ответ GitHub больше ожидаемого.",
+  "sistema.actualizar_descarga_grande": "Загружаемый файл больше ожидаемого.",
+  "sistema.actualizar_no_puede": "Эта копия Luzeira не может проверять обновления.",
+  "sistema.actualizar_instalador_distinto": "Скачанный установщик не совпадает с подписанным. Открывать его не буду.",
+  "sistema.ventana_titulo": "Luzeira — Редактор тем",
+  "sistema.ventana_sin_guardar": "Есть несохранённые изменения ({reason}). Всё равно закрыть?",
+  "sistema.ventana_pendiente_errores": "есть ошибки, отмеченные красным",
+  "sistema.ventana_pendiente_incluido": "это изменения встроенной темы; чтобы их сохранить, используйте «Сохранить как»",
+  "sistema.ventana_pendiente_fallo": "сохранить не удалось",
+  "sistema.ventana_pendiente_desconocido": "не удалось проверить, осталось ли что-то несохранённым"
+}

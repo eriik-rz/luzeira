@@ -1,0 +1,19 @@
+{
+  "sistema.acceso_fallo": "Nie udało się utworzyć skrótu.",
+  "sistema.actualizar_firma_no_valida": "Podpis nowej wersji jest nieprawidłowy.",
+  "sistema.actualizar_info_no_valida": "Informacje o nowej wersji są nieprawidłowe.",
+  "sistema.actualizar_fuera_de_github": "Pobieranie próbowało przejść na stronę spoza GitHuba.",
+  "sistema.actualizar_sin_versiones": "Nie ma jeszcze wersji z powiadomieniem o aktualizacji.",
+  "sistema.actualizar_error_github": "GitHub odpowiedział błędem ({code}).",
+  "sistema.actualizar_sin_conexion": "Nie udało się połączyć z GitHubem. Czy masz internet?",
+  "sistema.actualizar_respuesta_grande": "Odpowiedź GitHuba jest większa, niż się spodziewano.",
+  "sistema.actualizar_descarga_grande": "Pobierany plik jest większy, niż się spodziewano.",
+  "sistema.actualizar_no_puede": "Ta kopia Luzeiry nie może sprawdzać aktualizacji.",
+  "sistema.actualizar_instalador_distinto": "Pobrany instalator nie zgadza się z podpisanym. Nie otworzę go.",
+  "sistema.ventana_titulo": "Luzeira — Edytor motywów",
+  "sistema.ventana_sin_guardar": "Są niezapisane zmiany ({reason}). Zamknąć mimo to?",
+  "sistema.ventana_pendiente_errores": "są błędy zaznaczone na czerwono",
+  "sistema.ventana_pendiente_incluido": "to zmiany we wbudowanym motywie; użyj „Zapisz jako”, żeby je zachować",
+  "sistema.ventana_pendiente_fallo": "nie udało się zapisać",
+  "sistema.ventana_pendiente_desconocido": "nie udało się sprawdzić, czy coś zostało do zapisania"
+}

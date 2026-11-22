@@ -1,0 +1,17 @@
+{
+  "capas.titulo": "Ebenen",
+  "capas.lleno": "Ein Design hat höchstens {max} Elemente",
+  "capas.anadir": "Hinzufügen",
+  "capas.anadir.ayuda": "Ein neues Element zum Display hinzufügen",
+  "capas.tipo": "Elementtyp",
+  "capas.pista": "Was oben steht, liegt vorn. Zum Umsortieren ziehen.",
+  "capas.vacia": "Das Display ist leer.",
+  "capas.vacia.pista": "Klicke auf „Hinzufügen“, um das erste Element einzufügen.",
+  "capas.con_errores": "(hat Fehler)",
+  "capas.alt": "Alt + ↑/↓: Ebene hoch oder runter",
+  "capas.delante": "Nach vorne",
+  "capas.delante.ayuda": "Nach vorne (in der Liste nach oben)",
+  "capas.atras": "Nach hinten",
+  "capas.atras.ayuda": "Nach hinten (in der Liste nach unten)",
+  "capas.cuenta": "{n} von {max} Elementen"
+}

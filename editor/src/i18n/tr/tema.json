@@ -1,0 +1,18 @@
+{
+  "tema.titulo": "Tema",
+  "tema.pista": "Düzenlemek için tuvaldeki bir öğeye tıkla.",
+  "tema.datos": "Bilgiler",
+  "tema.nombre": "Ad",
+  "tema.nombre.ayuda": "Tema listesinde böyle görünür.",
+  "tema.autor": "Yazar (isteğe bağlı)",
+  "tema.autor.ayuda": "Temayı paylaşırsan, onu kimin yaptığı. Bir takma ad da olur.",
+  "tema.pantalla": "Ekran",
+  "tema.orientacion": "Yönlendirme",
+  "tema.orientacion.ayuda": "Ekranının nasıl durduğu. Döndürünce bir şey sığmazsa içeri yerleştirilir.",
+  "tema.fondo": "Arka plan",
+  "tema.fondo.color": "Arka plan rengi",
+  "tema.fondo.color.ayuda": "Arka plan resmi olmayan yerlerde görünür.",
+  "tema.fondo.imagen": "Arka plan resmi",
+  "tema.fondo.imagen.ayuda": "Tüm ekranı doldurur; şekli farklıysa kenarlardan kırpılır.",
+  "tema.fondo.solo_color": "Yalnızca renk"
+}

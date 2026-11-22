@@ -1,0 +1,6 @@
+{
+  "lienzo.etiqueta": "Холст: {ancho} × {alto} пикс.",
+  "lienzo.medida": "{ancho} × {alto} · масштаб ×{zoom}",
+  "lienzo.vista_previa": "Предпросмотр экрана",
+  "lienzo.preparando": "Подготовка предпросмотра…"
+}

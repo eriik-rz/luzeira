@@ -1,0 +1,19 @@
+{
+  "sistema.acceso_fallo": "Je n’ai pas pu créer le raccourci.",
+  "sistema.actualizar_firma_no_valida": "La signature de la nouvelle version n’est pas valide.",
+  "sistema.actualizar_info_no_valida": "Les informations sur la nouvelle version ne sont pas valides.",
+  "sistema.actualizar_fuera_de_github": "Le téléchargement a tenté d’aller sur un site autre que GitHub.",
+  "sistema.actualizar_sin_versiones": "Il n’y a pas encore de versions avec avis de mise à jour.",
+  "sistema.actualizar_error_github": "GitHub a répondu par une erreur ({code}).",
+  "sistema.actualizar_sin_conexion": "Je n’ai pas pu me connecter à GitHub. Êtes-vous connecté à Internet ?",
+  "sistema.actualizar_respuesta_grande": "La réponse de GitHub est plus volumineuse que prévu.",
+  "sistema.actualizar_descarga_grande": "Le téléchargement est plus volumineux que prévu.",
+  "sistema.actualizar_no_puede": "Cette copie de Luzeira ne peut pas vérifier les mises à jour.",
+  "sistema.actualizar_instalador_distinto": "Le programme d’installation téléchargé ne correspond pas à celui qui est signé. Je ne l’ouvre pas.",
+  "sistema.ventana_titulo": "Luzeira — Éditeur de thèmes",
+  "sistema.ventana_sin_guardar": "Des modifications n’ont pas été enregistrées ({reason}). Fermer quand même ?",
+  "sistema.ventana_pendiente_errores": "des erreurs sont signalées en rouge",
+  "sistema.ventana_pendiente_incluido": "ce sont des modifications d’un thème intégré ; utilisez « Enregistrer sous » pour les garder",
+  "sistema.ventana_pendiente_fallo": "l’enregistrement a échoué",
+  "sistema.ventana_pendiente_desconocido": "je n’ai pas pu vérifier s’il reste quelque chose à enregistrer"
+}

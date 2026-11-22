@@ -20,7 +20,7 @@ from enum import IntEnum
 
 from PIL import Image
 
-from luzeira.idioma import t
+from luzeira.idioma import Text
 from luzeira.pantallas.comun import (
     BAUDRATE,
     WRITE_TIMEOUT,
@@ -216,7 +216,7 @@ class TuringRevA:
                     device, BAUDRATE, timeout=1, write_timeout=WRITE_TIMEOUT, rtscts=True
                 )
 
-        last_error = DisplayError(t("pantallas.no_encuentro"))
+        last_error = DisplayError(Text("pantallas.no_encuentro"))
         for attempt in range(max(1, retries)):
             if port is not None:
                 device, confirmed = port, True
@@ -225,7 +225,7 @@ class TuringRevA:
                 device = match.device if match else None
                 confirmed = bool(match and match.by_serial)
             if device is None:
-                last_error = DisplayError(t("pantallas.no_encuentro"))
+                last_error = DisplayError(Text("pantallas.no_encuentro"))
             elif not confirmed:
                 raise ConfirmationNeeded(device)
             else:
@@ -270,7 +270,7 @@ class TuringRevA:
         try:
             self._transport.write(data)
         except OSError as exc:
-            raise DisplayError(t("pantallas.conexion_perdida")) from exc
+            raise DisplayError(Text("pantallas.conexion_perdida")) from exc
 
     def _send(self, command: int, x: int = 0, y: int = 0, ex: int = 0, ey: int = 0) -> None:
         self._write(pack_command(command, x, y, ex, ey))

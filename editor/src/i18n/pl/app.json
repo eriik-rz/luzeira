@@ -1,0 +1,10 @@
+{
+  "app.conectando": "Łączenie z Luzeirą…",
+  "app.no_abre": "Nie można otworzyć edytora",
+  "app.sin_temas": "Brak motywów",
+  "app.sin_temas.texto": "Luzeira nie znalazła żadnego motywu. Ponowna instalacja Luzeiry powinna to naprawić.",
+  "app.sin_token": "Nie udało się połączyć z Luzeirą. Otwórz edytor z ikony Luzeiry w zasobniku.",
+  "app.sin_conexion": "Utracono połączenie z Luzeirą. Czy nadal jest otwarta?",
+  "app.respuesta_rara": "Luzeira odpowiedziała czymś nieoczekiwanym. Zamknij edytor i otwórz go ponownie.",
+  "app.fallo": "Coś poszło nie tak. Spróbuj ponownie."
+}

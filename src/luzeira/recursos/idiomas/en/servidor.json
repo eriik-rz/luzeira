@@ -39,7 +39,7 @@
   "servidor.entre_caracteres": "between 1 and {max} characters",
   "servidor.copia_grande": "The theme is too big to copy.",
   "servidor.no_borrar_incluido": "Built-in themes can't be deleted.",
-  "servidor.no_borrar_activo": "This is the theme on the screen. Apply another one before deleting it.",
+  "servidor.no_borrar_activo": "This is the theme on the display. Apply another one before deleting it.",
   "servidor.no_borrar_en_uso": "It can't be deleted right now: a file in the theme is in use.",
   "servidor.nombre_fichero_no_valido": "The file name is not valid.",
   "servidor.solo_tipos": "You can only upload PNG, JPEG or GIF images and TTF or OTF fonts.",

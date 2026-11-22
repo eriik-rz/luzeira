@@ -34,7 +34,7 @@ import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from luzeira import idioma
 from luzeira.idioma import t
@@ -94,6 +94,14 @@ def is_local_editor_url(url: str) -> bool:
         and port is not None
         and parts.netloc == f"127.0.0.1:{port}"  # nada de mayúsculas raras ni ceros
     )
+
+
+def with_language(url: str, code: str) -> str:
+    """La dirección del editor con ``?lang=<código>``: así la página sale en el idioma de
+    Luzeira desde el primer momento («Conectando…», un fallo al conectar), antes de poder
+    preguntarlo a la API (C-62). El servidor no mira la query de los ficheros estáticos."""
+    parts = urlsplit(url)
+    return urlunsplit(parts._replace(query=urlencode({"lang": code})))
 
 
 class EditorWindow:
@@ -371,6 +379,7 @@ def run_window_from_stdin() -> int:
         return EXIT_BAD_CONFIG
     # El de la bandeja; sin él (una bandeja antigua), el de Windows.
     idioma.set_language(language if isinstance(language, str) else None)
+    url = with_language(url, idioma.current())  # un código que tenemos, no lo que llegó
     if not _webview2_ready(webview):
         log.error("Falta Microsoft Edge WebView2 Runtime: no se abre el editor.")
         return EXIT_NO_WEBVIEW2

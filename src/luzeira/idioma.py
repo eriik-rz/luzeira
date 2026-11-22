@@ -106,6 +106,89 @@ def t(key: str, /, **variables: object) -> str:
         return text
 
 
+class Text(str):
+    """Un texto ya traducido que **recuerda su clave y sus variables**.
+
+    Concepto: se usa como un ``str`` normal (es una subclase: vale en ``f""``, en ``in``,
+    en ``==``…) con el texto en el idioma de cuando se creó. Pero además guarda de dónde
+    salió, y eso sirve para dos cosas al cambiar de idioma:
+
+    - :func:`again` lo vuelve a escribir en el idioma de **ahora**;
+    - :func:`ident` dice «qué mensaje es» sin depender del idioma: dos ``Text`` de la misma
+      clave y variables son el mismo aviso aunque uno esté en español y otro en inglés.
+
+    Lo usan los estados del servicio y los errores de la pantalla (C-62).
+    """
+
+    key: str
+    variables: dict[str, object]
+
+    def __new__(cls, key: str, /, **variables: object) -> Text:
+        obj = super().__new__(cls, t(key, **variables))
+        obj.key = key
+        obj.variables = variables
+        return obj
+
+    def again(self) -> str:
+        return t(self.key, **{name: again(value) for name, value in self.variables.items()})
+
+    def ident(self) -> object:
+        return (self.key, tuple(sorted((n, ident(v)) for n, v in self.variables.items())))
+
+
+class Joined(Text):
+    """Varios textos seguidos, separados por un espacio (p. ej. «… Lo sigo intentando.»)."""
+
+    parts: tuple[object, ...]
+
+    def __new__(cls, *parts: object) -> Joined:
+        obj = str.__new__(cls, " ".join(str(p) for p in parts))
+        obj.key, obj.variables, obj.parts = "", {}, parts
+        return obj
+
+    def again(self) -> str:
+        return " ".join(str(again(p)) for p in self.parts)
+
+    def ident(self) -> object:
+        return ("", tuple(ident(p) for p in self.parts))
+
+
+def _text_in(value: object) -> Text | None:
+    """El ``Text`` de un error creado con uno (``DisplayError(Text(...))``), si lo hay."""
+    if isinstance(value, BaseException) and value.args and isinstance(value.args[0], Text):
+        return value.args[0]
+    return None
+
+
+def again(value: object) -> object:
+    """``value`` escrito otra vez en el idioma activo si es un ``Text`` (o un error con
+    uno); cualquier otra cosa, tal cual."""
+    if isinstance(value, Text):
+        return value.again()
+    inner = _text_in(value)
+    return inner.again() if inner is not None else value
+
+
+def ident(value: object) -> object:
+    """Qué mensaje es, sin depender del idioma. Un error sin ``Text`` cuenta por su tipo:
+    su texto ya viene traducido y cambiaría con el idioma."""
+    if isinstance(value, Text):
+        return value.ident()
+    inner = _text_in(value)
+    if inner is not None:
+        return inner.ident()
+    if isinstance(value, BaseException):
+        return type(value).__name__
+    return value
+
+
+def message_of(exc: BaseException) -> str:
+    """El mensaje de un error para el usuario: su ``Text`` si se creó con uno (así se puede
+    reescribir al cambiar de idioma) y si no, ``str(exc)``."""
+    inner = _text_in(exc)
+    return inner if inner is not None else str(exc)
+
+
 def current() -> str:
     return _active
 

@@ -1,0 +1,17 @@
+{
+  "capas.titulo": "Warstwy",
+  "capas.lleno": "Maksymalna liczba elementów w motywie: {max}",
+  "capas.anadir": "Dodaj",
+  "capas.anadir.ayuda": "Dodaj nowy element na ekran",
+  "capas.tipo": "Typ elementu",
+  "capas.pista": "To, co wyżej, widać na wierzchu. Przeciągnij, żeby zmienić kolejność.",
+  "capas.vacia": "Ekran jest pusty.",
+  "capas.vacia.pista": "Kliknij „Dodaj”, żeby wstawić pierwszy element.",
+  "capas.con_errores": "(ma błędy)",
+  "capas.alt": "Alt + ↑/↓: warstwa w górę lub w dół",
+  "capas.delante": "Przesuń do przodu",
+  "capas.delante.ayuda": "Przesuń do przodu (w górę listy)",
+  "capas.atras": "Przesuń do tyłu",
+  "capas.atras.ayuda": "Przesuń do tyłu (w dół listy)",
+  "capas.cuenta": "Elementy: {n} z {max}"
+}

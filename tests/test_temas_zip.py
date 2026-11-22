@@ -257,7 +257,7 @@ MALICIOUS_ZIPS: list[tuple[str, Builder, str]] = [
         for ext in ("svg", "py", "exe", "dll", "bat", "ps1", "lnk", "html", "js", "json", "pyc")
     ],
     # Sin extensión.
-    ("sin-extension", entries_with("LEEME"), "tipo de fichero no permitido"),
+    ("sin-extension", entries_with("LEEME"), "» no tiene extensión"),
     # Doble extensión engañosa (el patrón solo admite un punto).
     ("doble-extension", entries_with("foto.exe.png"), "nombre no válido"),
     # Nombre con espacio final (Windows lo recorta y cambiaría de fichero).

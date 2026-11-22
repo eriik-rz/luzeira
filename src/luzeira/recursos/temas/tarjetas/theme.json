@@ -8,9 +8,9 @@
     {"type": "clock", "format": "weekday", "box": {"x": 30, "y": 30, "width": 126, "height": 22}, "style": {"size": 15, "bold": true, "color": "#5c4f68", "align": "left"}},
     {"type": "clock", "format": "HH:MM", "box": {"x": 28, "y": 54, "width": 136, "height": 56}, "style": {"size": 42, "bold": true, "color": "#2b2533", "align": "left"}},
     {"type": "clock", "format": "date-short", "box": {"x": 30, "y": 110, "width": 126, "height": 22}, "style": {"size": 15, "color": "#5c4f68", "align": "left"}},
-    {"type": "text", "text": "ENCENDIDO", "text_i18n": { "en": "UPTIME" }, "box": {"x": 30, "y": 170, "width": 126, "height": 18}, "style": {"size": 14, "bold": true, "color": "#5c4f68", "align": "left"}},
+    {"type": "text", "text": "ENCENDIDO", "text_i18n": { "en": "UPTIME", "de": "LAUFZEIT", "fr": "ALLUMÉ", "it": "ACCESO", "pt": "LIGADO", "pl": "CZAS PRACY", "tr": "ÇALIŞMA", "ru": "В РАБОТЕ" }, "box": {"x": 30, "y": 170, "width": 126, "height": 18}, "style": {"size": 14, "bold": true, "color": "#5c4f68", "align": "left"}},
     {"type": "sensor", "sensor": "system.uptime", "decimals": 1, "interval": 60, "box": {"x": 30, "y": 188, "width": 126, "height": 28}, "style": {"size": 22, "bold": true, "color": "#2b2533", "align": "left"}},
-    {"type": "text", "text": "RED", "text_i18n": { "en": "NET" }, "box": {"x": 30, "y": 230, "width": 126, "height": 18}, "style": {"size": 14, "bold": true, "color": "#5c4f68", "align": "left"}},
+    {"type": "text", "text": "RED", "text_i18n": { "en": "NET", "de": "NETZ", "fr": "RÉSEAU", "it": "RETE", "pt": "REDE", "pl": "SIEĆ", "tr": "AĞ", "ru": "СЕТЬ" }, "box": {"x": 30, "y": 230, "width": 126, "height": 18}, "style": {"size": 14, "bold": true, "color": "#5c4f68", "align": "left"}},
     {"type": "sensor", "sensor": "network.download", "decimals": 1, "prefix": "↓ ", "box": {"x": 30, "y": 248, "width": 126, "height": 22}, "style": {"size": 15, "bold": true, "color": "#2b2533", "align": "left"}},
     {"type": "sensor", "sensor": "network.upload", "decimals": 1, "prefix": "↑ ", "box": {"x": 30, "y": 270, "width": 126, "height": 22}, "style": {"size": 15, "color": "#5c4f68", "align": "left"}},
 

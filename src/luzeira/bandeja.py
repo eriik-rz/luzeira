@@ -391,7 +391,8 @@ class TrayApp:
         # acceso del escritorio y con el inicio con Windows en Configuración (C-52).
         self._store = paquete.is_packaged() if store is None else store
         self._pending_calls: queue.SimpleQueue[Callable[[], None]] = queue.SimpleQueue()
-        self._last_notified: tuple[Status, str] | None = None
+        # (estado, idioma.ident(mensaje)) del último estado: sin depender del idioma.
+        self._last_notified: tuple[Status, object] | None = None
         self._importing = False
         self._startup_notice: str | None = None
         # Pantalla elegida a mano que se está probando: se guarda solo si funciona.
@@ -513,13 +514,21 @@ class TrayApp:
         self._post(lambda: self._show_status(status, message))
 
     def _show_status(self, status: Status, message: str) -> None:
+        """``message`` suele ser un :class:`~luzeira.idioma.Text`: se enseña en el idioma de
+        ahora y se compara por su clave, así que el mismo aviso en otro idioma (tras cambiar
+        de idioma) no vuelve a salir."""
+        text = str(idioma.again(message))
         self.icon.icon = make_icon(_COLORS.get(status, _RED))
-        self.icon.title = clip(f"Luzeira — {message}", _MAX_TIP)
+        self._show_tooltip(text)
         self._settle_trial(status)
         self.icon.update_menu()
-        if status in _NOTIFY and (status, message) != self._last_notified:
-            self._notify(message)
-        self._last_notified = (status, message)
+        seen = (status, idioma.ident(message))
+        if status in _NOTIFY and seen != self._last_notified:
+            self._notify(text)
+        self._last_notified = seen
+
+    def _show_tooltip(self, message: str) -> None:
+        self.icon.title = clip(f"Luzeira — {message}", _MAX_TIP)
 
     def _settle_trial(self, status: Status) -> None:
         """¿Ha funcionado la pantalla elegida a mano? Si se ve imagen, se recuerda; si
@@ -647,6 +656,8 @@ class TrayApp:
         self._change(reload=True, language=code)
         self.icon.menu = self._menu()
         self.icon.update_menu()
+        # El estado de ahora, ya en el idioma nuevo (el servicio lo reescribe al pedirlo).
+        self._show_tooltip(self.service.message)
         # La ventana del editor va en otro proceso: su título y su «¿cerrar sin guardar?».
         self.editor.window.set_language(idioma.current())
 

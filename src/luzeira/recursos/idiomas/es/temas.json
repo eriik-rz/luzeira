@@ -54,7 +54,7 @@
   "temas.zip.cifrado": "está cifrado",
   "temas.zip.compresion": "usa una compresión no admitida",
   "temas.zip.tipo": "tiene un tipo de fichero no permitido (.{ext})",
-  "temas.zip.sin_extension": "sin extensión",
+  "temas.zip.sin_extension": "no tiene extensión",
   "temas.zip.nombre": "tiene un nombre no válido (solo letras sin tilde, números, - y _)",
   "temas.zip.fichero_grande": "«{name}» ocupa más de {max} MB.",
   "temas.zip.total_grande": "El tema descomprimido ocupa más de {max} MB.",

@@ -1,0 +1,17 @@
+{
+  "capas.titulo": "Camadas",
+  "capas.lleno": "Um tema aceita no máximo {max} elementos",
+  "capas.anadir": "Adicionar",
+  "capas.anadir.ayuda": "Adicionar um elemento novo à tela",
+  "capas.tipo": "Tipo de elemento",
+  "capas.pista": "O que está em cima aparece na frente. Arraste para mudar a ordem.",
+  "capas.vacia": "A tela está vazia.",
+  "capas.vacia.pista": "Clique em “Adicionar” para colocar o primeiro elemento.",
+  "capas.con_errores": "(tem erros)",
+  "capas.alt": "Alt + ↑/↓ para subir ou descer a camada",
+  "capas.delante": "Trazer para a frente",
+  "capas.delante.ayuda": "Trazer para a frente (subir na lista)",
+  "capas.atras": "Enviar para trás",
+  "capas.atras.ayuda": "Enviar para trás (descer na lista)",
+  "capas.cuenta": "{n} de {max} elementos"
+}

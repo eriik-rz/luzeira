@@ -10,7 +10,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable, Iterable
 
-from luzeira.idioma import t
+from luzeira.idioma import Text
 from luzeira.pantallas.comun import (
     ChosenDisplayMissing,
     ConfirmationNeeded,
@@ -78,11 +78,11 @@ def open_auto(
         raise ConfirmationNeeded(port.device)
     port = first(KIPYE, sure=False)
     if port is not None:
-        raise ModelToConfirm(DisplayChoice.for_port(KIPYE, port), KIPYE.label)
+        raise ModelToConfirm(DisplayChoice.for_port(KIPYE, port), KIPYE.label_text)
     port = next((p for p, i in found if i.model is REV_C), None)
     if port is not None:
-        raise UnsupportedModel(port.device, REV_C.label)
-    raise DisplayError(t(MSG_NOT_FOUND))
+        raise UnsupportedModel(port.device, REV_C.label_text)
+    raise DisplayError(Text(MSG_NOT_FOUND))
 
 
 def open_chosen(
@@ -114,7 +114,7 @@ def open_chosen(
         answer = display.hello_answer
         if answer and not (len(answer) == 6 and len(set(answer)) == 1):
             display.close()
-            raise WrongModel(port.device, REV_A.label)
+            raise WrongModel(port.device, REV_A.label_text)
         # Sin respuesta solo cuenta como rev A con su USB (el Turing oficial no contesta):
         # en otro puerto, el silencio no demuestra nada.
         display.verified = bool(answer) or port.usb_id == VID_PID_CH552

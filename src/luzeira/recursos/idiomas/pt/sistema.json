@@ -1,0 +1,19 @@
+{
+  "sistema.acceso_fallo": "Não consegui criar o atalho.",
+  "sistema.actualizar_firma_no_valida": "A assinatura da versão nova não é válida.",
+  "sistema.actualizar_info_no_valida": "As informações da versão nova não são válidas.",
+  "sistema.actualizar_fuera_de_github": "O download tentou ir para um site que não é o GitHub.",
+  "sistema.actualizar_sin_versiones": "Ainda não há versões com aviso de atualização.",
+  "sistema.actualizar_error_github": "O GitHub respondeu com um erro ({code}).",
+  "sistema.actualizar_sin_conexion": "Não consegui conectar ao GitHub. Tem internet?",
+  "sistema.actualizar_respuesta_grande": "A resposta do GitHub é maior do que o esperado.",
+  "sistema.actualizar_descarga_grande": "O download é maior do que o esperado.",
+  "sistema.actualizar_no_puede": "Esta cópia da Luzeira não pode verificar atualizações.",
+  "sistema.actualizar_instalador_distinto": "O instalador baixado não corresponde ao assinado. Não vou abri-lo.",
+  "sistema.ventana_titulo": "Luzeira — Editor de temas",
+  "sistema.ventana_sin_guardar": "Há alterações não salvas ({reason}). Fechar mesmo assim?",
+  "sistema.ventana_pendiente_errores": "há erros marcados em vermelho",
+  "sistema.ventana_pendiente_incluido": "são alterações em um tema incluído; use “Salvar como” para mantê-las",
+  "sistema.ventana_pendiente_fallo": "não foi possível salvar",
+  "sistema.ventana_pendiente_desconocido": "não consegui verificar se falta salvar algo"
+}

@@ -20,7 +20,6 @@ Reglas:
 
 from __future__ import annotations
 
-from luzeira.idioma import t
 from luzeira.sensores import nvidia
 from luzeira.sensores.base import Reading, SensorInfo
 from luzeira.sensores.nvidia import NvidiaSource
@@ -52,7 +51,11 @@ class GpuSource:
 
         def missing(name: str) -> bool:
             r = readings.get(self._id(name))
-            return r is not None and r.value is None and r.reason == t(nvidia.NOT_SUPPORTED)
+            # Por la clave del motivo, no por su texto: el texto depende del idioma (y
+            # podría cambiar entre la lectura y esta comparación) y otro motivo podría
+            # traducirse igual en algún idioma.
+            key = getattr(r.reason, "key", None) if r is not None else None
+            return r is not None and r.value is None and key == nvidia.NOT_SUPPORTED
 
         wanted = [self._id(n) for n in _SINGLE if missing(n)]
         memory_missing = missing("memory_used") and missing("memory_total")

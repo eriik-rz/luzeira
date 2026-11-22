@@ -1,0 +1,18 @@
+{
+  "tema.titulo": "Design",
+  "tema.pista": "Klicke auf ein Element der Arbeitsfläche, um es zu bearbeiten.",
+  "tema.datos": "Angaben",
+  "tema.nombre": "Name",
+  "tema.nombre.ayuda": "So erscheint es in der Designliste.",
+  "tema.autor": "Autor (optional)",
+  "tema.autor.ayuda": "Wer es gemacht hat, falls du das Design teilst. Ein Spitzname reicht.",
+  "tema.pantalla": "Display",
+  "tema.orientacion": "Ausrichtung",
+  "tema.orientacion.ayuda": "Wie dein Display steht. Passt beim Drehen etwas nicht, wird es nach innen verschoben.",
+  "tema.fondo": "Hintergrund",
+  "tema.fondo.color": "Hintergrundfarbe",
+  "tema.fondo.color.ayuda": "Sichtbar, wo kein Hintergrundbild ist.",
+  "tema.fondo.imagen": "Hintergrundbild",
+  "tema.fondo.imagen.ayuda": "Füllt das ganze Display; hat es eine andere Form, wird es seitlich beschnitten.",
+  "tema.fondo.solo_color": "Nur Farbe"
+}

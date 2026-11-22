@@ -127,7 +127,13 @@ export function Editor({ api, info: initialInfo, initialThemes, initialName }: P
   }, [])
 
   // --- Validación -----------------------------------------------------------------
-  const clientIssues = useMemo(() => (current ? validateTheme(theme) : []), [theme, current])
+  // Los mensajes salen en el idioma activo: al cambiar de idioma, los errores en rojo
+  // tienen que cambiar con él (C-62). `validateTheme` no recibe el idioma (usa `t`), así
+  // que se nombra aquí para que el cálculo dependa de él.
+  const clientIssues = useMemo(() => {
+    void lang
+    return current ? validateTheme(theme) : []
+  }, [theme, current, lang])
   // Mientras el cliente ve errores, mandan esos; si no, los últimos del servidor.
   const issues = clientIssues.length ? clientIssues : dedupe([...serverIssues, ...previewIssues])
   const errorIds = useMemo(() => {

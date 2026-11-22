@@ -1,0 +1,6 @@
+{
+  "campos.escribe_numero": "Введите число.",
+  "campos.como_mucho": "Не больше {max}.",
+  "campos.como_poco": "Не меньше {min}.",
+  "campos.paleta": "{campo}: выбрать на палитре"
+}

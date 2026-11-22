@@ -1,6 +1,6 @@
 {
   "ajustes.idioma.titulo": "Idioma",
-  "ajustes.idioma.automatico": "Automático (el del sistema)",
+  "ajustes.idioma.automatico": "Automático (el de Windows)",
   "ajustes.idioma.ayuda": "El de la app, el del editor y el de la pantalla (fecha y etiquetas de los temas incluidos).",
   "ajustes.titulo": "Ajustes",
   "ajustes.sin_bandeja": "Los ajustes solo están cuando abres el editor desde el icono de Luzeira (junto al reloj).",

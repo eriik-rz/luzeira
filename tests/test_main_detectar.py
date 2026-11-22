@@ -79,3 +79,20 @@ def test_the_command_line_speaks_the_language_chosen_in_settings(
     save_config(AppConfig(language="en"), folder / "config.json")
     assert cli.main(["detectar"]) == 1  # sin pantallas: el comportamiento no cambia
     assert capsys.readouterr().out.strip() == "I can't find any supported display connected."
+
+
+def test_the_command_line_reads_the_language_without_touching_a_damaged_config(
+    tmp_path, monkeypatch
+):
+    from luzeira import __main__ as cli
+
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    folder = tmp_path / "Luzeira"
+    folder.mkdir()
+    (folder / "config.json").write_text("{ roto", encoding="utf-8")
+    assert cli._saved_language() is None
+    assert (folder / "config.json").exists()  # no lo aparta como «.danado»: eso es de la bandeja
+    (folder / "config.json").write_text('{"language": "en"}', encoding="utf-8")
+    assert cli._saved_language() == "en"
+    (folder / "config.json").write_text('{"language": "../x"}', encoding="utf-8")
+    assert cli._saved_language() is None

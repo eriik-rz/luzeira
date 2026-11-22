@@ -67,6 +67,18 @@ def test_the_app_runs_full_trust_with_the_embedded_python():
     assert caps == ["runFullTrust"]
 
 
+def test_the_package_declares_every_language_of_the_app():
+    # C-62: la Store anuncia los idiomas del manifiesto. Uno por idioma de la app, con la
+    # región que lista la Store (pt = portugués de Brasil), y el español primero (por defecto).
+    from luzeira import idioma
+
+    tags = [r.get("Language") for r in _manifest().find("m:Resources", NS)]
+    assert tags[0] == "es-es"
+    assert len(tags) == len(set(tags))
+    assert {t.split("-")[0] for t in tags} == set(idioma.NATIVE_NAMES)
+    assert "pt-br" in tags
+
+
 def test_the_icon_opens_the_editor_like_the_installer_shortcuts():
     app = _manifest().find("m:Applications/m:Application", NS)
     iss = (ROOT / "instalador" / "luzeira.iss").read_text(encoding="utf-8")

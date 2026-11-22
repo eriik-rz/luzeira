@@ -65,6 +65,19 @@ INNO_SHA256 = {
     "islzma.dll": "8af307ce3738ab1d37cc7e76b2f76615e2045597d4367c3e40d52b5f2fbd353d",
     "Setup.e32": "0c94d43e2c0f4d8371a2e1813b5446f3bc85ece3211dc4a6676159b534bbc483",
     "SetupLdr.e32": "998c58046b0808e75a030859962e1fe1ea600e8a5cf4646b09aadce77342c1a9",
+    # Traducciones del asistente (C-62): solo texto, pero acaban dentro del instalador y
+    # cambian sus hashes, así que también se fijan (comprobado 2026-11-23).
+    "Default.isl": "42a5f6f7dbbddf26cc278f67db5d894235ce1d126a6856702e31bd02023a1316",
+    "Languages/Spanish.isl": "c61ee6287d6a10db186cce43b556422e0a8bc631784132468a9cebca4f2df0d5",
+    "Languages/German.isl": "f016f4a957de8c59e8db2da788357b4c923cecadca6f0c6eab404fb28015cac9",
+    "Languages/French.isl": "145bf4ea34eaa79c52e4fcb77ce3eee9720b0d424c69458cb99592bc52121fba",
+    "Languages/Italian.isl": "18034c57f1133682b1b2e95afa327f232cdcf41bf1a44bc2b5aab1f8d3332a77",
+    "Languages/BrazilianPortuguese.isl": (
+        "e7e5e3dbd0ddee4c5a1f502f3035e431a21f87e68cef9a0295680b63ed61200b"
+    ),
+    "Languages/Polish.isl": "593f14b249afb49d38976816a4a3c73e13e354d1698f9f98d584c1c6c6a18e48",
+    "Languages/Turkish.isl": "21f69297a1d3d9a3407acd2ac43908cf20786fff8ef1c1d98cb9ea544a7a4c2c",
+    "Languages/Russian.isl": "81981fe6cfef7f3b2f744beac1494f4d2b29cea69c96a08d1c0a6b79dc0ed8f2",
 }
 #: Plataforma de las wheels: Windows de 64 bits, la única que soporta Luzeira v1.
 PLATFORM = "x86_64-pc-windows-msvc"
@@ -489,7 +502,7 @@ def third_party_notices(site: Path) -> str:
 def check_inno(iscc: Path) -> None:
     """Falla si algún binario de Inno no es el verificado (INNO_SHA256)."""
     for name, expected in INNO_SHA256.items():
-        path = iscc.with_name(name)
+        path = iscc.parent / name
         if not path.is_file():
             sys.exit(f"Falta {path} (Inno Setup 6.7.4). Usa --iscc.")
         if sha256(path) != expected:

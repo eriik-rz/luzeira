@@ -1179,3 +1179,38 @@ def test_after_switching_to_english_the_menu_and_the_notices_are_in_english(app,
     app._back_to_auto()
     assert app.notes[-1] == "OK: Luzeira will look for the display by itself."
     assert app._display_text() == "No display connected"  # lambda: se evalúa al abrir
+
+
+def test_switching_language_tells_the_editor_window(app, monkeypatch):
+    # La ventana del editor va en otro proceso: si no se le manda, su título y su
+    # «¿cerrar sin guardar?» se quedan en el idioma de antes.
+    monkeypatch.setattr(app.service, "apply", lambda s, reload=False: None)
+    sent = []
+    monkeypatch.setattr(app.editor.window, "set_language", sent.append)
+    app._set_language("en")
+    app._set_language(None)  # «automático»: se le manda el que queda, no None
+    assert sent == ["en", "es"]
+
+
+def test_switching_language_rewrites_the_tooltip_now(app, monkeypatch):
+    monkeypatch.setattr(app.service, "apply", lambda s, reload=False: None)
+    app._show_status(Status.STARTING, app.service.message)
+    assert app.icon.title == "Luzeira — Arrancando Luzeira…"
+    app._set_language("en")
+    assert app.icon.title == "Luzeira — Starting Luzeira…"
+
+
+def test_the_same_notice_in_another_language_is_not_repeated(app):
+    from luzeira import idioma
+    from luzeira.idioma import Joined, Text
+
+    def lost():  # como lo escribe el servicio al perder la pantalla
+        return Joined(Text("pantallas.no_encuentro"), Text("pantallas.estado_reintentando"))
+
+    app._show_status(Status.NO_DISPLAY, lost())
+    idioma.set_language("en")
+    app._show_status(Status.NO_DISPLAY, lost())  # al reintentar, ya en inglés
+    assert len(app.notes) == 1 and app.notes[0].startswith("No encuentro la pantalla.")
+    assert app.icon.title.startswith("Luzeira — I can't find the display.")
+    app._show_status(Status.NO_DISPLAY, Text("pantallas.en_uso", device="COM3"))
+    assert len(app.notes) == 2  # otro problema sí se avisa

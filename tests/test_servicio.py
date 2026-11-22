@@ -22,6 +22,7 @@ from luzeira.pantallas import (
     UnsupportedModel,
     WrongModel,
 )
+from luzeira.pantallas.comun import open_error
 from luzeira.sensores.base import Reading
 from luzeira.servicio import DisplayService, Settings, Status, Timings
 
@@ -670,3 +671,62 @@ def test_display_info_says_whether_the_first_probe_proved_the_model():
         h.wait_status(Status.RUNNING)
         info = h.service.display_info
         assert info.verified is True and info.choice is None
+
+
+# --- C-62: cambiar de idioma con un problema a la vista -------------------------------------
+
+
+class FreshErrors:
+    """``open_display`` falso que crea el error en cada intento, como los drivers de verdad
+    (así sale en el idioma de ese momento)."""
+
+    def __init__(self, make) -> None:
+        self.make = make
+        self.calls: list[str | None] = []
+
+    def __call__(self, port):
+        self.calls.append(port)
+        raise self.make()
+
+
+@pytest.mark.parametrize(
+    ("make", "status"),
+    [
+        (lambda: ConfirmationNeeded("COM7"), Status.NEEDS_CONFIRMATION),
+        (lambda: open_error("COM3", OSError("x")), Status.NO_DISPLAY),
+    ],
+)
+def test_changing_language_rewrites_the_message_but_does_not_notify_again(make, status):
+    from luzeira import idioma
+
+    with Harness(opener=FreshErrors(make)) as h:
+        h.wait_status(status)
+        spanish = h.service.message
+        idioma.set_language("en")
+        # Sin orden nueva: el mensaje guardado ya se lee en inglés.
+        english = h.service.message
+        assert english != spanish and "display" in english
+        h.service.apply(Settings(THEME), reload=True)  # lo que hace la bandeja
+        h.wait_for(lambda: len(h.opener.calls) >= 2)  # ha vuelto a intentarlo
+        time.sleep(0.05)
+        assert h.service.message == english
+    # El mismo aviso en otro idioma no es un aviso nuevo (no se repite en Windows).
+    assert [s for s, _ in h.statuses].count(status) == 1
+
+
+def test_a_different_problem_is_still_notified_after_changing_language():
+    from luzeira import idioma
+
+    # Mientras no se cambia de idioma, la pantalla está ocupada; después, pide confirmar.
+    changed = threading.Event()
+
+    def make():
+        return ConfirmationNeeded("COM7") if changed.is_set() else open_error("COM3", OSError())
+
+    with Harness(opener=FreshErrors(make)) as h:
+        h.wait_status(Status.NO_DISPLAY)
+        idioma.set_language("en")
+        changed.set()
+        h.service.apply(Settings(THEME), reload=True)
+        h.wait_status(Status.NEEDS_CONFIRMATION)
+    assert [s for s, _ in h.statuses][:2] == [Status.NO_DISPLAY, Status.NEEDS_CONFIRMATION]

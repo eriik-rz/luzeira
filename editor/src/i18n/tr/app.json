@@ -1,0 +1,10 @@
+{
+  "app.conectando": "Luzeira'ya bağlanılıyor…",
+  "app.no_abre": "Düzenleyici açılamıyor",
+  "app.sin_temas": "Tema yok",
+  "app.sin_temas.texto": "Luzeira hiç tema bulamadı. Luzeira'yı yeniden kurmak bunu düzeltmeli.",
+  "app.sin_token": "Luzeira'ya bağlanılamadı. Düzenleyiciyi bildirim alanındaki Luzeira simgesinden aç.",
+  "app.sin_conexion": "Luzeira ile bağlantı kesildi. Hâlâ açık mı?",
+  "app.respuesta_rara": "Luzeira beklenmeyen bir yanıt verdi. Düzenleyiciyi kapatıp yeniden aç.",
+  "app.fallo": "Bir şeyler ters gitti. Yeniden dene."
+}

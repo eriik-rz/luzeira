@@ -6,7 +6,7 @@
   "background": {"color": "#f1f3f7", "image": "fondo.png"},
   "widgets": [
     {"type": "clock", "format": "HH:MM", "box": {"x": 18, "y": 8, "width": 200, "height": 62}, "style": {"size": 50, "bold": true, "color": "#1d4ed8", "align": "left"}},
-    {"type": "clock", "format": "date-long", "box": {"x": 212, "y": 14, "width": 252, "height": 28}, "style": {"size": 18, "color": "#111827", "align": "right"}},
+    {"type": "clock", "format": "date-long", "box": {"x": 180, "y": 14, "width": 284, "height": 28}, "style": {"size": 18, "color": "#111827", "align": "right"}},
     {"type": "clock", "format": "date-short", "box": {"x": 220, "y": 42, "width": 244, "height": 22}, "style": {"size": 14, "color": "#6b7280", "align": "right"}},
 
     {"type": "text", "text": "CPU", "box": {"x": 32, "y": 90, "width": 90, "height": 18}, "style": {"size": 14, "bold": true, "color": "#6b7280", "align": "left"}},
@@ -23,7 +23,7 @@
     {"type": "sensor", "sensor": "memory.usage", "box": {"x": 32, "y": 232, "width": 188, "height": 46}, "style": {"size": 38, "bold": true, "color": "#111827", "align": "left"}},
     {"type": "bar", "sensor": "memory.usage", "fill": "#0d9488", "track": "#e5e7eb", "box": {"x": 32, "y": 286, "width": 188, "height": 8}},
 
-    {"type": "text", "text": "RED", "text_i18n": { "en": "NET" }, "box": {"x": 260, "y": 210, "width": 90, "height": 18}, "style": {"size": 14, "bold": true, "color": "#6b7280", "align": "left"}},
+    {"type": "text", "text": "RED", "text_i18n": { "en": "NET", "de": "NETZ", "fr": "RÉSEAU", "it": "RETE", "pt": "REDE", "pl": "SIEĆ", "tr": "AĞ", "ru": "СЕТЬ" }, "box": {"x": 260, "y": 210, "width": 90, "height": 18}, "style": {"size": 14, "bold": true, "color": "#6b7280", "align": "left"}},
     {"type": "sensor", "sensor": "network.download", "decimals": 1, "prefix": "↓ ", "box": {"x": 260, "y": 234, "width": 188, "height": 32}, "style": {"size": 24, "bold": true, "color": "#111827", "align": "left"}},
     {"type": "sensor", "sensor": "network.upload", "decimals": 1, "prefix": "↑ ", "box": {"x": 260, "y": 268, "width": 188, "height": 28}, "style": {"size": 18, "color": "#4b5563", "align": "left"}}
   ]
