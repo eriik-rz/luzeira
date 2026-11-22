@@ -90,6 +90,37 @@ def test_enable_accepts_exactly_260_chars(test_key):
     assert autoarranque.is_enabled(test_key)
 
 
+# --- C-24: quitado en el Administrador de tareas --------------------------------------------
+
+
+def _approved(path: str, value: object, kind: int) -> None:
+    with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, path, 0, winreg.KEY_SET_VALUE) as key:
+        winreg.SetValueEx(key, autoarranque.VALUE_NAME, 0, kind, value)
+
+
+def test_not_blocked_without_a_mark(test_key):
+    assert not autoarranque.blocked_by_user(test_key)
+
+
+@pytest.mark.parametrize(
+    "value,kind,blocked",
+    [
+        (b"\x03" + bytes(11), "REG_BINARY", True),  # desactivado (lo observado)
+        (b"\x02" + bytes(11), "REG_BINARY", False),  # activado
+        (b"\x06" + bytes(11), "REG_BINARY", False),  # otro valor: como hasta ahora
+        (b"", "REG_BINARY", False),
+        ("03", "REG_SZ", False),  # tipo raro: no se adivina
+    ],
+)
+def test_blocked_only_with_the_observed_disabled_mark(test_key, value, kind, blocked):
+    _approved(test_key, value, getattr(winreg, kind))
+    assert autoarranque.blocked_by_user(test_key) is blocked
+    winreg.DeleteValue(
+        winreg.OpenKey(winreg.HKEY_CURRENT_USER, test_key, 0, winreg.KEY_SET_VALUE),
+        autoarranque.VALUE_NAME,
+    )
+
+
 # --- default_command ---------------------------------------------------------------
 
 

@@ -47,6 +47,7 @@ def app(monkeypatch):
     saved = []
     monkeypatch.setattr(bandeja, "save_config", saved.append)
     monkeypatch.setattr(bandeja.autoarranque, "is_enabled", lambda: False)
+    monkeypatch.setattr(bandeja.autoarranque, "blocked_by_user", lambda: False)
     monkeypatch.setattr(bandeja, "list_ports", lambda: list(PORTS))
     tray = bandeja.TrayApp(AppConfig())
     notes = []
@@ -1031,20 +1032,89 @@ def test_store_has_no_updater_even_with_keys(store_app, settings, with_keys, mon
     assert one_loop_turn(store_app, monkeypatch) == []  # nunca se conecta
 
 
-def test_store_autostart_lives_in_windows_settings(store_app, settings, monkeypatch):
+class FakeStartupTask:
+    """La tarea de inicio del paquete (StartupTask) con su estado en un número."""
+
+    def __init__(self, raw: int = 0, *, user_blocks: bool = False) -> None:
+        self.raw, self.user_blocks = raw, user_blocks
+
+    def state(self) -> int:
+        return self.raw
+
+    def enable(self) -> int:
+        self.raw = 1 if self.user_blocks else 2
+        return self.raw
+
+    def disable(self) -> int:
+        self.raw = 1 if self.user_blocks else 0
+        return self.raw
+
+
+@pytest.fixture
+def startup_task(monkeypatch):
+    task = FakeStartupTask()
+    monkeypatch.setattr(bandeja.tarea_inicio, "_WinRTTask", lambda: task)
+    return task
+
+
+def test_store_autostart_uses_the_package_startup_task(
+    store_app, settings, startup_task, monkeypatch
+):
+    monkeypatch.setattr(bandeja.autoarranque, "enable", lambda cmd: pytest.fail("clave Run"))
+    item = next(i for i in walk(store_app.icon.menu) if i.text == "Iniciar con Windows")
+    assert not item.checked
+    item(store_app.icon)
+    assert startup_task.raw == 2 and item.checked
+    snap = settings.snapshot()
+    assert snap["store"] is True and snap["autostart"] is True
+    assert snap["autostart_blocked"] is False
+    settings.update(brightness=None, flip=None, autostart=False)
+    assert startup_task.raw == 0 and settings.snapshot()["autostart"] is False
+
+
+def test_store_autostart_removed_by_the_user_can_only_come_back_in_windows(
+    store_app, settings, startup_task, monkeypatch
+):
     opened = []
     monkeypatch.setattr(bandeja.os, "startfile", opened.append, raising=False)
-    monkeypatch.setattr(bandeja.autoarranque, "enable", lambda cmd: pytest.fail("clave Run"))
-    texts = menu_texts(store_app)
-    assert "Iniciar con Windows" not in texts and "Iniciar con Windows…" in texts
-    item = next(i for i in walk(store_app.icon.menu) if i.text == "Iniciar con Windows…")
-    item(store_app.icon)
-    assert opened == ["ms-settings:startupapps"]
+    startup_task.raw, startup_task.user_blocks = 1, True  # DisabledByUser
     snap = settings.snapshot()
-    assert snap["store"] is True and snap["autostart"] is False
+    assert snap["autostart"] is False and snap["autostart_blocked"] is True
     with pytest.raises(bandeja.EditorError) as exc:
         settings.update(brightness=None, flip=None, autostart=True)
     assert exc.value.status == 409 and "Configuración" in str(exc.value)
+    item = next(i for i in walk(store_app.icon.menu) if i.text == "Iniciar con Windows")
+    item(store_app.icon)
+    assert store_app.notes[-1] == bandeja.MSG_AUTOSTART_BLOCKED
+    assert opened == ["ms-settings:startupapps"]
+    settings.open_startup_settings()
+    assert opened == ["ms-settings:startupapps"] * 2
+
+
+def test_store_autostart_that_cannot_be_read_shows_off_and_fails_softly(
+    store_app, settings, monkeypatch
+):
+    def broken():
+        raise OSError("No se ha encontrado el elemento.")
+
+    monkeypatch.setattr(bandeja.tarea_inicio, "_WinRTTask", broken)
+    assert settings.snapshot()["autostart"] is False
+    with pytest.raises(bandeja.EditorError) as exc:
+        settings.update(brightness=None, flip=None, autostart=True)
+    assert exc.value.status == 500
+
+
+def test_autostart_removed_in_the_task_manager_is_shown_as_blocked(app, settings, monkeypatch):
+    # C-24: el valor de Run sigue ahí, pero Windows no lo lanza.
+    monkeypatch.setattr(bandeja.autoarranque, "is_enabled", lambda: True)
+    monkeypatch.setattr(bandeja.autoarranque, "blocked_by_user", lambda: True)
+    monkeypatch.setattr(bandeja.autoarranque, "enable", lambda cmd: None)
+    monkeypatch.setattr(bandeja.os, "startfile", lambda uri: None, raising=False)
+    snap = settings.snapshot()
+    assert snap["autostart"] is False and snap["autostart_blocked"] is True
+    with pytest.raises(bandeja.EditorError) as exc:
+        settings.update(brightness=None, flip=None, autostart=True)
+    assert exc.value.status == 409
 
 
 def test_store_has_no_desktop_shortcut(store_app, settings, monkeypatch):
@@ -1059,7 +1129,7 @@ def test_store_has_no_desktop_shortcut(store_app, settings, monkeypatch):
 
 def test_the_normal_version_keeps_its_menu(app, settings, with_keys):
     texts = menu_texts(app)
-    assert "Iniciar con Windows" in texts and "Iniciar con Windows…" not in texts
+    assert "Iniciar con Windows" in texts
     assert "Crear acceso directo en el escritorio" in texts
     assert "Buscar actualizaciones ahora" in texts
     assert settings.snapshot()["store"] is False

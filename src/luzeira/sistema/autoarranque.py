@@ -76,9 +76,35 @@ def is_enabled(key_path: str = RUN_KEY_PATH, name: str = VALUE_NAME) -> bool:
 
     Ojo: si el usuario lo desactiva desde el Administrador de tareas, Windows **no borra**
     el valor, sino que lo marca en otra clave (``Explorer\\StartupApproved\\Run``), cuyo
-    formato no está documentado por Microsoft. Esta función no la mira.
+    formato no está documentado por Microsoft. Esta función no la mira: para eso está
+    :func:`blocked_by_user`.
     """
     return registered_command(key_path, name) is not None
+
+
+#: Donde marca Windows lo que el usuario desactiva en el Administrador de tareas (C-24).
+APPROVED_KEY_PATH = r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"
+#: Primer byte del valor cuando está desactivado. El formato **no lo documenta
+#: Microsoft**: es lo que se observa (``02`` activado, ``03`` desactivado). Por eso solo se
+#: lee, y ante cualquier otra cosa se da por activado, como hasta ahora.
+_DISABLED_BY_USER = 0x03
+
+
+def blocked_by_user(key_path: str = APPROVED_KEY_PATH, name: str = VALUE_NAME) -> bool:
+    """``True`` si el usuario desactivó Luzeira en el Administrador de tareas (C-24).
+
+    El valor de ``Run`` sigue ahí, pero Windows no lo lanza, y escribir de nuevo en
+    ``Run`` no lo arregla: se reactiva en el mismo sitio donde se quitó.
+    """
+    _require_winreg()
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_QUERY_VALUE) as key:
+            value, kind = winreg.QueryValueEx(key, name)
+    except FileNotFoundError:
+        return False
+    except OSError as exc:
+        raise AutostartError(f"No se pudo leer el arranque automático: {exc}") from exc
+    return kind == winreg.REG_BINARY and isinstance(value, bytes) and value[:1] == b"\x03"
 
 
 def enable(command: str, key_path: str = RUN_KEY_PATH, name: str = VALUE_NAME) -> None:

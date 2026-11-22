@@ -1331,6 +1331,9 @@ class FakeSettings:
     def open_themes_folder(self) -> None:
         self.calls.append(("folder",))
 
+    def open_startup_settings(self) -> None:
+        self.calls.append(("startup",))
+
     def import_theme(self, zip_path: Path) -> str:
         return cargar.import_theme_zip(zip_path, self.user).name
 
@@ -1442,7 +1445,8 @@ def test_shortcut_and_folder(with_settings):
     client, fake, _ = with_settings
     assert client.json("POST", "/api/acceso-escritorio") == (200, {"message": "Listo."})
     assert client.json("POST", "/api/carpeta-temas") == (200, {"ok": True})
-    assert fake.calls == [("shortcut",), ("folder",)]
+    assert client.json("POST", "/api/configuracion-inicio") == (200, {"ok": True})
+    assert fake.calls == [("shortcut",), ("folder",), ("startup",)]
 
 
 def test_import_theme_zip_from_the_editor(with_settings):

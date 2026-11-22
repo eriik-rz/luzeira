@@ -724,6 +724,9 @@ class _Handler(BaseHTTPRequestHandler):
             case ("POST", "carpeta-temas"):
                 editor.settings().open_themes_folder()
                 return self._json(200, {"ok": True})
+            case ("POST", "configuracion-inicio"):
+                editor.settings().open_startup_settings()
+                return self._json(200, {"ok": True})
             case ("POST", "importar-tema"):
                 editor.settings()  # 404 antes de leer 20 MB
                 suggested = self._upload_filename()

@@ -185,23 +185,29 @@ export function SettingsDialog({ api, onDisplayChosen, onClose, onImported, toas
 
             <section className="settings-section" aria-labelledby="ajustes-inicio">
               <h3 id="ajustes-inicio">Inicio y accesos</h3>
-              {settings.store ? (
-                <p className="settings-status">
-                  En la versión de Microsoft Store, el inicio con Windows se activa o se quita en Configuración de Windows,
-                  en Aplicaciones → Inicio. Luzeira ya está en el menú Inicio, y se actualiza desde la Store.
-                </p>
-              ) : (
+              {settings.autostart_blocked ? (
                 <>
-                  <Toggle
-                    label="Iniciar con Windows"
-                    checked={settings.autostart}
-                    onChange={(v) => void change({ autostart: v })}
-                    hint="Luzeira se abre sola al encender el PC, sin pedir permisos de administrador."
-                  />
-                  <button type="button" className="btn" disabled={busy} onClick={() => void run(async () => toast(await api.createShortcut(), 'ok'))}>
-                    Crear acceso directo en el escritorio
+                  <p className="settings-status">
+                    Quitaste Luzeira del inicio desde Windows, así que solo se puede volver a activar allí.
+                  </p>
+                  <button type="button" className="btn" disabled={busy} onClick={() => void run(() => api.openStartupSettings())}>
+                    Abrir Configuración de Windows
                   </button>
                 </>
+              ) : (
+                <Toggle
+                  label="Iniciar con Windows"
+                  checked={settings.autostart}
+                  onChange={(v) => void change({ autostart: v })}
+                  hint="Luzeira se abre sola al encender el PC, sin pedir permisos de administrador."
+                />
+              )}
+              {settings.store ? (
+                <p className="settings-status">Luzeira ya está en el menú Inicio, y se actualiza desde la Store.</p>
+              ) : (
+                <button type="button" className="btn" disabled={busy} onClick={() => void run(async () => toast(await api.createShortcut(), 'ok'))}>
+                  Crear acceso directo en el escritorio
+                </button>
               )}
             </section>
 

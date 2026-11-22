@@ -17,6 +17,8 @@ dependencies = [
     "pyserial>=3.5",
     "pystray==0.19.5",  # fijada: bandeja.py usa su API privada _message_handlers,
     "pywebview>=6.2.1",
+    "winrt-runtime>=4.2.0",
+    "winrt-windows-applicationmodel>=4!10.0.28000.2957",
 ]
 
 [project.scripts]

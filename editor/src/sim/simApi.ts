@@ -211,6 +211,7 @@ export class SimulatedApi implements EditorApi {
     flip: false,
     store: false,
     autostart: true,
+    autostart_blocked: false,
     display_text: 'Ninguna pantalla conectada',
     display_auto: true,
     choices: [
@@ -301,6 +302,10 @@ export class SimulatedApi implements EditorApi {
   }
 
   async openThemesFolder(): Promise<void> {
+    await wait(50)
+  }
+
+  async openStartupSettings(): Promise<void> {
     await wait(50)
   }
 

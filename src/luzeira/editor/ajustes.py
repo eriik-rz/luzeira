@@ -60,6 +60,10 @@ class SettingsBackend(Protocol):
 
     def open_themes_folder(self) -> None: ...
 
+    def open_startup_settings(self) -> None:
+        """Abre Configuración → Aplicaciones → Inicio (cuando solo se puede activar allí)."""
+        ...
+
     def import_theme(self, zip_path: Path) -> str:
         """Importa el zip y devuelve el nombre del tema nuevo."""
         ...

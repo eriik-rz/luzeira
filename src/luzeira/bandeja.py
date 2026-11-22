@@ -60,11 +60,12 @@ from luzeira.pantallas.modelos import (
     model_by_key,
 )
 from luzeira.servicio import DisplayService, Settings, Status
-from luzeira.sistema import autoarranque, paquete
+from luzeira.sistema import autoarranque, paquete, tarea_inicio
 from luzeira.sistema.energia import PowerListener
 from luzeira.sistema.instancia import APP_MUTEX, EditorRequests, SingleInstance
 from luzeira.sistema.registro import default_log_dir, setup_logging
 from luzeira.sistema.sesion import SessionWatcher
+from luzeira.sistema.tarea_inicio import StartupState
 from luzeira.temas import ThemeError, load_theme
 
 log = logging.getLogger(__name__)
@@ -148,10 +149,11 @@ MSG_UPDATE_AVAILABLE = (
 MSG_UPDATE_BUSY = "Ya estoy buscando o descargando una actualización. Espera un momento."
 MSG_UPDATE_NONE = "No hay ninguna versión nueva pendiente. Busca otra vez."
 MSG_STORE_UPDATES = "En esta versión, las actualizaciones las hace Microsoft Store."
-MSG_STORE_AUTOSTART = (
-    "En la versión de Microsoft Store, el inicio con Windows se activa en Configuración"
-    " de Windows, en Aplicaciones → Inicio."
+MSG_AUTOSTART_BLOCKED = (
+    "Quitaste Luzeira del inicio desde Windows, así que solo se puede volver a activar"
+    " allí: Configuración → Aplicaciones → Inicio."
 )
+MSG_AUTOSTART_FAILED = "No he podido cambiar el inicio con Windows."
 MSG_STORE_SHORTCUT = "En la versión de Microsoft Store, Luzeira ya está en el menú Inicio."
 MSG_UPDATE_DOWNLOADING = "Descargando la versión {version}…"
 MSG_UPDATE_INSTALLING = (
@@ -285,13 +287,15 @@ class EditorSettings:
         def public(options: list[dict]) -> list[dict]:
             return [{k: v for k, v in o.items() if k != "action"} for o in options]
 
+        autostart = app._autostart_state()
         return {
             "updates": app.updates_snapshot(),
             "brightness": app.config.brightness,
             "brightness_levels": list(BRIGHTNESS_LEVELS),
             "flip": app.config.flip,
             "store": app._store,
-            "autostart": app._autostart_enabled(),
+            "autostart": autostart == StartupState.ON,
+            "autostart_blocked": autostart == StartupState.BLOCKED,
             "display_text": app._display_text(),
             "display_auto": app.config.display is None and app._trial is None,
             "choices": public(closed),
@@ -309,17 +313,12 @@ class EditorSettings:
         app = self._app
         if brightness is not None and brightness not in BRIGHTNESS_LEVELS:
             raise EditorError(400, "Ese brillo no está entre los que se pueden elegir.")
-        if autostart is not None and app._store:
-            raise EditorError(409, MSG_STORE_AUTOSTART)
         if autostart is not None:
-            try:
-                if autostart:
-                    autoarranque.enable(autoarranque.default_command())
-                else:
-                    autoarranque.disable()
-            except (autoarranque.AutostartError, ValueError, OSError):
-                log.exception("No se pudo cambiar el inicio con Windows")
-                raise EditorError(500, "No he podido cambiar el inicio con Windows.") from None
+            result = app._set_autostart(autostart)
+            if result is None:
+                raise EditorError(500, MSG_AUTOSTART_FAILED)
+            if autostart and result == StartupState.BLOCKED:
+                raise EditorError(409, MSG_AUTOSTART_BLOCKED)
         changes: dict[str, object] = {}
         if brightness is not None:
             changes["brightness"] = brightness
@@ -397,6 +396,9 @@ class EditorSettings:
 
     def open_themes_folder(self) -> None:
         self._app._open_themes_folder()
+
+    def open_startup_settings(self) -> None:
+        self._app._open_startup_settings()
 
     def import_theme(self, zip_path: Path) -> str:
         from luzeira.temas import import_theme_zip
@@ -747,24 +749,47 @@ class TrayApp:
         self.service.choose_display(None)
         self._notify(MSG_BACK_TO_AUTO)
 
-    def _autostart_enabled(self) -> bool:
-        if self._store:  # la clave Run de dentro del paquete no la ve Windows
-            return False
+    def _autostart_state(self) -> StartupState:
+        """Versión Store: la tarea de inicio del paquete (la clave Run de dentro del paquete
+        no la ve Windows). Si no: la clave Run, y si el usuario la quitó en el
+        Administrador de tareas, «bloqueado» (C-24)."""
         try:
-            return autoarranque.is_enabled()
+            if self._store:
+                return tarea_inicio.state()
+            if not autoarranque.is_enabled():
+                return StartupState.OFF
+            if autoarranque.blocked_by_user():
+                return StartupState.BLOCKED
+            return StartupState.ON
         except Exception:
             log.exception("No se pudo leer el inicio con Windows")
-            return False
+            return StartupState.OFF
+
+    def _autostart_enabled(self) -> bool:
+        return self._autostart_state() == StartupState.ON
+
+    def _set_autostart(self, on: bool) -> StartupState | None:
+        """Lo activa o desactiva y devuelve cómo queda; ``None`` si falló."""
+        try:
+            if self._store:
+                return tarea_inicio.set_enabled(on)
+            if on:
+                autoarranque.enable(autoarranque.default_command())
+            else:
+                autoarranque.disable()
+        except Exception:
+            log.exception("No se pudo cambiar el inicio con Windows")
+            return None
+        return self._autostart_state()
 
     def _toggle_autostart(self) -> None:
-        try:
-            if autoarranque.is_enabled():
-                autoarranque.disable()
-            else:
-                autoarranque.enable(autoarranque.default_command())
-        except (autoarranque.AutostartError, ValueError, OSError):
-            log.exception("No se pudo cambiar el inicio con Windows")
-            self._notify("No he podido cambiar el inicio con Windows.")
+        current = self._autostart_state()
+        result = self._set_autostart(current != StartupState.ON)
+        if result is None:
+            self._notify(MSG_AUTOSTART_FAILED)
+        elif result == StartupState.BLOCKED:
+            self._notify(MSG_AUTOSTART_BLOCKED)
+            self._open_startup_settings()
 
     def _open_startup_settings(self) -> None:
         os.startfile(paquete.STARTUP_SETTINGS_URI)  # noqa: S606 — página fija de Configuración
@@ -1157,12 +1182,6 @@ class TrayApp:
                 "Iniciar con Windows",
                 self._safe(self._toggle_autostart),
                 checked=lambda _item: self._autostart_enabled(),
-                visible=lambda _item: not self._store,
-            ),
-            Item(
-                "Iniciar con Windows…",  # versión de la Store: se activa en Configuración
-                self._safe(self._open_startup_settings),
-                visible=lambda _item: self._store,
             ),
             Item(
                 "Crear acceso directo en el escritorio",

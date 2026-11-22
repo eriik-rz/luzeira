@@ -89,9 +89,11 @@ export interface AppSettings {
   brightness: number
   brightness_levels: number[]
   flip: boolean
-  /** Versión de Microsoft Store: el inicio con Windows va en Configuración y no hay acceso del escritorio. */
+  /** Versión de Microsoft Store: sin acceso del escritorio ni actualizador (lo hace la Store). */
   store: boolean
   autostart: boolean
+  /** El usuario lo quitó desde Windows: solo se puede volver a activar en Configuración. */
+  autostart_blocked: boolean
   display_text: string
   /** Luzeira busca la pantalla ella sola (no hay ninguna elegida a mano). */
   display_auto: boolean
@@ -171,6 +173,8 @@ export interface EditorApi {
   /** Devuelve el texto para el usuario. */
   createShortcut(): Promise<string>
   openThemesFolder(): Promise<void>
+  /** Abre Configuración de Windows → Aplicaciones → Inicio. */
+  openStartupSettings(): Promise<void>
   /** Importa un tema `.zip`; devuelve el nombre del tema nuevo. */
   importTheme(file: File): Promise<string>
   /** Busca una versión nueva ahora; devuelve el texto para el usuario. */
@@ -357,6 +361,9 @@ class HttpApi implements EditorApi {
   }
   async openThemesFolder() {
     await this.json('POST', '/api/carpeta-temas', {})
+  }
+  async openStartupSettings() {
+    await this.json('POST', '/api/configuracion-inicio', {})
   }
   async importTheme(file: File) {
     const res = await this.request('POST', '/api/importar-tema', file, 'application/zip', undefined, {
