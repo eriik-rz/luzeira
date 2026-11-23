@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Luzeira — your PC on the little USB display</title>
+  <meta name="description" content="Luzeira is a free and open-source Windows app that shows your CPU, graphics card, memory and network on Turing Smart Screen–style USB displays. No ads, no telemetry.">
+  <meta name="color-scheme" content="dark light">
+  <!-- Para compartir en redes (LinkedIn, X…): sin esto cogen la primera foto que encuentran. -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Luzeira: your PC on the little USB display">
+  <meta property="og:description" content="Free and open-source Windows app: CPU, graphics card, memory and network on Turing Smart Screen–style USB displays, with 32 themes and a visual editor. No ads, no telemetry.">
+  <meta property="og:url" content="https://eriik-rz.github.io/luzeira/en/">
+  <meta property="og:image" content="https://eriik-rz.github.io/luzeira/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="627">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <!-- Sin recursos de fuera: ni fuentes, ni analíticas, ni scripts de terceros. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'none'; frame-src 'self'; base-uri 'none'; form-action 'none'">
+  <!-- La misma página en otros idiomas (para buscadores): URL absolutas, como pide Google. -->
+  <link rel="alternate" hreflang="es" href="https://eriik-rz.github.io/luzeira/">
+  <link rel="alternate" hreflang="en" href="https://eriik-rz.github.io/luzeira/en/">
+  <link rel="alternate" hreflang="x-default" href="https://eriik-rz.github.io/luzeira/">
+  <link rel="icon" type="image/png" href="../favicon.png">
+  <link rel="stylesheet" href="../estilo.css">
+</head>
+<body>
+  <header class="top">
+    <a class="marca" href="#">
+      <img src="../icono.png" width="32" height="32" alt="">
+      <span>Luzeira</span>
+    </a>
+    <nav aria-label="Sections">
+      <a href="#que-es">What it is</a>
+      <a href="#demo">Try it</a>
+      <a href="#pantallas">Displays</a>
+      <a href="#donar">Support</a>
+      <a href="https://github.com/eriik-rz/luzeira">GitHub</a>
+      <span class="idiomas" role="group" aria-label="Language">
+        <a href="../" hreflang="es" lang="es">ES</a> / <span aria-current="page" lang="en">EN</span>
+      </span>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <img class="hero-icono" src="../icono.png" width="128" height="128" alt="Luzeira icon: an orange star on a night-blue background">
+      <h1>Your PC, at a glance,<br>on the little USB display</h1>
+      <p class="lead">Luzeira shows your CPU, graphics card, memory, network and the time on 3.5" <strong>Turing Smart Screen</strong>–style USB displays. It's free and open source, available in English, and has no ads or telemetry.</p>
+      <div class="acciones">
+        <a class="btn principal" href="https://apps.microsoft.com/detail/9MSNPHG5NZ40">Get it from Microsoft Store</a>
+        <a class="btn" href="https://github.com/eriik-rz/luzeira/releases/latest">Installer (GitHub)</a>
+        <a class="btn" href="../demo/?lang=en">Try the editor here</a>
+      </div>
+      <p class="nota">Windows 10 and 11 · no administrator rights · about 20 MB</p>
+    </section>
+
+    <section id="que-es" class="bloque">
+      <h2>What it does</h2>
+      <div class="rejilla">
+        <article>
+          <h3>Install it and you're done</h3>
+          <p>It finds the display by itself, no COM ports to pick. It sits next to the Windows clock and starts with your PC if you want.</p>
+        </article>
+        <article>
+          <h3>32 built-in themes</h3>
+          <p>Hielo, Ámbar, Synthwave, Terminal, Glitch… in landscape and portrait, with large type you can read at a glance.</p>
+        </article>
+        <article>
+          <h3>Visual editor</h3>
+          <p>Drag in clocks, sensors, bars, text and images. What you see is what shows up on the display, because the same engine draws it.</p>
+        </article>
+        <article>
+          <h3>Any graphics card</h3>
+          <p>NVIDIA with all its data; AMD and Intel with what Windows provides (usage, memory and, if the card reports it, temperature).</p>
+        </article>
+        <article>
+          <h3>Lightweight</h3>
+          <p>It only sends the display what changes. It uses very little CPU and no network at all.</p>
+        </article>
+        <article>
+          <h3>Safe and honest</h3>
+          <p>It doesn't ask for administrator rights, it only connects to the internet if you let it (to tell you about new versions, which are signed), and themes are just data: they never run code.</p>
+        </article>
+      </div>
+      <figure class="captura">
+        <img src="../temas.png" alt="Several Luzeira themes as they look on the display" loading="lazy">
+        <figcaption>Some of the built-in themes, exactly as they show up on the display.</figcaption>
+      </figure>
+      <div class="en-vivo">
+        <div class="en-vivo-texto">
+          <p class="etiqueta">Live</p>
+          <h3>What it really looks like</h3>
+          <p>The Synthwave theme on a 3.5" display inside the PC. Photo taken with a phone, unedited.</p>
+        </div>
+        <img src="../pantalla-real.jpg" width="720" height="992" alt="Photo of a 3.5-inch display inside a PC with the Synthwave theme: time, date, network, CPU, GPU and RAM" loading="lazy">
+      </div>
+    </section>
+
+    <section id="demo" class="bloque">
+      <h2>Try the editor without installing anything</h2>
+      <p>It's the same editor as in the app, but here it runs on made-up data with an approximate preview. It doesn't save anything or connect anywhere.</p>
+      <div class="demo-marco">
+        <iframe src="../demo/?lang=en" title="Luzeira theme editor (demo)" loading="lazy"></iframe>
+      </div>
+      <p class="nota"><a href="../demo/?lang=en">Open the editor full screen</a> (works best on a computer).</p>
+    </section>
+
+    <section id="pantallas" class="bloque">
+      <h2>Supported displays</h2>
+      <table>
+        <thead><tr><th scope="col">Display</th><th scope="col">Status</th></tr></thead>
+        <tbody>
+          <tr><td>Turing Smart Screen 3.5" (revision A) and those that use UsbPCMonitor</td><td><span class="chip ok">Tested</span></td></tr>
+          <tr><td>XuanFang 3.5" (also “flagship”, revision B)</td><td><span class="chip beta">Beta</span></td></tr>
+          <tr><td>Kipye Qiye 3.5"</td><td><span class="chip beta">Beta</span></td></tr>
+          <tr><td>Turing 2.1", 5" and 8.8" (revision C)</td><td><span class="chip no">Not yet</span></td></tr>
+        </tbody>
+      </table>
+      <p class="nota">“Beta” means it's written to its protocol but nobody has tested it with a real display yet. If you have one, <a href="https://github.com/eriik-rz/luzeira/issues">let us know if it works</a>.</p>
+    </section>
+
+    <section id="instalar" class="bloque">
+      <h2>Install</h2>
+      <p><strong>The easiest way:</strong> from <a href="https://apps.microsoft.com/detail/9MSNPHG5NZ40">Microsoft Store</a>. It installs in one click, with no Windows warnings, and updates itself.</p>
+      <p>Or with the installer from GitHub:</p>
+      <ol class="pasos">
+        <li>Download <strong>Luzeira-…-instalador.exe</strong> from the <a href="https://github.com/eriik-rz/luzeira/releases/latest">latest version</a>.</li>
+        <li>If Windows says “Windows protected your PC”, click <strong>More info</strong> and then <strong>Run anyway</strong>. It shows up because the app isn't signed yet, not because it's dangerous.</li>
+        <li>Plug in the display. Luzeira finds it by itself and opens the editor the first time.</li>
+      </ol>
+      <p class="nota">Skeptical? Good. Every version is built on GitHub from the public code and comes with its SHA-256 checksums and GitHub's proof of origin (<em>attestation</em>).</p>
+    </section>
+
+    <section id="donar" class="bloque">
+      <h2>Support the project</h2>
+      <p>Luzeira is free and will stay that way. If you find it useful and want to help it keep improving (more displays, more themes, CPU temperature…), you can buy me a coffee:</p>
+      <!-- DONACIONES (C-54): solo enlaces normales, sin widgets ni scripts de terceros.
+           Ko-fi va primero porque deja donar sin crear cuenta; GitHub Sponsors pide cuenta de GitHub. -->
+      <div class="acciones">
+        <a class="btn principal" href="https://ko-fi.com/eriik_rz">Buy me a coffee (Ko-fi)</a>
+        <a class="btn" href="https://github.com/sponsors/eriik-rz">GitHub Sponsors</a>
+      </div>
+      <p class="nota">Ko-fi doesn't require signing up: you can pay by card, Apple Pay or Google Pay. If you already have a GitHub account, you can also donate there. Donations are voluntary and don't get you anything in return: Luzeira is the same for everyone.</p>
+      <p class="nota">It also helps a lot to <a href="https://github.com/eriik-rz/luzeira">star it on GitHub</a>, report bugs and share it.</p>
+    </section>
+
+    <section id="creditos" class="bloque">
+      <h2>Credits</h2>
+      <p>Luzeira builds on the work of many people. Thanks to:</p>
+      <ul class="creditos">
+        <li><a href="https://www.python.org/">Python</a> (PSF) and <a href="https://jrsoftware.org/isinfo.php">Inno Setup</a> for the installer.</li>
+        <li><a href="https://python-pillow.org/">Pillow</a> (MIT-CMU) for drawing, <a href="https://github.com/giampaolo/psutil">psutil</a> (BSD-3) for the sensors, <a href="https://pypi.org/project/nvidia-ml-py/">nvidia-ml-py</a> (BSD) for NVIDIA cards and <a href="https://github.com/pyserial/pyserial">pyserial</a> (BSD) for talking to the display.</li>
+        <li><a href="https://pywebview.flowrl.com/">pywebview</a> (BSD-3) and <a href="https://react.dev/">React</a> (MIT) for the editor, <a href="https://docs.pydantic.dev/">pydantic</a> (MIT) for validating themes and <a href="https://github.com/moses-palmer/pystray">pystray</a> (LGPL-3.0) for the tray icon.</li>
+        <li>The <a href="https://github.com/rsms/inter">Inter</a> typeface, by The Inter Project Authors (SIL OFL 1.1).</li>
+        <li><a href="https://github.com/mathoudebine/turing-smart-screen-python">turing-smart-screen-python</a>, for documenting the protocols of these displays, and <a href="https://github.com/syntensa/libre-panel">Libre Panel</a>, for the ideas and for leading the way.</li>
+      </ul>
+      <p class="nota">The full licenses are included in the installer.</p>
+    </section>
+  </main>
+
+  <footer class="pie">
+    <p>Luzeira videos on <a href="https://www.tiktok.com/@eriik_rz.dev">TikTok</a> and <a href="https://www.instagram.com/eriik_rz.dev/">Instagram</a>.</p>
+    <p>Luzeira is free software under the <a href="https://github.com/eriik-rz/luzeira/blob/main/LICENSE">GPL-3.0</a> license. It isn't affiliated with Turing, XuanFang or Kipye.</p>
+    <p>This website uses no cookies or analytics and doesn't load anything from other sites. <a href="privacidad.html">Privacy policy</a>.</p>
+  </footer>
+</body>
+</html>

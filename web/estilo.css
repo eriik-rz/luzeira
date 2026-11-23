@@ -58,6 +58,9 @@ img { max-width: 100%; height: auto; }
 .top nav { display: flex; gap: 18px; flex-wrap: wrap; }
 .top nav a { color: var(--text-2); text-decoration: none; font-size: 15px; }
 .top nav a:hover { color: var(--text); }
+/* Selector de idioma (ES / EN): el idioma de la página va resaltado y sin enlace. */
+.idiomas { color: var(--text-2); font-size: 15px; white-space: nowrap; }
+.idiomas [aria-current] { color: var(--text); font-weight: 700; }
 
 main { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
 

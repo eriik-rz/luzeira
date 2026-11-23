@@ -1,0 +1,147 @@
+"""La web (``web/``): versión en español y en inglés, enlazadas entre sí.
+
+Lee el HTML de ``web/`` tal cual (sin montar ``_site/``, que necesita Node). Comprueba
+lo que se rompe sin que se note al mirar una sola página: el ``lang``, los
+``hreflang`` para buscadores, el selector ES / EN, las rutas relativas desde ``en/`` y
+que la política de privacidad en inglés tenga las mismas piezas que la española.
+"""
+
+from html.parser import HTMLParser
+from pathlib import Path
+from urllib.parse import urlsplit
+
+import pytest
+
+REPO = Path(__file__).resolve().parent.parent
+WEB = REPO / "web"
+BASE = "https://eriik-rz.github.io/luzeira/"
+
+# Lo que ``scripts/web.py`` genera en ``_site/`` y no está en ``web/``.
+GENERATED = {"icono.png", "favicon.png", "temas.png", "demo/"}
+
+# Página -> (idioma, la misma página en el otro idioma, URL pública de cada idioma).
+PAGES = {
+    "index.html": ("es", "en/index.html"),
+    "privacidad.html": ("es", "en/privacidad.html"),
+    "en/index.html": ("en", "index.html"),
+    "en/privacidad.html": ("en", "privacidad.html"),
+}
+
+
+class _Page(HTMLParser):
+    """Recoge lo que miran los tests: lang, alternates, enlaces y piezas del texto."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lang: str | None = None
+        self.alternates: dict[str, str] = {}
+        self.refs: list[str] = []  # href y src de enlaces, imágenes, CSS, iframes
+        self.switch: list[tuple[str, str | None]] = []  # (lang, href) del selector
+        self.tags: list[str] = []  # h2, h3, li, p, strong: el esqueleto del texto
+        self._in_switch = 0
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if tag == "html":
+            self.lang = a.get("lang")
+        if tag == "link" and a.get("rel") == "alternate":
+            self.alternates[a["hreflang"]] = a["href"]
+        for key in ("href", "src"):
+            if a.get(key):
+                self.refs.append(a[key])
+        if tag in {"h2", "h3", "li", "p", "strong"}:
+            self.tags.append(tag)
+        if tag == "span" and a.get("class") == "idiomas":
+            self._in_switch = 1
+        elif self._in_switch:
+            if tag == "span":
+                self._in_switch += 1
+            if tag in {"a", "span"}:
+                self.switch.append((a.get("lang"), a.get("href")))
+
+    def handle_endtag(self, tag):
+        if tag == "span" and self._in_switch:
+            self._in_switch -= 1
+
+
+def parse(rel: str) -> _Page:
+    page = _Page()
+    page.feed((WEB / rel).read_text(encoding="utf-8"))
+    return page
+
+
+def public_url(rel: str) -> str:
+    """URL pública de una página: ``index.html`` se sirve como su carpeta."""
+    return BASE + rel.removesuffix("index.html")
+
+
+@pytest.mark.parametrize("rel", PAGES)
+def test_each_page_declares_its_language(rel):
+    assert parse(rel).lang == PAGES[rel][0]
+
+
+@pytest.mark.parametrize("rel", PAGES)
+def test_hreflang_points_to_both_versions(rel):
+    lang, other = PAGES[rel]
+    es, en = (rel, other) if lang == "es" else (other, rel)
+    assert parse(rel).alternates == {
+        "es": public_url(es),
+        "en": public_url(en),
+        "x-default": public_url(es),
+    }
+
+
+@pytest.mark.parametrize("rel", PAGES)
+def test_language_switch_links_to_the_same_page_in_the_other_language(rel):
+    lang, other = PAGES[rel]
+    switch = parse(rel).switch
+    # El idioma actual sin enlace; el otro, con enlace a su página.
+    assert (lang, None) in switch
+    other_lang = "en" if lang == "es" else "es"
+    links = [href for code, href in switch if code == other_lang]
+    assert len(links) == 1
+    target = (WEB / rel).parent / links[0]
+    if links[0].endswith("/"):
+        target = target / "index.html"
+    assert target.resolve() == (WEB / other).resolve()
+
+
+@pytest.mark.parametrize("rel", PAGES)
+def test_relative_links_exist_in_the_built_site(rel):
+    """Cada ruta relativa apunta a un fichero de ``web/`` o a algo que genera web.py."""
+    missing = []
+    for ref in parse(rel).refs:
+        parts = urlsplit(ref)
+        if parts.scheme or not parts.path:  # http(s)://… o #ancla
+            continue
+        target = ((WEB / rel).parent / parts.path).resolve()
+        if target.is_relative_to(WEB.resolve()):
+            inside = target.relative_to(WEB.resolve()).as_posix()
+            if parts.path.endswith("/") and inside + "/" in GENERATED:
+                continue
+            if inside in GENERATED:
+                continue
+            if target.is_dir():
+                target = target / "index.html"
+        if not target.is_file():
+            missing.append(ref)
+    assert missing == []
+
+
+def test_english_page_opens_the_demo_in_english():
+    demo = [r for r in parse("en/index.html").refs if "demo/" in r]
+    assert demo, "la portada inglesa ya no enlaza la demo"
+    assert all(r == "../demo/?lang=en" for r in demo), demo
+
+
+@pytest.mark.parametrize("rel", ["index.html", "privacidad.html"])
+def test_english_version_has_the_same_structure(rel):
+    """Misma traducción, mismas piezas: mismos títulos, párrafos y puntos, y los
+    mismos enlaces de fuera. Si alguien añade un compromiso solo en un idioma, cae."""
+    es, en = parse(rel), parse("en/" + rel)
+    assert en.tags == es.tags
+
+    def external(page):
+        return [r for r in page.refs if urlsplit(r).scheme]
+
+    assert external(en) == external(es)

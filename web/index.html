@@ -17,6 +17,10 @@
   <meta name="twitter:card" content="summary_large_image">
   <!-- Sin recursos de fuera: ni fuentes, ni analíticas, ni scripts de terceros. -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'none'; frame-src 'self'; base-uri 'none'; form-action 'none'">
+  <!-- La misma página en otros idiomas (para buscadores): URL absolutas, como pide Google. -->
+  <link rel="alternate" hreflang="es" href="https://eriik-rz.github.io/luzeira/">
+  <link rel="alternate" hreflang="en" href="https://eriik-rz.github.io/luzeira/en/">
+  <link rel="alternate" hreflang="x-default" href="https://eriik-rz.github.io/luzeira/">
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="stylesheet" href="estilo.css">
 </head>
@@ -32,6 +36,9 @@
       <a href="#pantallas">Pantallas</a>
       <a href="#donar">Apoyar</a>
       <a href="https://github.com/eriik-rz/luzeira">GitHub</a>
+      <span class="idiomas" role="group" aria-label="Idioma">
+        <span aria-current="page" lang="es">ES</span> / <a href="en/" hreflang="en" lang="en">EN</a>
+      </span>
     </nav>
   </header>
 

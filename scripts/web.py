@@ -1,7 +1,8 @@
 """Monta la web del proyecto (GitHub Pages) en ``_site/``.
 
 Qué hace:
-1. Copia ``web/`` (la portada, en HTML y CSS a mano).
+1. Copia ``web/`` (la portada, en HTML y CSS a mano), con ``web/en/`` (la versión en
+   inglés, que usa el mismo CSS e imágenes con rutas ``../``).
 2. Dibuja el icono de Luzeira (``luzeira.marca``) y copia la captura de los temas.
 3. Compila el editor en **modo simulado** dentro de ``_site/demo/``: el mismo editor
    que va en la app, con datos inventados y una vista previa aproximada. No habla con
