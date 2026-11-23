@@ -526,13 +526,13 @@ const PANTALLA_EN: Catalog = {
     ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => [`pantalla.mes.${i + 1}`, m]),
   ),
   'pantalla.fecha_larga': '{dia}, {mes} {d}',
-  'pantalla.fecha_corta': '{mm}/{dd}/{aaaa}',
+  'pantalla.fecha_corta': '{aaaa}-{mm}-{dd}',
   'pantalla.decimal': '.',
 }
 
 /** Ejecuta `fn` en inglés con el `pantalla` de prueba y vuelve al español. */
 function inEnglish(fn: () => void) {
-  registerCatalogs({ ...CATALOGS, en: { ...CATALOGS.en, ...PANTALLA_EN } })
+  registerCatalogs({ ...CATALOGS, en: { ...PANTALLA_EN, ...CATALOGS.en } }) // manda el del disco
   setLanguage('en')
   try {
     fn()
@@ -554,7 +554,7 @@ test('reloj y sensor en inglés: días, meses, formato de fecha y punto decimal'
     const d = new Date(2026, 10, 17, 9, 5, 7) // martes
     assert.equal(formatClock('date-long', d), 'Tuesday, November 17')
     assert.equal(formatClock('weekday', new Date(2026, 10, 22)), 'Sunday')
-    assert.equal(formatClock('date-short', d), '11/17/2026')
+    assert.equal(formatClock('date-short', d), '2026-11-17')
     assert.equal(formatClock('HH:MM', d), '09:05')
     const fields = { decimals: 1, prefix: '↓ ', suffix: '', show_unit: true, max_chars: 5 }
     assert.equal(formatReading(fields, { value: 2.26, unit: 'MB/s', text: null }), '↓ 2.3 MB/s')

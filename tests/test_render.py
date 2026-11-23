@@ -453,7 +453,7 @@ def test_theme_translations_are_short_language_codes_and_short_texts(bad):
     ("fmt", "expected"),
     [
         ("HH:MM", "09:05"),
-        ("date-short", "11/07/2026"),  # EE. UU.: mes/día/año
+        ("date-short", "2026-11-07"),  # ISO: nadie lo lee al revés (C-63)
         ("weekday", "Saturday"),
         ("date-long", "Saturday, November 7"),
     ],

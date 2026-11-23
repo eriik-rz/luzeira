@@ -31,17 +31,17 @@ def public_files() -> list[Path]:
 
 
 def test_no_developer_data_in_published_files():
-    needles = _load_packager().personal_needles()
+    packager = _load_packager()
+    needles = packager.personal_needles()
     if not needles:
         pytest.skip("sin datos personales que buscar en este entorno")
-    encoded = [n.encode() for n in needles] + [n.encode("utf-16-le") for n in needles]
     offenders = []
     for path in public_files():
         try:
             data = path.read_bytes().lower()
         except OSError:
             continue
-        if any(raw in data for raw in encoded):
+        if any(packager.contains_needle(data, n) for n in needles):
             offenders.append(path.relative_to(REPO).as_posix())
     # Sin decir qué dato: el mensaje acabaría en un log público de CI.
     assert offenders == [], f"aparecen datos de quien desarrolla en: {offenders}"
@@ -53,3 +53,16 @@ def test_needles_include_the_git_email(monkeypatch):
     monkeypatch.setenv("COMPUTERNAME", "EQUIPO-PRUEBA")
     needles = emp.personal_needles()
     assert "alguien@ejemplo.org" in needles and "equipo-prueba" in needles
+
+
+def test_a_name_counts_only_as_a_whole_word():
+    """Un nombre de usuario corto solo cuenta como palabra entera: «içerik» (turco,
+    «contenido») no delata al usuario «erik». Aquí con un nombre inventado, «ana»."""
+    contains = _load_packager().contains_needle
+    assert not contains("Banana".lower().encode(), "ana")
+    assert not contains("içana".encode(), "ana")  # letra no ASCII pegada
+    assert not contains("bananas".encode("utf-16-le"), "ana")
+    assert contains(b"c:\\users\\ana\\appdata", "ana")
+    assert contains("c:\\users\\ana\\x".encode("utf-16-le"), "ana")
+    assert contains(b"hola ana.", "ana")
+    assert contains(b"x@y.com", "x@y.com")

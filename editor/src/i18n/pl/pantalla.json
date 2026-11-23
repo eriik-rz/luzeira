@@ -18,7 +18,7 @@
   "pantalla.mes.10": "października",
   "pantalla.mes.11": "listopada",
   "pantalla.mes.12": "grudnia",
-  "pantalla.fecha_larga": "{dia} {d} {mes}",
+  "pantalla.fecha_larga": "{dia}, {d} {mes}",
   "pantalla.fecha_corta": "{dd}.{mm}.{aaaa}",
   "pantalla.decimal": ","
 }

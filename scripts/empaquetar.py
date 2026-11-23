@@ -615,6 +615,34 @@ def personal_needles() -> set[str]:
     return needles
 
 
+_WORD = rb"[a-z0-9\x80-\xff]"  # letra o cifra (bytes altos: letras no ASCII en UTF-8)
+
+
+def contains_needle(data: bytes, needle: str) -> bool:
+    """¿Aparece ``needle`` en ``data`` (ya en minúsculas), en UTF-8 o UTF-16?
+
+    Un nombre suelto (usuario o equipo, solo letras y cifras) cuenta solo como palabra
+    entera: si no, «erik» saltaría dentro de «içerik» (turco, C-62). Rutas y emails se
+    buscan tal cual."""
+    if not re.fullmatch(r"[a-z0-9]+", needle):
+        return needle.encode() in data or needle.encode("utf-16-le") in data
+    word = re.escape(needle.encode())
+    if re.search(rb"(?<!" + _WORD + rb")" + word + rb"(?!" + _WORD + rb")", data):
+        return True
+    wide = needle.encode("utf-16-le")
+
+    def letter(unit: bytes) -> bool:  # una unidad UTF-16 que es letra o cifra
+        return len(unit) == 2 and (unit[1] != 0 or chr(unit[0]).isalnum())
+
+    start = data.find(wide)
+    while start != -1:
+        end = start + len(wide)
+        if not letter(data[max(0, start - 2) : start]) and not letter(data[end : end + 2]):
+            return True
+        start = data.find(wide, start + 1)
+    return False
+
+
 def check_no_personal_paths(base: Path) -> None:
     """Falla si algún fichero del paquete (de cualquier tipo) lleva rutas de esta máquina
     o datos de quien construye (usuario, equipo, email)."""
@@ -625,12 +653,11 @@ def check_no_personal_paths(base: Path) -> None:
         places += [home / "AppData", home / ".local", home / ".cache"]
     needles = {str(p).lower() for p in places} | personal_needles()
     needles |= {n.replace("\\", "/") for n in needles}
-    encoded = [(n, n.encode()) for n in needles] + [(n, n.encode("utf-16-le")) for n in needles]
     for path in base.rglob("*"):
         if path.is_file():
             data = path.read_bytes().lower()
-            for _needle, raw in encoded:
-                if raw in data:
+            for needle in needles:
+                if contains_needle(data, needle):
                     # Sin decir cuál: el mensaje acabaría en un log público de CI.
                     sys.exit(f"Dato personal o ruta de la máquina dentro del paquete: {path}")
 

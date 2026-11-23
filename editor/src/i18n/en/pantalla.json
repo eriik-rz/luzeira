@@ -19,6 +19,6 @@
   "pantalla.mes.11": "November",
   "pantalla.mes.12": "December",
   "pantalla.fecha_larga": "{dia}, {mes} {d}",
-  "pantalla.fecha_corta": "{mm}/{dd}/{aaaa}",
+  "pantalla.fecha_corta": "{aaaa}-{mm}-{dd}",
   "pantalla.decimal": "."
 }
