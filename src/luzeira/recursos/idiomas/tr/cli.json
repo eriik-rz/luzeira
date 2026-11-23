@@ -19,7 +19,7 @@
   "cli.demo_hola": "Merhaba!",
   "cli.demo_funciona": "Ekranın çalışıyor.",
   "cli.demo_conectado": "Bağlı: {model} ({width}x{height}).",
-  "cli.demo_completa": "Tam ekran: {seconds} sn ({fps} fps).",
+  "cli.demo_completa": "Tam kare: {seconds} sn ({fps} fps).",
   "cli.demo_reloj_ctrl_c": "Saat çalışıyor. Durdurmak için Ctrl+C.",
   "cli.demo_reloj": "Saat çalışıyor.",
   "cli.demo_franja": "Saat şeridi {width}x{height}: ortalama {ms} ms.",

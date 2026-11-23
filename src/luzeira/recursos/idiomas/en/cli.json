@@ -19,7 +19,7 @@
   "cli.demo_hola": "Hello!",
   "cli.demo_funciona": "Your display works.",
   "cli.demo_conectado": "Connected: {model} ({width}x{height}).",
-  "cli.demo_completa": "Full screen: {seconds} s ({fps} fps).",
+  "cli.demo_completa": "Full frame: {seconds} s ({fps} fps).",
   "cli.demo_reloj_ctrl_c": "Clock running. Ctrl+C to stop.",
   "cli.demo_reloj": "Clock running.",
   "cli.demo_franja": "Clock strip {width}x{height}: {ms} ms on average.",

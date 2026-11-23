@@ -19,7 +19,7 @@
   "cli.demo_hola": "Olá!",
   "cli.demo_funciona": "Sua tela funciona.",
   "cli.demo_conectado": "Conectado: {model} ({width}x{height}).",
-  "cli.demo_completa": "Tela cheia: {seconds} s ({fps} fps).",
+  "cli.demo_completa": "Quadro completo: {seconds} s ({fps} fps).",
   "cli.demo_reloj_ctrl_c": "Relógio rodando. Ctrl+C para parar.",
   "cli.demo_reloj": "Relógio rodando.",
   "cli.demo_franja": "Faixa do relógio {width}x{height}: {ms} ms em média.",

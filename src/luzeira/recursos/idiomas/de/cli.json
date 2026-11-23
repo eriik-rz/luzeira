@@ -19,7 +19,7 @@
   "cli.demo_hola": "Hallo!",
   "cli.demo_funciona": "Dein Display funktioniert.",
   "cli.demo_conectado": "Verbunden: {model} ({width}x{height}).",
-  "cli.demo_completa": "Vollbild: {seconds} s ({fps} fps).",
+  "cli.demo_completa": "Ganzes Bild: {seconds} s ({fps} fps).",
   "cli.demo_reloj_ctrl_c": "Uhr läuft. Strg+C zum Beenden.",
   "cli.demo_reloj": "Uhr läuft.",
   "cli.demo_franja": "Uhrstreifen {width}x{height}: im Schnitt {ms} ms.",

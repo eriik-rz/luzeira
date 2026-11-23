@@ -19,7 +19,7 @@
   "cli.demo_hola": "Cześć!",
   "cli.demo_funciona": "Twój ekran działa.",
   "cli.demo_conectado": "Podłączony: {model} ({width}x{height}).",
-  "cli.demo_completa": "Pełny ekran: {seconds} s ({fps} fps).",
+  "cli.demo_completa": "Pełna klatka: {seconds} s ({fps} fps).",
   "cli.demo_reloj_ctrl_c": "Zegar działa. Ctrl+C, żeby zatrzymać.",
   "cli.demo_reloj": "Zegar działa.",
   "cli.demo_franja": "Pasek zegara {width}x{height}: średnio {ms} ms.",

@@ -28,7 +28,7 @@ from pathlib import Path, PurePosixPath
 from PIL import Image, UnidentifiedImageError
 from pydantic import TypeAdapter, ValidationError
 
-from luzeira.idioma import t
+from luzeira.idioma import Text, t
 
 from .modelo import RelPath, Theme
 from .rutas import is_reserved_windows_name
@@ -84,7 +84,7 @@ class Subject:
     n: int | None = None
 
     def text(self) -> str:
-        return t(self.key) if self.n is None else t(self.key, n=self.n)
+        return Text(self.key) if self.n is None else Text(self.key, n=self.n)
 
 
 BACKGROUND_IMAGE = Subject("temas.que.fondo")
@@ -131,7 +131,7 @@ def _what(what: Subject | str) -> str:
 def _file_error(key: str, what: Subject | str, **variables: object) -> ThemeError:
     """Error sobre un fichero del tema: «{what} «{rel}» …»."""
     return ThemeError(
-        t(key, what=_what(what), **variables),
+        Text(key, what=_what(what), **variables),
         key=key,
         variables=variables,
         subject=what if isinstance(what, Subject) else None,
@@ -193,7 +193,7 @@ def _check_gif_frames(im: Image.Image, rel: str) -> None:
             im.seek(frames)
             frames += 1
             if frames > MAX_GIF_FRAMES:
-                raise ThemeError(t("temas.gif_largo", rel=rel, max=MAX_GIF_FRAMES))
+                raise ThemeError(Text("temas.gif_largo", rel=rel, max=MAX_GIF_FRAMES))
     except EOFError:
         pass
     im.seek(0)
@@ -221,14 +221,14 @@ def _check_image(path: Path, rel: str, ext: str) -> None:
     except ThemeError:
         raise
     except Image.DecompressionBombError:
-        raise ThemeError(t("temas.imagen_bomba", rel=rel)) from None
+        raise ThemeError(Text("temas.imagen_bomba", rel=rel)) from None
     except (UnidentifiedImageError, OSError, SyntaxError, ValueError):
         # Pillow señala PNG rotos con SyntaxError y ficheros cortados con OSError.
-        raise ThemeError(t("temas.imagen_danada", rel=rel)) from None
+        raise ThemeError(Text("temas.imagen_danada", rel=rel)) from None
 
 
 def _too_big_image(rel: str, width: int, height: int) -> str:
-    return t("temas.imagen_enorme", rel=rel, width=width, height=height, max=MAX_IMAGE_SIDE)
+    return Text("temas.imagen_enorme", rel=rel, width=width, height=height, max=MAX_IMAGE_SIDE)
 
 
 def open_validated_image(path: Path, ext: str) -> Image.Image:
@@ -248,7 +248,7 @@ def open_validated_image(path: Path, ext: str) -> Image.Image:
     ext = ext.lower().lstrip(".")
     fmt = PILLOW_FORMATS.get(ext)
     if fmt is None:
-        raise ThemeError(t("temas.imagen_extension", rel=path.name))
+        raise ThemeError(Text("temas.imagen_extension", rel=path.name))
     try:
         with Image.open(path, formats=[fmt]) as im:
             width, height = im.size
@@ -261,9 +261,9 @@ def open_validated_image(path: Path, ext: str) -> Image.Image:
     except ThemeError:
         raise
     except Image.DecompressionBombError:
-        raise ThemeError(t("temas.imagen_bomba", rel=path.name)) from None
+        raise ThemeError(Text("temas.imagen_bomba", rel=path.name)) from None
     except (UnidentifiedImageError, OSError, SyntaxError, ValueError, EOFError):
-        raise ThemeError(t("temas.imagen_danada", rel=path.name)) from None
+        raise ThemeError(Text("temas.imagen_danada", rel=path.name)) from None
 
 
 # Muestra que se pinta con cada fuente del tema: cifras, signos de las unidades y lo
@@ -288,11 +288,11 @@ def _check_font(path: Path, rel: str, sizes: frozenset[int] = frozenset()) -> No
         try:
             font = ImageFont.truetype(str(path), size)
         except (OSError, ValueError):
-            raise ThemeError(t("temas.fuente_danada", rel=rel)) from None
+            raise ThemeError(Text("temas.fuente_danada", rel=rel)) from None
         try:
             draw.text((0, 0), FONT_SAMPLE, font=font, fill=255)
         except (OSError, ValueError):
-            raise ThemeError(t("temas.fuente_falla", rel=rel, size=size)) from None
+            raise ThemeError(Text("temas.fuente_falla", rel=rel, size=size)) from None
 
 
 def _check_file(
@@ -402,24 +402,24 @@ def load_theme(path: str | os.PathLike[str]) -> LoadedTheme:
     """
     directory = Path(path)
     if not directory.is_dir():
-        raise ThemeError(t("temas.sin_carpeta", name=directory.name))
+        raise ThemeError(Text("temas.sin_carpeta", name=directory.name))
     directory = directory.resolve()
 
     json_path = directory / THEME_JSON
     if json_path.is_symlink() or not json_path.is_file() or not _inside(json_path, directory):
-        raise ThemeError(t("temas.falta_json", file=THEME_JSON), damaged=True)
+        raise ThemeError(Text("temas.falta_json", file=THEME_JSON), damaged=True)
     with json_path.open("rb") as fh:
         raw = fh.read(MAX_JSON_BYTES + 1)
     if len(raw) > MAX_JSON_BYTES:
         raise ThemeError(
-            t("temas.json_grande", file=THEME_JSON, kb=MAX_JSON_BYTES // 1024), damaged=True
+            Text("temas.json_grande", file=THEME_JSON, kb=MAX_JSON_BYTES // 1024), damaged=True
         )
 
     try:
         theme = Theme.model_validate_json(raw)
     except ValidationError as err:
         raise ThemeError(
-            t("temas.json_no_valido", file=THEME_JSON, details=_friendly_validation(err)),
+            Text("temas.json_no_valido", file=THEME_JSON, details=_friendly_validation(err)),
             damaged=True,
         ) from None
 
@@ -453,23 +453,23 @@ def _zip_entry_problem(info: zipfile.ZipInfo) -> str | None:
     """
     name = info.filename
     if "\\" in info.orig_filename or "\\" in name:
-        return t("temas.zip.barra")
+        return Text("temas.zip.barra")
     if name.startswith("/") or PurePosixPath(name).is_absolute():
-        return t("temas.zip.absoluta")
+        return Text("temas.zip.absoluta")
     if ":" in name:
-        return t("temas.zip.unidad")
+        return Text("temas.zip.unidad")
     parts = name.rstrip("/").split("/")
     if any(p in ("", ".", "..") for p in parts):
-        return t("temas.zip.salir")
+        return Text("temas.zip.salir")
     if any(is_reserved_windows_name(p) for p in parts):
-        return t("temas.zip.reservado")
+        return Text("temas.zip.reservado")
     mode = info.external_attr >> 16
     if stat.S_ISLNK(mode):
-        return t("temas.zip.enlace")
+        return Text("temas.zip.enlace")
     if info.flag_bits & 0x1:
-        return t("temas.zip.cifrado")
+        return Text("temas.zip.cifrado")
     if info.compress_type not in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED):
-        return t("temas.zip.compresion")
+        return Text("temas.zip.compresion")
     return None
 
 
@@ -493,13 +493,13 @@ def _target_name(rel: str) -> str | None:
     ext = rel.rsplit(".", 1)[-1].lower() if "." in rel else ""
     allowed = set(IMAGE_SIGNATURES) | set(FONT_SIGNATURES) | ZIP_EXTRA_EXTENSIONS
     if not ext:
-        return t("temas.zip.sin_extension")  # antes salía «tipo no permitido (.sin extensión)»
+        return Text("temas.zip.sin_extension")  # antes salía «tipo no permitido (.sin extensión)»
     if ext not in allowed:
-        return t("temas.zip.tipo", ext=ext)
+        return Text("temas.zip.tipo", ext=ext)
     try:
         _relpath_adapter.validate_python(rel)
     except ValidationError:
-        return t("temas.zip.nombre")
+        return Text("temas.zip.nombre")
     return None
 
 
@@ -523,12 +523,12 @@ def _extract_entry(zf: zipfile.ZipFile, info: zipfile.ZipInfo, dest: Path, budge
             written += len(chunk)
             if written > MAX_FILE_BYTES:
                 raise ThemeError(
-                    t("temas.zip.fichero_grande", name=info.filename, max=MAX_FILE_BYTES // MB)
+                    Text("temas.zip.fichero_grande", name=info.filename, max=MAX_FILE_BYTES // MB)
                 )
             if written > budget:
-                raise ThemeError(t("temas.zip.total_grande", max=MAX_UNZIPPED_BYTES // MB))
+                raise ThemeError(Text("temas.zip.total_grande", max=MAX_UNZIPPED_BYTES // MB))
             if written > limit_ratio:
-                raise ThemeError(t("temas.zip.bomba", name=info.filename))
+                raise ThemeError(Text("temas.zip.bomba", name=info.filename))
             out.write(chunk)
     return written
 
@@ -545,10 +545,10 @@ def import_theme_zip(zip_path: str | os.PathLike[str], themes_dir: str | os.Path
     themes_root = themes_root.resolve()
 
     if not zip_path.is_file():
-        raise ThemeError(t("temas.zip.no_encuentro", name=zip_path.name))
+        raise ThemeError(Text("temas.zip.no_encuentro", name=zip_path.name))
     if zip_path.stat().st_size > MAX_ZIP_BYTES:
         raise ThemeError(
-            t("temas.zip.demasiado_grande", name=zip_path.name, max=MAX_ZIP_BYTES // MB)
+            Text("temas.zip.demasiado_grande", name=zip_path.name, max=MAX_ZIP_BYTES // MB)
         )
 
     # Carpeta temporal oculta dentro de la de temas: así el renombrado final es en el
@@ -586,17 +586,17 @@ def _extract_zip(zip_path: Path, dest: Path) -> None:
     try:
         zf = zipfile.ZipFile(zip_path)
     except (zipfile.BadZipFile, OSError, ValueError):
-        raise ThemeError(t("temas.zip.no_valido", name=zip_path.name)) from None
+        raise ThemeError(Text("temas.zip.no_valido", name=zip_path.name)) from None
     with zf:
         infos = zf.infolist()
         if len(infos) > MAX_ZIP_ENTRIES:
-            raise ThemeError(t("temas.zip.muchos", max=MAX_ZIP_ENTRIES))
+            raise ThemeError(Text("temas.zip.muchos", max=MAX_ZIP_ENTRIES))
 
         # 1) Todo se comprueba por nombre ANTES de escribir un solo byte.
         for info in infos:
             problem = _zip_entry_problem(info)
             if problem:
-                raise ThemeError(t("temas.zip.no_seguro", name=info.filename, problem=problem))
+                raise ThemeError(Text("temas.zip.no_seguro", name=info.filename, problem=problem))
         names = [i.filename for i in infos]
         root = _common_root(names)
         plan: list[tuple[zipfile.ZipInfo, str]] = []
@@ -609,10 +609,10 @@ def _extract_zip(zip_path: Path, dest: Path) -> None:
                 continue
             problem = _target_name(rel)
             if problem:
-                raise ThemeError(t("temas.zip.no_seguro", name=info.filename, problem=problem))
+                raise ThemeError(Text("temas.zip.no_seguro", name=info.filename, problem=problem))
             key = rel.casefold()  # Windows no distingue mayúsculas: «A.png» = «a.png»
             if key in seen:
-                raise ThemeError(t("temas.zip.repetido", rel=rel))
+                raise ThemeError(Text("temas.zip.repetido", rel=rel))
             seen.add(key)
             plan.append((info, rel))
 
@@ -621,11 +621,11 @@ def _extract_zip(zip_path: Path, dest: Path) -> None:
         for info, rel in plan:
             target = dest / rel
             if not target.resolve().is_relative_to(dest.resolve()):  # defensa en profundidad
-                raise ThemeError(t("temas.zip.sale", name=info.filename))
+                raise ThemeError(Text("temas.zip.sale", name=info.filename))
             target.parent.mkdir(parents=True, exist_ok=True)
             try:
                 budget -= _extract_entry(zf, info, target, budget)
             except ThemeError:
                 raise
             except (zipfile.BadZipFile, OSError, EOFError, ValueError, NotImplementedError):
-                raise ThemeError(t("temas.zip.danado", name=info.filename)) from None
+                raise ThemeError(Text("temas.zip.danado", name=info.filename)) from None

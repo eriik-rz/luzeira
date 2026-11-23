@@ -19,7 +19,7 @@
   "cli.demo_hola": "Ciao!",
   "cli.demo_funciona": "Il tuo schermo funziona.",
   "cli.demo_conectado": "Collegato: {model} ({width}x{height}).",
-  "cli.demo_completa": "Schermo intero: {seconds} s ({fps} fps).",
+  "cli.demo_completa": "Immagine intera: {seconds} s ({fps} fps).",
   "cli.demo_reloj_ctrl_c": "Orologio avviato. Ctrl+C per fermare.",
   "cli.demo_reloj": "Orologio avviato.",
   "cli.demo_franja": "Striscia dell'orologio {width}x{height}: {ms} ms in media.",

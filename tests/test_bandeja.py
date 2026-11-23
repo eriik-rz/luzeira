@@ -1214,3 +1214,27 @@ def test_the_same_notice_in_another_language_is_not_repeated(app):
     assert app.icon.title.startswith("Luzeira — I can't find the display.")
     app._show_status(Status.NO_DISPLAY, Text("pantallas.en_uso", device="COM3"))
     assert len(app.notes) == 2  # otro problema sí se avisa
+
+
+def test_a_theme_error_is_told_again_only_if_it_changes(app, tmp_path):
+    # C-64: el error del cargador va dentro del aviso del servicio. Si no recordara su
+    # clave, dos fallos distintos del mismo tema contarían como el mismo aviso.
+    from luzeira import idioma
+    from luzeira.servicio import _theme_message
+    from luzeira.temas import ThemeError, load_theme
+
+    def failure(path):
+        try:
+            load_theme(path)
+        except ThemeError as exc:
+            return _theme_message(tmp_path / "mio", exc)
+        raise AssertionError("el tema debía fallar")
+
+    (tmp_path / "mio").mkdir()
+    app._show_status(Status.THEME_ERROR, failure(tmp_path / "mio"))  # falta theme.json
+    idioma.set_language("en")
+    app._show_status(Status.THEME_ERROR, failure(tmp_path / "mio"))  # el mismo, en inglés
+    assert len(app.notes) == 1
+    assert "theme.json is missing" in app.icon.title
+    app._show_status(Status.THEME_ERROR, failure(tmp_path / "no-existe"))  # otro fallo
+    assert len(app.notes) == 2

@@ -44,7 +44,7 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from luzeira import __version__
+from luzeira import __version__, idioma
 from luzeira.idioma import t
 
 log = logging.getLogger(__name__)
@@ -298,7 +298,10 @@ def launch_command(installer: Path, log_file: Path) -> Launch:
     if os.name == "nt":
         # Que el instalador no muera con Luzeira (sale justo después) ni comparta consola.
         flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
-    return Launch([str(installer), *INSTALLER_ARGS, f"/LOG={log_file}"], flags)
+    # /LANG: el instalador habla el idioma elegido en Luzeira, no el de Windows. Sus
+    # [Languages] se llaman con los códigos de la app (test_empaquetado lo vigila).
+    lang = f"/LANG={idioma.current()}"
+    return Launch([str(installer), *INSTALLER_ARGS, lang, f"/LOG={log_file}"], flags)
 
 
 def launch(installer: Path, manifest: Manifest, log_file: Path) -> None:

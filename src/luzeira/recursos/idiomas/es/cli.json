@@ -19,7 +19,7 @@
   "cli.demo_hola": "¡Hola!",
   "cli.demo_funciona": "Tu pantalla funciona.",
   "cli.demo_conectado": "Conectado: {model} ({width}x{height}).",
-  "cli.demo_completa": "Pantalla completa: {seconds} s ({fps} fps).",
+  "cli.demo_completa": "Imagen completa: {seconds} s ({fps} fps).",
   "cli.demo_reloj_ctrl_c": "Reloj en marcha. Ctrl+C para parar.",
   "cli.demo_reloj": "Reloj en marcha.",
   "cli.demo_franja": "Franja de reloj {width}x{height}: {ms} ms de media.",

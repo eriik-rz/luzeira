@@ -83,7 +83,10 @@ export class SimulatedApi implements EditorApi {
     const loaded = await Promise.all(
       names.map(async (name) => {
         try {
-          const res = await fetch(`temas/${encodeURIComponent(name)}/theme.json`)
+          // no-cache: tras publicar la web, el navegador pregunta antes de reusar un tema viejo.
+          const res = await fetch(`temas/${encodeURIComponent(name)}/theme.json`, {
+            cache: 'no-cache',
+          })
           return res.ok ? ([name, (await res.json()) as ThemeJson] as const) : null
         } catch {
           return null
@@ -111,7 +114,9 @@ export class SimulatedApi implements EditorApi {
       pending.map(async (path) => {
         try {
           const safe = path.split('/').map(encodeURIComponent).join('/')
-          const res = await fetch(`temas/${encodeURIComponent(name)}/${safe}`)
+          const res = await fetch(`temas/${encodeURIComponent(name)}/${safe}`, {
+            cache: 'no-cache',
+          })
           if (res.ok) files.set(path, await res.blob())
         } catch {
           // sin la imagen, la vista previa pinta solo el color de fondo

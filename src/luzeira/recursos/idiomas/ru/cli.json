@@ -19,7 +19,7 @@
   "cli.demo_hola": "Привет!",
   "cli.demo_funciona": "Ваш экран работает.",
   "cli.demo_conectado": "Подключено: {model} ({width}x{height}).",
-  "cli.demo_completa": "Весь экран: {seconds} s ({fps} fps).",
+  "cli.demo_completa": "Полный кадр: {seconds} s ({fps} fps).",
   "cli.demo_reloj_ctrl_c": "Часы идут. Ctrl+C — остановить.",
   "cli.demo_reloj": "Часы идут.",
   "cli.demo_franja": "Полоса часов {width}x{height}: в среднем {ms} ms.",

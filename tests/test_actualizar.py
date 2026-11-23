@@ -14,7 +14,7 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
-from luzeira import actualizar
+from luzeira import actualizar, idioma
 from luzeira.actualizar import Manifest, UpdateError
 
 INSTALLER = b"MZ esto haria de instalador " * 100
@@ -248,6 +248,10 @@ def test_installer_is_silent_and_marked_as_an_update(tmp_path):
     cmd = actualizar.launch_command(tmp_path / "x.exe", tmp_path / "log.txt")
     assert cmd.args[1:5] == ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/ACTUALIZAR"]
     assert cmd.args[-1] == f"/LOG={tmp_path / 'log.txt'}"
+    assert cmd.args[-2] == "/LANG=es"  # el idioma de Luzeira (conftest: español)
+    idioma.set_language("de")
+    cmd = actualizar.launch_command(tmp_path / "x.exe", tmp_path / "log.txt")
+    assert "/LANG=de" in cmd.args
     assert "/CURRENTUSER" not in cmd.args  # no hace nada en nuestro instalador (C-53)
 
 
