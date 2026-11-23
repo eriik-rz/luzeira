@@ -72,5 +72,5 @@ def test_release_uses_the_same_tool_versions_as_the_build_script():
     assert "python-3.12.10-embed-amd64.zip" in text
     assert emp.PYTHON_TAG == "312"
     # Inno Setup: la misma versión cuyos binarios fija INNO_SHA256.
-    assert "innosetup-6.7.4.exe" in text
-    assert "Inno Setup 6.7.4" in Path(emp.__file__).read_text(encoding="utf-8")
+    assert "innosetup-7.1.1-x64.exe" in text
+    assert "Inno Setup 7.1.1" in Path(emp.__file__).read_text(encoding="utf-8")

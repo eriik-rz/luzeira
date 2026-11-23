@@ -1,4 +1,4 @@
-; Instalador de Luzeira (Inno Setup 6). Decisión D-12, fase 6.
+; Instalador de Luzeira (Inno Setup 7). Decisión D-12, fase 6; Inno 7 desde la 0.1.7 (C-64).
 ;
 ; No se compila a mano: lo hace scripts/empaquetar.py, que monta antes build\Luzeira y pasa
 ;   ISCC /DAppVersion=<versión de pyproject.toml> /DSourceDir=... /DOutputDir=... /DIconFile=...
@@ -14,10 +14,11 @@
 ; - Al desinstalar borra el autoarranque y PREGUNTA antes de borrar temas y configuración
 ;   (por defecto, no se borran).
 
-; Desde Inno 6.3 el .iss se lee como UTF-8 sin BOM (lleva acentos y «») y existe
-; «x64compatible». Con una versión anterior los textos saldrían mal sin avisar.
-#if Ver < EncodeVer(6, 3, 0)
-  #error Hace falta Inno Setup 6.3 o posterior
+; Inno 7: el .iss se lee como UTF-8 sin BOM (lleva acentos y «»), existe «x64compatible»
+; y trae las traducciones oficiales de todos nuestros idiomas. empaquetar.py exige además
+; la 7.1.1 exacta (INNO_SHA256).
+#if Ver < EncodeVer(7, 0, 0)
+  #error Hace falta Inno Setup 7
 #endif
 
 #ifndef AppVersion
@@ -116,7 +117,7 @@ LanguageDetectionMethod=uilanguage
 
 [Languages]
 ; Los mismos idiomas que la app (luzeira.idioma.NATIVE_NAMES), con las traducciones
-; oficiales que trae Inno Setup 6.7.4. Los nombres cortos son los códigos de la app.
+; oficiales que trae Inno Setup 7.1.1. Los nombres cortos son los códigos de la app.
 Name: "en"; MessagesFile: "compiler:Default.isl"
 Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"
 Name: "de"; MessagesFile: "compiler:Languages\German.isl"

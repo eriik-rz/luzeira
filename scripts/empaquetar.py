@@ -44,7 +44,7 @@ ROOT = Path(__file__).resolve().parent.parent
 ISS = ROOT / "instalador" / "luzeira.iss"
 ICON = ROOT / "src" / "luzeira" / "recursos" / "luzeira.ico"
 EDITOR_INDEX = ROOT / "src" / "luzeira" / "editor" / "web" / "index.html"
-DEFAULT_ISCC = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Inno Setup 6" / "ISCC.exe"
+DEFAULT_ISCC = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Inno Setup 7" / "ISCC.exe"
 
 #: Versión del Python embebible que se espera (la de ``.python-version`` y el desarrollo).
 PYTHON_TAG = "312"
@@ -54,30 +54,36 @@ PYTHON_TAG = "312"
 #: **ejecuta** el python.exe de ese zip (compileall): sin esto, un zip manipulado correría
 #: código en la máquina de build y acabaría dentro del paquete.
 EMBED_SHA256 = "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3"
-#: SHA-256 de los binarios de Inno Setup 6.7.4 que compilan el instalador o van dentro de
-#: él. ISCC.exe y las DLL llevan firma válida de Pyrsys B.V. (comprobada 2026-11-18); los
-#: ``.e32`` no van firmados, por eso se fija el hash de todos. Otra versión de Inno = otros
-#: hashes: se actualizan aquí a propósito, nunca en silencio.
+#: SHA-256 de los binarios de Inno Setup 7.1.1 (edición x64, C-64) que compilan el
+#: instalador o van dentro de él. El instalador de Inno se comprobó contra su ``.issig`` y
+#: con ``gh release verify-asset``; ISCC.exe y las DLL llevan firma válida de Pyrsys B.V.
+#: (2026-11-23). Los ``.e32`` no van firmados, por eso se fija el hash de todos. Otra
+#: versión de Inno = otros hashes: se actualizan aquí a propósito, nunca en silencio.
 INNO_SHA256 = {
-    "ISCC.exe": "f02fa0e5f237b47d7ed1edae9b991866ec94fe02af61eb6a73e94f92fe8e0604",
-    "ISCmplr.dll": "236555054ca65194c69544b4ef1d49ea345259745f5c4a2005aca7b5674e7cff",
-    "ISPP.dll": "140b2d822bf30ed8aa3fed64764b2d2b92a80e0b9aafc1b8ff3e409706b9207e",
-    "islzma.dll": "8af307ce3738ab1d37cc7e76b2f76615e2045597d4367c3e40d52b5f2fbd353d",
-    "Setup.e32": "0c94d43e2c0f4d8371a2e1813b5446f3bc85ece3211dc4a6676159b534bbc483",
-    "SetupLdr.e32": "998c58046b0808e75a030859962e1fe1ea600e8a5cf4646b09aadce77342c1a9",
+    "ISCC.exe": "e0f9f1dc32032650c6629f6dee41eb6d20ba140e4e3c07c25d8a24f9ba781644",
+    "ISCmplr.dll": "7bf5943088e20ab95863a640d99c0234cf98e57850af82cdb465589f994d87de",
+    "ISPP.dll": "fef3c09323ffbcead73c306aa2626fc7dd1e316bf1a55d541d925286e5366015",
+    # El ISCC de 64 bits carga esta, no islzma.dll (medido: sin ella no compila).
+    "islzma-x64.dll": "40ff69ac37464035cec3338637f360f035f69beff8263c47f5913cbac8813158",
+    "Setup.e32": "0bddcbb0d3a739a54a9e89341b4543b2df8c01ce3f93e76f6adf2388b1c59468",
+    "SetupLdr.e32": "3c6c29ff87a2f3bcc0f9d36a3465f39de4cdc7fbb8086b7a053c5f6d84f709f8",
     # Traducciones del asistente (C-62): solo texto, pero acaban dentro del instalador y
-    # cambian sus hashes, así que también se fijan (comprobado 2026-11-23).
-    "Default.isl": "42a5f6f7dbbddf26cc278f67db5d894235ce1d126a6856702e31bd02023a1316",
-    "Languages/Spanish.isl": "c61ee6287d6a10db186cce43b556422e0a8bc631784132468a9cebca4f2df0d5",
-    "Languages/German.isl": "f016f4a957de8c59e8db2da788357b4c923cecadca6f0c6eab404fb28015cac9",
-    "Languages/French.isl": "145bf4ea34eaa79c52e4fcb77ce3eee9720b0d424c69458cb99592bc52121fba",
-    "Languages/Italian.isl": "18034c57f1133682b1b2e95afa327f232cdcf41bf1a44bc2b5aab1f8d3332a77",
+    # cambian sus hashes, así que también se fijan.
+    "Default.isl": "f2bbf8236200fd41919ac9cfde05841066ae4194deb36d06dc9445fdef99883b",
+    "Languages/Spanish.isl": "cb071274c70d7de4b774b306c6750edef7e8b662f71bb551333a7ed84c5a2634",
+    "Languages/German.isl": "36090e2ad4895d0f59c4716925a9739ecc9fb4fa2a7c0dc066ffcfb953d6ed59",
+    "Languages/French.isl": "5dd8367b662b7f250bbfb6859e32a5ff98ac98a677bc1211f635d287e23cb801",
+    "Languages/Italian.isl": "20636321f14d4c525cd2965242f765dcb772826a07ad9b224e6e6cacf232d8c8",
     "Languages/BrazilianPortuguese.isl": (
-        "e7e5e3dbd0ddee4c5a1f502f3035e431a21f87e68cef9a0295680b63ed61200b"
+        "d0bddd148bf2e8ba999e0b40a6429d0711bc6476c2c5eac9c3da2b9ac88a4be4"
     ),
-    "Languages/Polish.isl": "593f14b249afb49d38976816a4a3c73e13e354d1698f9f98d584c1c6c6a18e48",
-    "Languages/Turkish.isl": "21f69297a1d3d9a3407acd2ac43908cf20786fff8ef1c1d98cb9ea544a7a4c2c",
-    "Languages/Russian.isl": "81981fe6cfef7f3b2f744beac1494f4d2b29cea69c96a08d1c0a6b79dc0ed8f2",
+    "Languages/Polish.isl": "15f719b42c5fda5a4798b92ad38d090372e1d27c9658278148c7506a3d1f8191",
+    "Languages/Turkish.isl": "5a27f42d9f9c2ced4b105e82e6bfd4a8e2dc08fdc12dc742fb7196be02c52a8f",
+    "Languages/Russian.isl": "0def13d0a979bd3d062ef7ce960264df17f908fb62af46bb81970e2abee53919",
+    "Languages/ChineseSimplified.isl": (
+        "e0b0b350e2245f3c5e65586dfe43d574f6e7f06f2261149aba284954b3fc9a8d"
+    ),
+    "Languages/Japanese.isl": "4b5b3343eaf1a04c768979e92648e9080b2d0888f187c7a4300cc7ac89b2fc22",
 }
 #: Plataforma de las wheels: Windows de 64 bits, la única que soporta Luzeira v1.
 PLATFORM = "x86_64-pc-windows-msvc"
@@ -504,14 +510,14 @@ def check_inno(iscc: Path) -> None:
     for name, expected in INNO_SHA256.items():
         path = iscc.parent / name
         if not path.is_file():
-            sys.exit(f"Falta {path} (Inno Setup 6.7.4). Usa --iscc.")
+            sys.exit(f"Falta {path} (Inno Setup 7.1.1). Usa --iscc.")
         if sha256(path) != expected:
-            sys.exit(f"{path} no es el de Inno Setup 6.7.4 verificado (SHA-256 distinto).")
+            sys.exit(f"{path} no es el de Inno Setup 7.1.1 verificado (SHA-256 distinto).")
 
 
 def build_installer(iscc: Path, src: Path, out: Path, version: str, defines: list[str]) -> Path:
     if not iscc.is_file():
-        sys.exit(f"No encuentro ISCC.exe en {iscc} (Inno Setup 6). Usa --iscc.")
+        sys.exit(f"No encuentro ISCC.exe en {iscc} (Inno Setup 7). Usa --iscc.")
     check_inno(iscc)
     cmd = [
         str(iscc),

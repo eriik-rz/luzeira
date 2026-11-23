@@ -76,7 +76,7 @@ def test_64_bit():
     assert _setup("ArchitecturesInstallIn64BitMode") == "x64compatible"
 
 
-#: El fichero de Inno Setup 6.7.4 de cada idioma de la app (C-62).
+#: El fichero de Inno Setup 7.1.1 de cada idioma de la app (C-62).
 INNO_LANGUAGES = {
     "en": "compiler:Default.isl",
     "es": "compiler:Languages\\Spanish.isl",
@@ -528,8 +528,8 @@ def test_prune_removes_stray_top_level_files(tmp_path):
     assert (tmp_path / "pynvml.py").exists()
 
 
-def test_requires_inno_6_3():
-    assert "#if Ver < EncodeVer(6, 3, 0)" in ISS
+def test_requires_inno_7():
+    assert "#if Ver < EncodeVer(7, 0, 0)" in ISS
 
 
 def test_update_without_autostart_task_removes_only_our_value():

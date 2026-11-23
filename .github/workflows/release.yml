@@ -55,15 +55,16 @@ jobs:
           New-Item -ItemType Directory -Force descargas | Out-Null
           Invoke-WebRequest https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip -OutFile descargas/python-embed.zip
 
-      - name: Inno Setup 6.7.4 (instalador verificado; empaquetar.py comprueba además sus binarios)
+      - name: Inno Setup 7.1.1 (instalador verificado; empaquetar.py comprueba además sus binarios)
         shell: pwsh
         run: |
-          # SHA-256 publicado por GitHub para el asset de jrsoftware/issrc, release is-6_7_4.
-          $expected = "a549929319f9120716677c685535ca4671e4b937b5fdc87e2585f32d8eb30e8c"
-          Invoke-WebRequest https://github.com/jrsoftware/issrc/releases/download/is-6_7_4/innosetup-6.7.4.exe -OutFile descargas/innosetup.exe
+          # SHA-256 del .issig publicado por jrsoftware/issrc, release is-7_1_1 (edición x64,
+          # la recomendada; comprobado además con gh release verify-asset el 2026-11-23).
+          $expected = "8a5a6711c3766a6e5fb74f280ba0e3551e719ce94538d901fdbd1f8f9920b3f0"
+          Invoke-WebRequest https://github.com/jrsoftware/issrc/releases/download/is-7_1_1/innosetup-7.1.1-x64.exe -OutFile descargas/innosetup.exe
           $actual = (Get-FileHash descargas/innosetup.exe -Algorithm SHA256).Hash.ToLower()
           if ($actual -ne $expected) { throw "Instalador de Inno Setup con SHA-256 inesperado: $actual" }
-          $dir = Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6"
+          $dir = Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 7"
           $p = Start-Process descargas/innosetup.exe -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/CURRENTUSER","/DIR=`"$dir`"" -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "Inno Setup no se instaló ($($p.ExitCode))" }
 
