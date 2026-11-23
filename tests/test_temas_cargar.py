@@ -528,3 +528,31 @@ def test_gif_over_the_frame_limit_is_rejected(tmp_path: Path) -> None:
     (folder / "anim.gif").write_bytes(gif_bytes(cargar.MAX_GIF_FRAMES + 1))
     with pytest.raises(ThemeError, match="fotogramas"):
         load_theme(folder)
+
+
+@pytest.mark.parametrize(
+    "theme_json",
+    [
+        '{"name": 5}',  # theme.json que no cumple el formato: lista de problemas
+        '{"format": "luzeira-theme/1", "name": "x", "orientation": "landscape",'
+        ' "background": {"image": "no-esta.png"}}',  # un fichero del tema que falta
+    ],
+)
+def test_a_theme_error_is_the_same_notice_in_every_language(tmp_path, theme_json):
+    # C-64: el aviso de la bandeja se compara con ``ident`` y se reescribe con ``again``
+    # al cambiar de idioma: el mensaje entero (también sus detalles) tiene que llevar Text.
+    from luzeira import idioma
+    from luzeira.servicio import _theme_message
+
+    (tmp_path / "theme.json").write_text(theme_json, encoding="utf-8")
+
+    def notice():
+        with pytest.raises(cargar.ThemeError) as caught:
+            cargar.load_theme(tmp_path)
+        return _theme_message(tmp_path, caught.value)
+
+    spanish = notice()
+    idioma.set_language("en")
+    english = notice()
+    assert idioma.ident(spanish) == idioma.ident(english)
+    assert idioma.again(spanish) == str(english)  # el español, reescrito: todo en inglés

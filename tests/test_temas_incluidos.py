@@ -194,7 +194,8 @@ def test_builtin_texts_fit_their_box(name, language, monkeypatch):
     """
     from PIL import Image, ImageDraw
 
-    from luzeira.temas.fuentes import missing_glyphs
+    from luzeira.render.motor import month_names, weekday_names
+    from luzeira.temas.fuentes import font_for_text, missing_glyphs
 
     monkeypatch.setattr(idioma, "_active", language)
     loaded = load_theme(BUILTIN_THEMES / name)
@@ -204,18 +205,24 @@ def test_builtin_texts_fit_their_box(name, language, monkeypatch):
     for i, widget in enumerate(loaded.theme.widgets):
         if widget.type not in ("text", "clock", "sensor"):
             continue
-        font = resolve_font(widget.style, loaded.files)
+        base = resolve_font(widget.style, loaded.files)
         w, h = widget.box.width, widget.box.height
         # El mismo anclaje que Renderer._draw_text.
         x, anchor = {"left": (0, "lm"), "center": (w // 2, "mm"), "right": (w, "rm")}[
             widget.style.align
         ]
-        texts = _worst_texts(widget, units, font)
-        # Sin cuadros: un texto ruso o turco con una fuente sin esas letras se vería «□□□□».
-        missing = missing_glyphs(font, "".join(sorted(set("".join(texts)))))
-        if missing:
-            overflow.append(f"#{i} sin las letras {missing}")
+        # Los días y meses más anchos se buscan con la fuente con que se pintan (en chino y
+        # japonés, la de CJK de Windows: C-65).
+        names = "".join(weekday_names() + month_names())
+        texts = _worst_texts(widget, units, font_for_text(base, widget.style, names, language))
         for text in texts:
+            # La misma fuente que el motor para este texto (Renderer._font_for_text).
+            font = font_for_text(base, widget.style, text, language)
+            # Sin cuadros: un texto ruso o turco con una fuente sin esas letras se vería «□□□□».
+            missing = missing_glyphs(font, text)
+            if missing:
+                overflow.append(f"#{i} {text!r} sin las letras {missing}")
+                break
             left, top, right, bottom = draw.textbbox((x, h // 2), text, font=font, anchor=anchor)
             # 1 px de margen: el trazo de algunas letras (la «j» de «jueves») asoma 1 px
             # por fuera de su origen; no se nota en la pantalla.

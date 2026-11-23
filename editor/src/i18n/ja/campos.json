@@ -1,0 +1,6 @@
+{
+  "campos.escribe_numero": "数値を入力してください。",
+  "campos.como_mucho": "{max} 以下にしてください。",
+  "campos.como_poco": "{min} 以上にしてください。",
+  "campos.paleta": "{campo}: パレットから選択"
+}

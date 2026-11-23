@@ -1,6 +1,8 @@
 """Tests del motor de render, sin pantalla ni sensores reales."""
 
+import os
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 from PIL import Image, ImageFont
@@ -473,3 +475,22 @@ def test_decimal_separator_follows_the_language():
     idioma.set_language("en")
     assert format_reading(w, Reading(14.06, "GB")) == "14.1 GB"
     assert format_reading(w, Reading(14.06, "GB"), decimal_sep=",") == "14,1 GB"  # a mano manda
+
+
+YAHEI = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / "msyh.ttc"
+
+
+@pytest.mark.skipif(not YAHEI.is_file(), reason="Microsoft YaHei viene con Windows")
+def test_chinese_text_is_drawn_with_the_windows_cjk_font():
+    # C-65: ni la fuente del tema ni Segoe UI tienen ideogramas; sin la reserva saldrían
+    # cuadros. Tiene que salir lo mismo que pintando directamente con YaHei.
+    from luzeira import idioma
+
+    idioma.set_language("zh")
+    theme = make_theme({"type": "text", "text": "内存", "box": box(), "style": {"size": 20}})
+
+    def frame(fonts):
+        return Renderer(theme, font_for=fonts, read_sensor=lambda s: Reading(None, "")).full_frame()
+
+    yahei = frame(lambda style: ImageFont.truetype(str(YAHEI), style.size))
+    assert frame(font_for).tobytes() == yahei.tobytes()

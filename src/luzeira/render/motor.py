@@ -27,6 +27,7 @@ from luzeira import idioma
 from luzeira.idioma import t
 from luzeira.sensores.base import Reading
 from luzeira.temas.cargar import open_validated_image
+from luzeira.temas.fuentes import font_for_text
 from luzeira.temas.modelo import (
     BarWidget,
     ClockWidget,
@@ -185,6 +186,8 @@ class Renderer:
         self.theme = theme
         self._font_for_uncached = font_for
         self._fonts: dict[Style, ImageFont.FreeTypeFont | ImageFont.ImageFont] = {}
+        # (estilo, texto) → fuente con que se pinta (C-65: la de CJK si le faltan letras).
+        self._text_fonts: dict[tuple[Style, str], ImageFont.FreeTypeFont | ImageFont.ImageFont] = {}
         self._read_sensor = read_sensor
         self._files = dict(files or {})
         self._now = now
@@ -200,6 +203,21 @@ class Renderer:
         font = self._fonts.get(style)
         if font is None:
             font = self._fonts[style] = self._font_for_uncached(style)
+        return font
+
+    def _font_for_text(
+        self, style: Style, text: str
+    ) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+        """La fuente del estilo, o la de CJK de Windows si a esa le faltan letras del
+        texto. En caché: mirar los glifos pinta cada letra, y el reloj cambia cada segundo
+        (por eso se vacía al llegar a un tope)."""
+        key = (style, text)
+        font = self._text_fonts.get(key)
+        if font is None:
+            if len(self._text_fonts) >= 256:
+                self._text_fonts.clear()
+            font = font_for_text(self._font_for(style), style, text, idioma.current())
+            self._text_fonts[key] = font
         return font
 
     # --- capas fijas ---------------------------------------------------------------
@@ -253,7 +271,7 @@ class Renderer:
 
     def _draw_text(self, tile: Image.Image, text: str, style: Style) -> None:
         draw = ImageDraw.Draw(tile)
-        font = self._font_for(style)
+        font = self._font_for_text(style, text)
         y = tile.height // 2
         x, anchor = {
             "left": (0, "lm"),
@@ -267,7 +285,8 @@ class Renderer:
             # tamaños (bytecode de hinting roto). Se cae a la fuente de Luzeira en vez de
             # tumbar la app; no se registra el mensaje (puede llevar rutas personales).
             log.warning("La fuente del tema falló al pintar; uso la de Luzeira.")
-            fallback = self._font_for(style.model_copy(update={"font": None}))
+            plain = style.model_copy(update={"font": None})
+            fallback = self._font_for_text(plain, text)
             draw.text((x, y), text, font=fallback, fill=style.color, anchor=anchor)
 
     def _draw_bar(self, tile: Image.Image, widget: BarWidget, reading: Reading) -> None:

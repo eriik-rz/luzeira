@@ -226,3 +226,20 @@ def test_joined_texts_and_errors_are_written_again_too(fake_catalogs):
     )
     # Un error sin Text cuenta por su tipo: su texto ya viene traducido.
     assert idioma.ident(KeyError("a")) == idioma.ident(KeyError("b")) == "KeyError"
+
+
+@pytest.mark.parametrize(
+    ("langid", "expected"), [(0x0804, "zh"), (0x0411, "ja"), (0x0404, None), (0x0C04, None)]
+)
+def test_traditional_chinese_windows_falls_back_instead_of_simplified(
+    monkeypatch, langid, expected
+):
+    # C-65: el chino de Luzeira es el simplificado (China continental); en Taiwán y Hong
+    # Kong se escribe el tradicional, así que ahí sale el inglés (y se puede elegir a mano).
+    class Kernel32:
+        def GetUserDefaultUILanguage(self):
+            return langid
+
+    monkeypatch.setattr(idioma.sys, "platform", "win32")
+    monkeypatch.setattr(idioma.ctypes, "WinDLL", lambda name: Kernel32(), raising=False)
+    assert REAL_WINDOWS_LANGUAGE() == expected

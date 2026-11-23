@@ -21,7 +21,7 @@
     {"type": "bar", "sensor": "memory.usage", "fill": "#ffb347", "track": "#2c2c33", "box": {"x": 328, "y": 262, "width": 128, "height": 6}},
 
     {"type": "sensor", "sensor": "gpu.temperature", "prefix": "GPU ", "box": {"x": 24, "y": 284, "width": 128, "height": 22}, "style": {"size": 14, "color": "#8b8f98", "align": "left"}},
-    {"type": "sensor", "sensor": "memory.used", "decimals": 1, "prefix": "usada ", "prefix_i18n": { "en": "used ", "de": "belegt ", "fr": "utilisée ", "it": "usata ", "pt": "usada ", "pl": "zajęte ", "tr": "kullanılan ", "ru": "занято " }, "box": {"x": 328, "y": 284, "width": 128, "height": 22}, "style": {"size": 14, "color": "#8b8f98", "align": "right"}},
-    {"type": "sensor", "sensor": "system.uptime", "decimals": 1, "prefix": "encendido ", "prefix_i18n": { "en": "uptime ", "de": "laufzeit ", "fr": "allumé ", "it": "acceso ", "pt": "ligado ", "pl": "czas pracy ", "tr": "çalışma ", "ru": "в работе " }, "interval": 60, "box": {"x": 156, "y": 284, "width": 168, "height": 22}, "style": {"size": 14, "color": "#8b8f98", "align": "center"}}
+    {"type": "sensor", "sensor": "memory.used", "decimals": 1, "prefix": "usada ", "prefix_i18n": { "en": "used ", "de": "belegt ", "fr": "utilisée ", "it": "usata ", "pt": "usada ", "pl": "zajęte ", "tr": "kullanılan ", "ru": "занято ", "zh": "已用 ", "ja": "使用 " }, "box": {"x": 328, "y": 284, "width": 128, "height": 22}, "style": {"size": 14, "color": "#8b8f98", "align": "right"}},
+    {"type": "sensor", "sensor": "system.uptime", "decimals": 1, "prefix": "encendido ", "prefix_i18n": { "en": "uptime ", "de": "laufzeit ", "fr": "allumé ", "it": "acceso ", "pt": "ligado ", "pl": "czas pracy ", "tr": "çalışma ", "ru": "в работе ", "zh": "运行 ", "ja": "稼働 " }, "interval": 60, "box": {"x": 156, "y": 284, "width": 168, "height": 22}, "style": {"size": 14, "color": "#8b8f98", "align": "center"}}
   ]
 }

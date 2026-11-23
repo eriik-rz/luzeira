@@ -1,0 +1,18 @@
+{
+  "tema.titulo": "テーマ",
+  "tema.pista": "キャンバス上の要素をクリックすると編集できます。",
+  "tema.datos": "詳細",
+  "tema.nombre": "名前",
+  "tema.nombre.ayuda": "テーマの一覧にこの名前で表示されます。",
+  "tema.autor": "作成者 (省略可)",
+  "tema.autor.ayuda": "テーマを共有するときの作成者名です。ニックネームでもかまいません。",
+  "tema.pantalla": "ディスプレイ",
+  "tema.orientacion": "向き",
+  "tema.orientacion.ayuda": "ディスプレイの置き方です。向きを変えて収まらなくなった要素は、内側に移動されます。",
+  "tema.fondo": "背景",
+  "tema.fondo.color": "背景色",
+  "tema.fondo.color.ayuda": "背景画像がない部分に表示されます。",
+  "tema.fondo.imagen": "背景画像",
+  "tema.fondo.imagen.ayuda": "画面全体を覆います。縦横比が違う場合は、端が切り取られます。",
+  "tema.fondo.solo_color": "色のみ"
+}

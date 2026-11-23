@@ -1,0 +1,6 @@
+{
+  "lienzo.etiqueta": "{ancho} × {alto} 像素的画布",
+  "lienzo.medida": "{ancho} × {alto} · 缩放 ×{zoom}",
+  "lienzo.vista_previa": "副屏预览",
+  "lienzo.preparando": "正在准备预览……"
+}

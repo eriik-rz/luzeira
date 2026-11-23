@@ -87,6 +87,8 @@ INNO_LANGUAGES = {
     "pl": "compiler:Languages\\Polish.isl",
     "tr": "compiler:Languages\\Turkish.isl",
     "ru": "compiler:Languages\\Russian.isl",
+    "zh": "compiler:Languages\\ChineseSimplified.isl",
+    "ja": "compiler:Languages\\Japanese.isl",
 }
 
 
@@ -105,7 +107,7 @@ def test_installer_speaks_every_language_of_the_app():
 
 
 def test_installer_picks_the_windows_language_without_asking():
-    # «auto»: solo pregunta si el idioma de Windows no es ninguno de los nueve.
+    # «auto»: solo pregunta si el idioma de Windows no es ninguno de los nuestros.
     assert _setup("ShowLanguageDialog") == "auto"
     assert _setup("LanguageDetectionMethod") == "uilanguage"
 

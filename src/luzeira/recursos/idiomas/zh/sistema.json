@@ -1,0 +1,19 @@
+{
+  "sistema.acceso_fallo": "无法创建快捷方式。",
+  "sistema.actualizar_firma_no_valida": "新版本的签名无效。",
+  "sistema.actualizar_info_no_valida": "新版本的信息无效。",
+  "sistema.actualizar_fuera_de_github": "下载试图转到 GitHub 以外的网站。",
+  "sistema.actualizar_sin_versiones": "目前还没有带更新通知的版本。",
+  "sistema.actualizar_error_github": "GitHub 返回了错误（{code}）。",
+  "sistema.actualizar_sin_conexion": "无法连接到 GitHub。网络通吗？",
+  "sistema.actualizar_respuesta_grande": "GitHub 的响应比预期的大。",
+  "sistema.actualizar_descarga_grande": "下载的文件比预期的大。",
+  "sistema.actualizar_no_puede": "此 Luzeira 副本无法检查更新。",
+  "sistema.actualizar_instalador_distinto": "下载的安装程序与签名的不一致。不会打开它。",
+  "sistema.ventana_titulo": "Luzeira — 主题编辑器",
+  "sistema.ventana_sin_guardar": "有未保存的更改（{reason}）。仍要关闭吗？",
+  "sistema.ventana_pendiente_errores": "有标红的错误",
+  "sistema.ventana_pendiente_incluido": "这些是对内置主题的更改；要保留它们，请用“另存为”",
+  "sistema.ventana_pendiente_fallo": "保存失败",
+  "sistema.ventana_pendiente_desconocido": "无法确认是否还有未保存的内容"
+}

@@ -1,0 +1,17 @@
+{
+  "capas.titulo": "图层",
+  "capas.lleno": "一个主题最多只能有 {max} 个元素",
+  "capas.anadir": "添加",
+  "capas.anadir.ayuda": "在副屏上添加一个新元素",
+  "capas.tipo": "元素类型",
+  "capas.pista": "上面的显示在前面。拖动可以调整顺序。",
+  "capas.vacia": "副屏上还是空的。",
+  "capas.vacia.pista": "点击“添加”放上第一个元素。",
+  "capas.con_errores": "（有错误）",
+  "capas.alt": "Alt + ↑/↓ 上移或下移图层",
+  "capas.delante": "上移一层",
+  "capas.delante.ayuda": "上移一层（在列表中上移）",
+  "capas.atras": "下移一层",
+  "capas.atras.ayuda": "下移一层（在列表中下移）",
+  "capas.cuenta": "{n} / {max} 个元素"
+}

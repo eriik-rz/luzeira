@@ -13,6 +13,11 @@ Orden de búsqueda de ``resolve_font`` (la primera que se pueda abrir gana):
    probaría primero la carpeta actual y un ``segoeui.ttf`` plantado ahí se colaría.
 4. ``ImageFont.load_default(size)`` (Aileron, que viene dentro de Pillow). Ojo: le faltan
    «¡», «¿», «ñ» y todas las vocales con tilde, así que solo es el último recurso.
+
+Chino y japonés (C-65): ninguna de esas trae ideogramas ni kana. ``font_for_text`` mira
+el texto que se va a pintar y, si a la fuente elegida le faltan letras CJK, lo pinta con
+una de Windows (Microsoft YaHei para el chino, Yu Gothic para el japonés). Vienen con
+Windows 10 y 11, así que no se redistribuyen ni pesan en el paquete.
 """
 
 from __future__ import annotations
@@ -39,6 +44,22 @@ BUNDLED_BOLD = "bold.ttf"
 SYSTEM_REGULAR = "segoeui.ttf"
 SYSTEM_BOLD = "segoeuib.ttf"
 
+#: Fuentes de Windows con CJK, (normal, negrita), en orden de preferencia según el idioma
+#: activo: el mismo ideograma se dibuja distinto en chino y en japonés (unificación Han),
+#: así que cada idioma prefiere la suya. Con cualquier otro idioma, el orden del chino.
+_YAHEI = ("msyh.ttc", "msyhbd.ttc")
+_YUGOTHIC = ("YuGothM.ttc", "YuGothB.ttc")
+_SIMSUN = ("simsun.ttc", "simsun.ttc")
+_MSGOTHIC = ("msgothic.ttc", "msgothic.ttc")
+CJK_FONTS = {
+    "zh": (_YAHEI, _SIMSUN, _YUGOTHIC, _MSGOTHIC),
+    "ja": (_YUGOTHIC, _MSGOTHIC, _YAHEI, _SIMSUN),
+}
+#: Desde aquí empiezan los bloques CJK de Unicode (radicales, kana, ideogramas, hangul,
+#: formas de ancho completo). Por debajo no hace falta mirar nada: el texto es latino,
+#: cirílico… y lo tienen nuestras fuentes.
+_CJK_START = 0x2E80
+
 # U+10FFFF es un «no carácter» de Unicode: ninguna fuente lo tiene, así que siempre se
 # pinta con el glifo de «falta» (.notdef, normalmente un rectángulo: el «cuadro»).
 _NOTDEF_PROBE = "\U0010ffff"
@@ -46,7 +67,8 @@ _NOTDEF_PROBE = "\U0010ffff"
 
 def _system_fonts_dir() -> Path | None:
     windir = os.environ.get("WINDIR") or os.environ.get("SYSTEMROOT")
-    return Path(windir) / "Fonts" if windir else None
+    # Solo absoluta: una relativa se buscaría en la carpeta actual (ver arriba, punto 3).
+    return Path(windir) / "Fonts" if windir and Path(windir).is_absolute() else None
 
 
 def _theme_font_path(style: Style, files: Mapping[str, Path] | None) -> Path | None:
@@ -110,6 +132,38 @@ def resolve_font(style: Style, files: Mapping[str, Path] | None = None) -> Font:
             if font is not None:
                 return font
     return _load_default(style.size)
+
+
+def cjk_font(style: Style, language: str) -> Font | None:
+    """La fuente de Windows con CJK para ``style`` (tamaño y negrita), o None si este
+    Windows no tiene ninguna. Ruta absoluta, como Segoe UI (ver arriba)."""
+    sys_dir = _system_fonts_dir()
+    if sys_dir is None:
+        return None
+    for regular, bold in CJK_FONTS.get(language, CJK_FONTS["zh"]):
+        path = sys_dir / (bold if style.bold else regular)
+        if path.is_file():
+            font = _load(str(path), style.size)
+            if font is not None:
+                return font
+    return None
+
+
+def font_for_text(font: Font, style: Style, text: str, language: str) -> Font:
+    """``font``, salvo que le falten letras CJK de ``text`` y la de Windows las tenga.
+
+    El texto entero va con una sola fuente (Pillow no sustituye letra a letra): con la
+    de CJK también salen bien las cifras y el «%» de al lado.
+    """
+    if all(ord(ch) < _CJK_START for ch in text):
+        return font
+    missing = missing_glyphs(font, text)
+    if not missing:
+        return font
+    alt = cjk_font(style, language)
+    if alt is not None and len(missing_glyphs(alt, text)) < len(missing):
+        return alt
+    return font
 
 
 @lru_cache(maxsize=16)

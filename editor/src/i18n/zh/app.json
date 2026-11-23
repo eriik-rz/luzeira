@@ -1,0 +1,10 @@
+{
+  "app.conectando": "正在连接 Luzeira……",
+  "app.no_abre": "无法打开编辑器",
+  "app.sin_temas": "没有主题",
+  "app.sin_temas.texto": "Luzeira 没有找到任何主题。重新安装 Luzeira 应该可以解决。",
+  "app.sin_token": "无法连接到 Luzeira。请从通知区域的 Luzeira 图标打开编辑器。",
+  "app.sin_conexion": "与 Luzeira 的连接断开了。它还在运行吗？",
+  "app.respuesta_rara": "Luzeira 返回了意外的内容。请关闭编辑器后重新打开。",
+  "app.fallo": "出了点问题。请再试一次。"
+}

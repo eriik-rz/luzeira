@@ -1,0 +1,17 @@
+{
+  "capas.titulo": "レイヤー",
+  "capas.lleno": "1 つのテーマに置ける要素は {max} 個までです",
+  "capas.anadir": "追加",
+  "capas.anadir.ayuda": "画面に新しい要素を追加します",
+  "capas.tipo": "要素の種類",
+  "capas.pista": "上にあるものほど手前に表示されます。ドラッグして順番を変えられます。",
+  "capas.vacia": "画面は空です。",
+  "capas.vacia.pista": "「追加」を押して最初の要素を置きましょう。",
+  "capas.con_errores": "(エラーあり)",
+  "capas.alt": "Alt + ↑/↓ でレイヤーを上下に移動",
+  "capas.delante": "前面へ移動",
+  "capas.delante.ayuda": "前面へ移動 (一覧で上へ)",
+  "capas.atras": "背面へ移動",
+  "capas.atras.ayuda": "背面へ移動 (一覧で下へ)",
+  "capas.cuenta": "要素 {n} / {max} 個"
+}

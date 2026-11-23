@@ -517,6 +517,20 @@ test('idiomas: el activo, luego inglés, luego español, y si no la clave; con v
   i18n.setLanguage('es')
 })
 
+test('idiomas: el chino es el simplificado; un navegador en tradicional sale en inglés', async () => {
+  // C-65, como `idioma.windows_language` en la app.
+  const i18n = await import('../src/model/i18n.ts')
+  i18n.registerCatalogs({ es: { a: 'a' }, en: { a: 'a' }, zh: { a: '甲' } })
+  assert.equal(i18n.setLanguage(null, 'zh-CN'), 'zh')
+  assert.equal(i18n.setLanguage(null, 'zh'), 'zh')
+  for (const traditional of ['zh-TW', 'zh-HK', 'zh-MO', 'zh-Hant-TW']) {
+    assert.equal(i18n.setLanguage(null, traditional), 'en', traditional)
+  }
+  assert.equal(i18n.setLanguage('zh', 'zh-TW'), 'zh') // elegido a mano, sí
+  i18n.registerCatalogs(CATALOGS)
+  i18n.setLanguage('es')
+})
+
 // --- C-62: idiomas en la vista previa y traducciones de los temas ----------------------
 
 /** Un `pantalla` inglés de prueba (el de verdad lo escribe el agente de Python). */

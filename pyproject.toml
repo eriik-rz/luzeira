@@ -1,6 +1,6 @@
 [project]
 name = "luzeira"
-version = "0.1.6"
+version = "0.1.7"
 description = "App libre para pantallas USB de monitorización del PC, en español y fácil de usar."
 readme = "README.md"
 license = "GPL-3.0-or-later"

@@ -48,6 +48,8 @@ NATIVE_NAMES = {
     "pl": "Polski",
     "tr": "Türkçe",
     "ru": "Русский",
+    "zh": "简体中文",
+    "ja": "日本語",
 }
 
 _lock = threading.Lock()
@@ -153,6 +155,30 @@ class Joined(Text):
         return ("", tuple(ident(p) for p in self.parts))
 
 
+class Composed(Text):
+    """Piezas puestas en un patrón fijo nuestro (``"  - {}: {}"``), no del catálogo.
+
+    Cada pieza puede ser un ``Text``, un error con uno o un texto que no depende del idioma
+    (el nombre de un campo). Así un mensaje compuesto (la lista de problemas de un
+    ``theme.json``) también se reescribe entero al cambiar de idioma y cuenta como el mismo
+    aviso. El patrón es siempre una constante del código: las piezas no se interpretan.
+    """
+
+    pattern: str
+    parts: tuple[object, ...]
+
+    def __new__(cls, pattern: str, *parts: object) -> Composed:
+        obj = str.__new__(cls, pattern.format(*(str(p) for p in parts)))
+        obj.key, obj.variables, obj.pattern, obj.parts = "", {}, pattern, parts
+        return obj
+
+    def again(self) -> str:
+        return self.pattern.format(*(str(again(p)) for p in self.parts))
+
+    def ident(self) -> object:
+        return (self.pattern, tuple(ident(p) for p in self.parts))
+
+
 def _text_in(value: object) -> Text | None:
     """El ``Text`` de un error creado con uno (``DisplayError(Text(...))``), si lo hay."""
     if isinstance(value, BaseException) and value.args and isinstance(value.args[0], Text):
@@ -193,6 +219,9 @@ def current() -> str:
     return _active
 
 
+_TRADITIONAL_CHINESE = {"zh_TW", "zh_HK", "zh_MO", "zh_CHT"}
+
+
 def windows_language() -> str | None:
     """Código de dos letras del idioma de la interfaz de Windows (``es``, ``en``…)."""
     if sys.platform != "win32":
@@ -202,6 +231,10 @@ def windows_language() -> str | None:
     except (AttributeError, OSError):
         return None
     name = locale.windows_locale.get(langid)  # p. ej. «es_ES»
+    if name in _TRADITIONAL_CHINESE:
+        # Nuestro chino es el simplificado: en Taiwán, Hong Kong y Macao se escribe el
+        # tradicional, así que ahí se cae al inglés (y se puede elegir a mano).
+        return None
     return name.split("_")[0].lower() if name else None
 
 

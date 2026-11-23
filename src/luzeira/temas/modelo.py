@@ -19,7 +19,7 @@ from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
-from luzeira.idioma import t
+from luzeira.idioma import Text
 from luzeira.temas.rutas import has_reserved_component
 
 FORMAT = "luzeira-theme/1"
@@ -37,14 +37,14 @@ def _not_reserved(path: str) -> str:
     # patrón pero Windows los trata como dispositivos. Se rechazan ya en el esquema para
     # que también lo vea el editor.
     if has_reserved_component(path):
-        raise ValueError(t("temas.modelo.reservado"))
+        raise ValueError(Text("temas.modelo.reservado"))
     return path
 
 
 def _with_extensions(*allowed: str):
     def check(path: str) -> str:
         if path.rsplit(".", 1)[-1].lower() not in allowed:
-            raise ValueError(t("temas.modelo.extension", allowed=", ".join(allowed)))
+            raise ValueError(Text("temas.modelo.extension", allowed=", ".join(allowed)))
         return path
 
     return AfterValidator(check)
@@ -87,7 +87,7 @@ class WidgetOffScreen(ValueError):
     sus palabras y lo cuelgue de la caja de ese elemento (``n`` cuenta desde 1)."""
 
     def __init__(self, n: int, kind: str, width: int, height: int) -> None:
-        super().__init__(t("temas.modelo.fuera", n=n, kind=kind, width=width, height=height))
+        super().__init__(Text("temas.modelo.fuera", n=n, kind=kind, width=width, height=height))
         self.n, self.kind, self.width, self.height = n, kind, width, height
 
 
@@ -158,7 +158,7 @@ class BarWidget(_Widget):
     @model_validator(mode="after")
     def _range(self) -> BarWidget:
         if self.max <= self.min:
-            raise RangeError(t("temas.modelo.max_min"))
+            raise RangeError(Text("temas.modelo.max_min"))
         return self
 
 

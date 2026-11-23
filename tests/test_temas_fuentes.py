@@ -219,3 +219,46 @@ def test_planted_font_in_current_dir_is_ignored(
 def test_cache_returns_same_object(no_bundled: None) -> None:
     assert resolve_font(Style(size=21), None) is resolve_font(Style(size=21), None)
     assert resolve_font(Style(size=21), None) is not resolve_font(Style(size=22), None)
+
+
+# --- chino y japonés (C-65) ------------------------------------------------------------
+
+YAHEI = FONTS_DIR / "msyh.ttc"
+YUGOTHIC = FONTS_DIR / "YuGothM.ttc"
+needs_cjk = pytest.mark.skipif(
+    not (YAHEI.is_file() and YUGOTHIC.is_file()), reason="YaHei y Yu Gothic vienen con Windows"
+)
+
+
+@needs_cjk
+@pytest.mark.parametrize(("language", "expected"), [("zh", YAHEI), ("ja", YUGOTHIC)])
+def test_cjk_text_falls_back_to_the_windows_font_of_the_language(language, expected) -> None:
+    # Inter (la incluida) no tiene ideogramas: sin la reserva saldrían cuadros.
+    style = Style(size=20)
+    base = resolve_font(style)
+    text = "内存 45%" if language == "zh" else "メモリ 45%"
+    assert missing_glyphs(base, text)
+    font = fuentes.font_for_text(base, style, text, language)
+    assert font_path(font) == expected
+    assert missing_glyphs(font, text) == []
+
+
+@needs_cjk
+def test_bold_cjk_uses_the_bold_file() -> None:
+    style = Style(size=20, bold=True)
+    font = fuentes.font_for_text(resolve_font(style), style, "处理器", "zh")
+    assert font_path(font).name == "msyhbd.ttc"
+
+
+def test_latin_text_keeps_its_font_without_looking_at_glyphs(monkeypatch) -> None:
+    style = Style(size=20)
+    base = resolve_font(style)
+    monkeypatch.setattr(fuentes, "missing_glyphs", lambda *a: pytest.fail("no hace falta mirar"))
+    assert fuentes.font_for_text(base, style, "CPU 45 % ñ Ж", "zh") is base
+
+
+def test_without_any_cjk_font_the_text_keeps_its_font(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("WINDIR", str(tmp_path))  # un Windows sin fuentes CJK
+    style = Style(size=20)
+    base = resolve_font(style)
+    assert fuentes.font_for_text(base, style, "内存", "zh") is base

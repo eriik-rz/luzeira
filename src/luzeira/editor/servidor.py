@@ -65,7 +65,7 @@ from luzeira.render.motor import (
     format_clock,
 )
 from luzeira.sensores.base import Reading, SensorInfo
-from luzeira.temas import ThemeError, load_theme, missing_glyphs, resolve_font
+from luzeira.temas import ThemeError, font_for_text, load_theme, missing_glyphs, resolve_font
 from luzeira.temas.cargar import MAX_ZIP_BYTES
 from luzeira.temas.modelo import (
     ORIENTATION_SIZES,
@@ -244,7 +244,9 @@ def find_missing_glyphs(theme, files, moment: datetime | None = None) -> list[di
         text = "".join(ch for ch in text if not ch.isspace())
         if not text:
             continue
-        missing = missing_glyphs(resolve_font(widget.style, files), text)
+        # La misma que usa el motor: con la de CJK de Windows si a la del tema le faltan.
+        font = font_for_text(resolve_font(widget.style, files), widget.style, text, lang)
+        missing = missing_glyphs(font, text)
         if missing:
             found.append({"index": index, "chars": "".join(dict.fromkeys(missing))})
     return found

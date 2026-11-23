@@ -1,0 +1,6 @@
+{
+  "lienzo.etiqueta": "{ancho} × {alto} ピクセルのキャンバス",
+  "lienzo.medida": "{ancho} × {alto} · ズーム ×{zoom}",
+  "lienzo.vista_previa": "ディスプレイのプレビュー",
+  "lienzo.preparando": "プレビューを準備しています…"
+}

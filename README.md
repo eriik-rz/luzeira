@@ -1,6 +1,6 @@
 # Luzeira
 
-Tu pantalla USB de monitorización del PC, en español y como tú quieras.
+Tu pantalla USB de monitorización del PC, en tu idioma y como tú quieras.
 
 ### [⬇ Descargar en Microsoft Store](https://apps.microsoft.com/detail/9MSNPHG5NZ40) · [Instalador (GitHub)](https://github.com/eriik-rz/luzeira/releases/latest)
 
@@ -13,7 +13,7 @@ Luzeira es una app libre para las pequeñas pantallas USB que se ponen dentro o 
 ## Qué la hace distinta
 
 - **Fácil**: se instala con dos clics, arranca sola con Windows y se maneja desde el icono junto al reloj.
-- **En español** de principio a fin, sin jerga.
+- **En tu idioma**, sin jerga: español, inglés, alemán, francés, italiano, portugués de Brasil, polaco, turco, ruso, chino simplificado y japonés. El chino y el japonés aún no los ha revisado un hablante nativo: si algo suena raro, [avísanos](https://github.com/eriik-rz/luzeira/issues).
 - **Sin permisos de administrador**: ni para instalar ni para funcionar.
 - **Ligera**: solo envía a la pantalla lo que cambia (unos pocos KB por segundo) y apenas usa CPU.
 - **Respetuosa**: apaga la pantalla al apagar o suspender el PC y la vuelve a encender al volver; si desenchufas el cable, se reconecta sola.

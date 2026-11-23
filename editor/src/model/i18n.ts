@@ -22,6 +22,8 @@ export const NATIVE_NAMES: Record<string, string> = {
   pl: 'Polski',
   tr: 'Türkçe', // i18n: no
   ru: 'Русский',
+  zh: '简体中文',
+  ja: '日本語',
 }
 
 let catalogs: Record<string, Catalog> = {}
@@ -39,7 +41,11 @@ export function availableLanguages(): string[] {
 export function resolveLanguage(code: string | null | undefined, system?: string | null): string {
   const langs = availableLanguages()
   if (code && langs.includes(code)) return code
-  const sys = (system ?? '').slice(0, 2).toLowerCase()
+  const full = (system ?? '').toLowerCase()
+  // Nuestro chino es el simplificado: con un navegador en chino tradicional (Taiwán, Hong
+  // Kong, Macao), inglés, igual que la app (idioma.py).
+  if (/^zh-(tw|hk|mo|hant)/.test(full)) return FALLBACK
+  const sys = full.slice(0, 2)
   return langs.includes(sys) ? sys : FALLBACK
 }
 

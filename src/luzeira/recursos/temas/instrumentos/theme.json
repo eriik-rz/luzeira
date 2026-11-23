@@ -32,11 +32,11 @@
     {"type": "sensor", "sensor": "gpu.temperature", "box": {"x": 272, "y": 258, "width": 64, "height": 22}, "style": {"size": 15, "bold": true, "color": "#ffa640", "align": "center"}},
 
     {"type": "bar", "sensor": "gpu.fan", "direction": "vertical", "fill": "#60a5fa", "track": "#08090b", "box": {"x": 360, "y": 66, "width": 24, "height": 164}},
-    {"type": "text", "text": "VENT", "text_i18n": { "en": "FAN", "de": "LÜFTER", "fr": "VENTIL.", "it": "VENT.", "pt": "VENT.", "pl": "WENT.", "tr": "FAN", "ru": "ВЕНТ." }, "box": {"x": 336, "y": 240, "width": 64, "height": 16}, "style": {"size": 14, "bold": true, "color": "#c9ccd1", "align": "center"}},
+    {"type": "text", "text": "VENT", "text_i18n": { "en": "FAN", "de": "LÜFTER", "fr": "VENTIL.", "it": "VENT.", "pt": "VENT.", "pl": "WENT.", "tr": "FAN", "ru": "ВЕНТ.", "zh": "风扇", "ja": "ファン" }, "box": {"x": 336, "y": 240, "width": 64, "height": 16}, "style": {"size": 14, "bold": true, "color": "#c9ccd1", "align": "center"}},
     {"type": "sensor", "sensor": "gpu.fan", "box": {"x": 336, "y": 258, "width": 64, "height": 22}, "style": {"size": 15, "bold": true, "color": "#93c5fd", "align": "center"}},
 
     {"type": "bar", "sensor": "disk.usage.c", "direction": "vertical", "fill": "#4ade80", "track": "#08090b", "box": {"x": 424, "y": 66, "width": 24, "height": 164}},
-    {"type": "text", "text": "DISCO", "text_i18n": { "en": "DISK", "de": "PLATTE", "fr": "DISQUE", "it": "DISCO", "pt": "DISCO", "pl": "DYSK", "tr": "DİSK", "ru": "ДИСК" }, "box": {"x": 400, "y": 240, "width": 64, "height": 16}, "style": {"size": 14, "bold": true, "color": "#c9ccd1", "align": "center"}},
+    {"type": "text", "text": "DISCO", "text_i18n": { "en": "DISK", "de": "PLATTE", "fr": "DISQUE", "it": "DISCO", "pt": "DISCO", "pl": "DYSK", "tr": "DİSK", "ru": "ДИСК", "zh": "磁盘", "ja": "ディスク" }, "box": {"x": 400, "y": 240, "width": 64, "height": 16}, "style": {"size": 14, "bold": true, "color": "#c9ccd1", "align": "center"}},
     {"type": "sensor", "sensor": "disk.usage.c", "box": {"x": 400, "y": 258, "width": 64, "height": 22}, "style": {"size": 15, "bold": true, "color": "#4ade80", "align": "center"}},
 
     {"type": "sensor", "sensor": "cpu.name", "max_chars": 27, "interval": 3600, "box": {"x": 16, "y": 290, "width": 218, "height": 20}, "style": {"size": 14, "color": "#8b9099", "align": "left"}},

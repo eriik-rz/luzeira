@@ -1,0 +1,10 @@
+{
+  "app.conectando": "Luzeira に接続しています…",
+  "app.no_abre": "エディターを開けません",
+  "app.sin_temas": "テーマがありません",
+  "app.sin_temas.texto": "Luzeira はテーマを 1 つも見つけられませんでした。Luzeira を再インストールすると解決するはずです。",
+  "app.sin_token": "Luzeira に接続できませんでした。タスク バーの通知領域にある Luzeira のアイコンからエディターを開いてください。",
+  "app.sin_conexion": "Luzeira との接続が切れました。Luzeira はまだ起動していますか？",
+  "app.respuesta_rara": "Luzeira から予期しない応答がありました。エディターを閉じて、もう一度開いてください。",
+  "app.fallo": "問題が発生しました。もう一度お試しください。"
+}

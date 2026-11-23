@@ -1,0 +1,19 @@
+{
+  "sistema.acceso_fallo": "ショートカットを作成できませんでした。",
+  "sistema.actualizar_firma_no_valida": "新しいバージョンの署名が無効です。",
+  "sistema.actualizar_info_no_valida": "新しいバージョンの情報が無効です。",
+  "sistema.actualizar_fuera_de_github": "ダウンロードが GitHub 以外のサイトに移動しようとしました。",
+  "sistema.actualizar_sin_versiones": "更新通知に対応したバージョンはまだありません。",
+  "sistema.actualizar_error_github": "GitHub がエラーを返しました ({code})。",
+  "sistema.actualizar_sin_conexion": "GitHub に接続できませんでした。インターネットに接続されていますか？",
+  "sistema.actualizar_respuesta_grande": "GitHub からの応答が想定より大きすぎます。",
+  "sistema.actualizar_descarga_grande": "ダウンロードが想定より大きすぎます。",
+  "sistema.actualizar_no_puede": "この Luzeira では更新を確認できません。",
+  "sistema.actualizar_instalador_distinto": "ダウンロードしたインストーラーが署名済みのものと一致しません。開かずに中止します。",
+  "sistema.ventana_titulo": "Luzeira — テーマ エディター",
+  "sistema.ventana_sin_guardar": "保存されていない変更があります ({reason})。閉じてもよろしいですか？",
+  "sistema.ventana_pendiente_errores": "赤で示されたエラーがあります",
+  "sistema.ventana_pendiente_incluido": "標準テーマへの変更です。残すには「名前を付けて保存」を使ってください",
+  "sistema.ventana_pendiente_fallo": "保存できませんでした",
+  "sistema.ventana_pendiente_desconocido": "未保存の内容が残っているかどうかを確認できませんでした"
+}

@@ -1,0 +1,18 @@
+{
+  "tema.titulo": "主题",
+  "tema.pista": "点击画布上的元素即可编辑。",
+  "tema.datos": "信息",
+  "tema.nombre": "名称",
+  "tema.nombre.ayuda": "在主题列表中显示的名称。",
+  "tema.autor": "作者（可选）",
+  "tema.autor.ayuda": "如果你分享这个主题，写上是谁做的。可以用昵称。",
+  "tema.pantalla": "副屏",
+  "tema.orientacion": "方向",
+  "tema.orientacion.ayuda": "副屏的摆放方式。旋转后如果有内容放不下，会自动移回范围内。",
+  "tema.fondo": "背景",
+  "tema.fondo.color": "背景颜色",
+  "tema.fondo.color.ayuda": "没有背景图片的地方显示这个颜色。",
+  "tema.fondo.imagen": "背景图片",
+  "tema.fondo.imagen.ayuda": "铺满整个副屏；如果比例不同，会裁掉两边。",
+  "tema.fondo.solo_color": "仅颜色"
+}

@@ -28,7 +28,7 @@ from pathlib import Path, PurePosixPath
 from PIL import Image, UnidentifiedImageError
 from pydantic import TypeAdapter, ValidationError
 
-from luzeira.idioma import Text, t
+from luzeira.idioma import Composed, Text, t
 
 from .modelo import RelPath, Theme
 from .rutas import is_reserved_windows_name
@@ -364,29 +364,32 @@ PYDANTIC_TYPES = frozenset(
 
 def pydantic_message(kind: str) -> str | None:
     """Un error de pydantic en palabras del usuario, o None si no lo tenemos."""
-    return t(f"temas.pydantic.{kind}") if kind in PYDANTIC_TYPES else None
+    return Text(f"temas.pydantic.{kind}") if kind in PYDANTIC_TYPES else None
 
 
 _PATH_FIELDS = {("image",), ("file",), ("font",)}
 
 
-def _friendly_validation(err: ValidationError) -> str:
-    lines = []
+def _friendly_validation(err: ValidationError) -> Composed:
+    """La lista de problemas, una línea por problema. Es un ``Composed``: al cambiar de
+    idioma se reescribe entera y sigue contando como el mismo aviso (C-64)."""
+    lines: list[Composed] = []
     for item in err.errors()[:5]:
         where = " > ".join(str(p + 1) if isinstance(p, int) else str(p) for p in item["loc"])
+        msg: object
         if item["type"] == "value_error":
-            # Nuestros validadores ya hablan en el idioma activo; pydantic antepone
-            # «Value error, ».
-            msg = str(item.get("ctx", {}).get("error", item["msg"]))
+            # El error de nuestros validadores tal cual (lleva su ``Text``); pydantic, en
+            # ``msg``, le antepondría «Value error, ».
+            msg = item.get("ctx", {}).get("error", item["msg"])
         elif item["type"] == "string_pattern_mismatch" and item["loc"][-1:] in _PATH_FIELDS:
-            msg = t("temas.ruta_no_valida", input=item["input"])
+            msg = Text("temas.ruta_no_valida", input=item["input"])
         else:
             msg = pydantic_message(item["type"]) or item["msg"]
-        lines.append(f"  - {where}: {msg}" if where else f"  - {msg}")
+        lines.append(Composed("  - {}: {}", where, msg) if where else Composed("  - {}", msg))
     more = len(err.errors()) - len(lines)
     if more > 0:
-        lines.append("  - " + t("temas.mas_problemas", n=more))
-    return "\n".join(lines)
+        lines.append(Composed("  - {}", Text("temas.mas_problemas", n=more)))
+    return Composed("\n".join(["{}"] * len(lines)), *lines)
 
 
 # --- Carga de una carpeta ------------------------------------------------------------

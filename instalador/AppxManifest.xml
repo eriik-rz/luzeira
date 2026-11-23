@@ -12,7 +12,7 @@
     Configuración → Aplicaciones → Inicio. Arranca solo la bandeja, sin abrir el editor.
     Lanza Luzeira.exe y no pythonw.exe: Windows no pasa uap10:Parameters a la tarea de
     inicio (medido el 2026-11-22), y pythonw sin argumentos se cierra sin hacer nada.
-  - Idiomas (C-62): los nueve de la app, para que la Store los anuncie. No hay recursos
+  - Idiomas (C-62, C-65): los de la app, para que la Store los anuncie. No hay recursos
     MRT: la app elige el idioma ella sola, y DisplayName y Description salen siempre
     como están aquí. El primero (es-es) es el idioma por defecto del paquete.
 -->
@@ -41,6 +41,8 @@
     <Resource Language="pl-pl" />
     <Resource Language="tr-tr" />
     <Resource Language="ru-ru" />
+    <Resource Language="zh-cn" />
+    <Resource Language="ja-jp" />
   </Resources>
   <Applications>
     <Application Id="Luzeira" Executable="python\pythonw.exe" EntryPoint="Windows.FullTrustApplication"

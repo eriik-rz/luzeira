@@ -1627,3 +1627,31 @@ def test_loader_errors_say_element_in_the_editor_in_any_language(tmp_path):
     with pytest.raises(ThemeError) as info:
         load_theme(folder)
     assert friendly_theme_error(info.value) == "This theme is damaged and can't be opened."
+
+
+def test_chinese_labels_are_not_missing_letters_thanks_to_the_cjk_font():
+    # C-65: el editor avisa de letras que faltan con la misma fuente con que se pintan; en
+    # chino la de Windows las tiene, así que no hay aviso.
+    from luzeira import idioma
+    from luzeira.editor.servidor import find_missing_glyphs
+    from luzeira.temas.fuentes import cjk_font
+    from luzeira.temas.modelo import Style, Theme
+
+    if cjk_font(Style(size=16), "zh") is None:
+        pytest.skip("este Windows no tiene fuentes CJK")
+    idioma.set_language("zh")
+    theme = Theme.model_validate(
+        {
+            "format": "luzeira-theme/1",
+            "name": "Prueba",
+            "orientation": "landscape",
+            "widgets": [
+                {
+                    "type": "text",
+                    "text": "系统",
+                    "box": {"x": 0, "y": 0, "width": 100, "height": 30},
+                }
+            ],
+        }
+    )
+    assert find_missing_glyphs(theme, {}) == []

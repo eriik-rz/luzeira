@@ -8,7 +8,7 @@
     {"type": "clock", "format": "HH:MM", "box": {"x": 16, "y": 14, "width": 288, "height": 72}, "style": {"size": 64, "bold": true, "color": "#ffffff", "align": "center"}},
     {"type": "clock", "format": "date-long", "box": {"x": 16, "y": 88, "width": 288, "height": 24}, "style": {"size": 16, "color": "#a9a9c2", "align": "center"}},
     {"type": "text", "text": "CPU", "box": {"x": 28, "y": 130, "width": 100, "height": 22}, "style": {"size": 16, "bold": true, "color": "#8cffff", "align": "left"}},
-    {"type": "sensor", "sensor": "system.uptime", "decimals": 1, "prefix": "activo ", "prefix_i18n": { "en": "up ", "de": "seit ", "fr": "actif ", "it": "attivo ", "pt": "ativo ", "pl": "działa ", "tr": "açık ", "ru": "вкл. " }, "box": {"x": 28, "y": 154, "width": 120, "height": 20}, "style": {"size": 14, "color": "#a9a9c2", "align": "left"}},
+    {"type": "sensor", "sensor": "system.uptime", "decimals": 1, "prefix": "activo ", "prefix_i18n": { "en": "up ", "de": "seit ", "fr": "actif ", "it": "attivo ", "pt": "ativo ", "pl": "działa ", "tr": "açık ", "ru": "вкл. ", "zh": "运行 ", "ja": "稼働 " }, "box": {"x": 28, "y": 154, "width": 120, "height": 20}, "style": {"size": 14, "color": "#a9a9c2", "align": "left"}},
     {"type": "sensor", "sensor": "cpu.usage", "show_unit": false, "suffix": "%", "box": {"x": 140, "y": 126, "width": 152, "height": 48}, "style": {"size": 40, "bold": true, "color": "#ffffff", "align": "right"}},
     {"type": "bar", "sensor": "cpu.usage", "min": 0.0, "max": 8.33, "fill": "#ff1919", "track": "#23232f", "box": {"x": 29, "y": 180, "width": 20, "height": 12}},
     {"type": "bar", "sensor": "cpu.usage", "min": 8.33, "max": 16.67, "fill": "#ff7b19", "track": "#23232f", "box": {"x": 51, "y": 180, "width": 20, "height": 12}},
@@ -52,9 +52,9 @@
     {"type": "bar", "sensor": "memory.usage", "min": 75.0, "max": 83.33, "fill": "#1942ff", "track": "#23232f", "box": {"x": 227, "y": 356, "width": 20, "height": 12}},
     {"type": "bar", "sensor": "memory.usage", "min": 83.33, "max": 91.67, "fill": "#5319ff", "track": "#23232f", "box": {"x": 249, "y": 356, "width": 20, "height": 12}},
     {"type": "bar", "sensor": "memory.usage", "min": 91.67, "max": 100.0, "fill": "#b419ff", "track": "#23232f", "box": {"x": 271, "y": 356, "width": 20, "height": 12}},
-    {"type": "text", "text": "BAJADA", "text_i18n": { "en": "DOWN", "de": "DOWNLOAD", "fr": "RÉCEPTION", "it": "DOWNLOAD", "pt": "DOWNLOAD", "pl": "POBIERANIE", "tr": "İNDİRME", "ru": "ПРИЁМ" }, "box": {"x": 28, "y": 398, "width": 100, "height": 26}, "style": {"size": 14, "bold": true, "color": "#a9a9c2", "align": "left"}},
+    {"type": "text", "text": "BAJADA", "text_i18n": { "en": "DOWN", "de": "DOWNLOAD", "fr": "RÉCEPTION", "it": "DOWNLOAD", "pt": "DOWNLOAD", "pl": "POBIERANIE", "tr": "İNDİRME", "ru": "ПРИЁМ", "zh": "下载", "ja": "受信" }, "box": {"x": 28, "y": 398, "width": 100, "height": 26}, "style": {"size": 14, "bold": true, "color": "#a9a9c2", "align": "left"}},
     {"type": "sensor", "sensor": "network.download", "decimals": 1, "prefix": "↓ ", "box": {"x": 128, "y": 398, "width": 164, "height": 26}, "style": {"size": 18, "bold": true, "color": "#ffffff", "align": "right"}},
-    {"type": "text", "text": "SUBIDA", "text_i18n": { "en": "UP", "de": "UPLOAD", "fr": "ENVOI", "it": "UPLOAD", "pt": "UPLOAD", "pl": "WYSYŁANIE", "tr": "YÜKLEME", "ru": "ОТДАЧА" }, "box": {"x": 28, "y": 428, "width": 100, "height": 26}, "style": {"size": 14, "bold": true, "color": "#a9a9c2", "align": "left"}},
+    {"type": "text", "text": "SUBIDA", "text_i18n": { "en": "UP", "de": "UPLOAD", "fr": "ENVOI", "it": "UPLOAD", "pt": "UPLOAD", "pl": "WYSYŁANIE", "tr": "YÜKLEME", "ru": "ОТДАЧА", "zh": "上传", "ja": "送信" }, "box": {"x": 28, "y": 428, "width": 100, "height": 26}, "style": {"size": 14, "bold": true, "color": "#a9a9c2", "align": "left"}},
     {"type": "sensor", "sensor": "network.upload", "decimals": 1, "prefix": "↑ ", "box": {"x": 128, "y": 428, "width": 164, "height": 26}, "style": {"size": 18, "bold": true, "color": "#ffffff", "align": "right"}}
   ]
 }

@@ -108,8 +108,8 @@ SolidCompression=yes
 TimeStampsInUTC=yes
 ; La licencia es GPL: no hay que «aceptarla» para usar el programa, así que no hay página
 ; de licencia. Va como LICENSE.txt en la carpeta del programa.
-; Idioma (C-62): el de la interfaz de Windows si es uno de los nueve, sin preguntar. Solo si
-; no lo es (p. ej. japonés) sale la lista, con el inglés marcado (el primero de [Languages]),
+; Idioma (C-62, C-65): el de la interfaz de Windows si es uno de los nuestros, sin preguntar. Solo si
+; no lo es (p. ej. coreano) sale la lista, con el inglés marcado (el primero de [Languages]),
 ; igual que la app, que cae al inglés. Instalando en silencio (/VERYSILENT, actualizaciones)
 ; nunca pregunta: usa el de Windows o el inglés.
 ShowLanguageDialog=auto
@@ -127,6 +127,8 @@ Name: "pt"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
 Name: "pl"; MessagesFile: "compiler:Languages\Polish.isl"
 Name: "tr"; MessagesFile: "compiler:Languages\Turkish.isl"
 Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
+Name: "zh"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+Name: "ja"; MessagesFile: "compiler:Languages\Japanese.isl"
 
 [CustomMessages]
 es.GrupoAccesos=Accesos directos:
@@ -209,6 +211,24 @@ ru.AbrirAhora=Открыть Luzeira сейчас
 ru.Descripcion=Luzeira: USB-экран для вашего ПК
 ru.FaltaWebView2=Для редактора тем нужен «Microsoft Edge WebView2 Runtime» (бесплатно, от Microsoft), а на этом компьютере его нет.%n%nЭкран и значок рядом с часами работают и без него.%n%nОткрыть официальную страницу загрузки Microsoft?
 ru.BorrarDatos=Удалить также ваши темы, настройки и журналы Luzeira?%n%nЕсли вы собираетесь снова установить Luzeira, нажмите «Нет», чтобы сохранить их.
+
+zh.GrupoAccesos=快捷方式:
+zh.TareaEscritorio=在桌面上创建快捷方式(&D)
+zh.GrupoArranque=启动:
+zh.TareaAutoarranque=随 Windows 启动 Luzeira（屏幕会自动亮起）(&W)
+zh.AbrirAhora=立即打开 Luzeira
+zh.Descripcion=Luzeira：电脑的 USB 副屏
+zh.FaltaWebView2=主题编辑器需要“Microsoft Edge WebView2 Runtime”（免费，由 Microsoft 提供），但这台电脑上没有安装。%n%n屏幕和时钟旁的图标不需要它也能正常工作。%n%n现在打开 Microsoft 的官方下载页面吗？
+zh.BorrarDatos=同时删除你的主题、设置和 Luzeira 日志吗？%n%n如果你打算重新安装 Luzeira，请点击“否”以保留它们。
+
+ja.GrupoAccesos=ショートカット:
+ja.TareaEscritorio=デスクトップにショートカットを作成する(&D)
+ja.GrupoArranque=スタートアップ:
+ja.TareaAutoarranque=Windows の起動時に Luzeira を起動する（ディスプレイが自動でつきます）(&W)
+ja.AbrirAhora=今すぐ Luzeira を開く
+ja.Descripcion=Luzeira: PC 用 USB ディスプレイ
+ja.FaltaWebView2=テーマエディターには「Microsoft Edge WebView2 Runtime」（Microsoft 提供、無料）が必要ですが、このコンピューターにはインストールされていません。%n%n画面と時計の横のアイコンは、これがなくても動作します。%n%nMicrosoft の公式ダウンロードページを今すぐ開きますか？
+ja.BorrarDatos=テーマ、設定、Luzeira のログも削除しますか？%n%nLuzeira を再インストールする予定なら、残すために「いいえ」をクリックしてください。
 
 [Tasks]
 ; Escritorio desmarcado: Luzeira vive junto al reloj y arranca con Windows; el acceso del
