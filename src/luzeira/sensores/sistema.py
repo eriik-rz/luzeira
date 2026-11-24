@@ -24,6 +24,7 @@ import psutil
 
 from luzeira.idioma import t
 from luzeira.sensores.base import Reading, SensorInfo
+from luzeira.sensores.cpu_frecuencia import CpuFrequency
 
 log = logging.getLogger(__name__)
 
@@ -34,8 +35,10 @@ _MB = 1_000_000
 
 # Claves del catálogo (zona ``sensores``): el motivo se traduce al crear cada lectura.
 MEASURING = "sensores.midiendo"
-CPU_TEMPERATURE_REASON = "sensores.cpu_temperatura_avanzado"
-CPU_FREQUENCY_REASON = "sensores.cpu_frecuencia_nominal"
+CPU_FREQUENCY_REASON = "sensores.frecuencia_no_informa"
+
+#: Valor por defecto de ``frequency``: en Windows, la frecuencia real por PDH.
+_AUTO = object()
 
 # Bucle local: no es tráfico real hacia fuera. Se compara el nombre exacto «lo» (Linux)
 # o el prefijo de Windows; un prefijo corto como «lo» excluiría también «Local Area
@@ -175,8 +178,20 @@ class SystemSource:
         memory: Callable[[], tuple[int, int]] = (
             _windows_memory if sys.platform == "win32" else _psutil_memory
         ),
+        frequency: object = _AUTO,
     ) -> None:
         self._memory = memory
+        # La temperatura de la CPU no está aquí: la da el módulo opcional (``modulo``).
+        # La frecuencia, en Windows, sale de PDH (``cpu_frecuencia``): psutil solo da
+        # la nominal. ``None``: sin lector (en Windows sale «—»; fuera, psutil).
+        self._frequency_source: CpuFrequency | None = None
+        if frequency is _AUTO:
+            if sys.platform == "win32":
+                self._frequency_source = CpuFrequency()
+                frequency = self._frequency_source.read
+            else:
+                frequency = None
+        self._frequency: Callable[[], Reading] | None = frequency  # type: ignore[assignment]
         # El reloj se inyecta para poder probar el cálculo de velocidades sin esperar.
         self._clock = clock
         self._physical = _PhysicalNics(physical_nics, clock)
@@ -194,7 +209,6 @@ class SystemSource:
             # La etiqueta es una clave del catálogo: se traduce al servirla (``label``).
             SensorInfo("cpu.usage", "sensores.cpu.usage", "%", "cpu"),
             SensorInfo("cpu.frequency", "sensores.cpu.frequency", "MHz", "cpu"),
-            SensorInfo("cpu.temperature", "sensores.cpu.temperature", "°C", "cpu"),
             SensorInfo("memory.usage", "sensores.memory.usage", "%", "memory"),
             SensorInfo("memory.used", "sensores.memory.used", "GB", "memory"),
             SensorInfo("memory.total", "sensores.memory.total", "GB", "memory"),
@@ -234,7 +248,6 @@ class SystemSource:
         # Cada bloque va protegido por separado: si falla uno, los demás siguen.
         self._guard(out, ("cpu.usage",), lambda: self._read_cpu(out, elapsed))
         self._guard(out, ("cpu.frequency",), lambda: self._read_freq(out))
-        out["cpu.temperature"] = Reading(None, "°C", reason=t(CPU_TEMPERATURE_REASON))
         self._guard(
             out, ("memory.usage", "memory.used", "memory.total"), lambda: self._read_memory(out)
         )
@@ -256,7 +269,9 @@ class SystemSource:
         return out
 
     def close(self) -> None:
-        """psutil no mantiene recursos abiertos: no hay nada que cerrar."""
+        """psutil no mantiene recursos abiertos; los contadores de frecuencia, sí."""
+        if self._frequency_source is not None:
+            self._frequency_source.close()
 
     # --- lectores por bloque -------------------------------------------------------
 
@@ -290,6 +305,9 @@ class SystemSource:
         out["cpu.usage"] = Reading(round(min(max(pct, 0.0), 100.0), 1), "%")
 
     def _read_freq(self, out: dict[str, Reading]) -> None:
+        if self._frequency is not None:
+            out["cpu.frequency"] = self._frequency()
+            return
         if sys.platform == "win32":
             # Medido en el equipo de pruebas: psutil devuelve siempre 3001 MHz (la nominal)
             # aunque la CPU esté a plena carga. Un valor fijo y falso es peor que ninguno.

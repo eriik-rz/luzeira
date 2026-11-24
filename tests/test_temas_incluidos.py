@@ -8,6 +8,7 @@ from luzeira import idioma
 from luzeira.config import BUILTIN_THEMES
 from luzeira.render import Renderer
 from luzeira.sensores.base import Reading
+from luzeira.sensores.modulo import SENSORS
 from luzeira.temas import load_theme, resolve_font
 
 BUILTIN = sorted(p.name for p in BUILTIN_THEMES.iterdir() if (p / "theme.json").is_file())
@@ -234,9 +235,9 @@ def test_builtin_texts_fit_their_box(name, language, monkeypatch):
 
 # --- Otras reglas de la colección -----------------------------------------------------------
 
-#: En la v1 (sin admin, Windows) estos sensores existen pero nunca dan dato: un tema incluido
-#: que los use enseñaría «—» para siempre.
-NO_DATA_IN_V1 = {"cpu.temperature", "cpu.frequency"}
+#: Estos sensores solo dan dato con el módulo opcional de sensores (ADR-007): un tema incluido
+#: que los use enseñaría «—» a quien no lo instale.
+NO_DATA_IN_V1 = {s.id for s in SENSORS}
 
 
 @pytest.mark.parametrize("name", BUILTIN)

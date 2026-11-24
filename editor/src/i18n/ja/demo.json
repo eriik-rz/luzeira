@@ -37,7 +37,7 @@
   "demo.sensor.cpu.usage": "CPU 使用率",
   "demo.sensor.cpu.frequency": "CPU クロック",
   "demo.sensor.cpu.temperature": "CPU 温度",
-  "demo.sensor.cpu.temperature.falta": "温度モジュールが必要です (v2 で提供予定)。",
+  "demo.sensor.cpu.temperature.falta": "オプションの「Luzeira センサー」モジュールが必要です。",
   "demo.sensor.cpu.name": "プロセッサ名",
   "demo.sensor.cpu.name.valor": "8 コア プロセッサ (シミュレーション)",
   "demo.sensor.memory.usage": "メモリ使用率",

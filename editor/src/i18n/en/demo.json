@@ -37,7 +37,7 @@
   "demo.sensor.cpu.usage": "CPU usage",
   "demo.sensor.cpu.frequency": "CPU frequency",
   "demo.sensor.cpu.temperature": "CPU temperature",
-  "demo.sensor.cpu.temperature.falta": "Needs the temperature module (coming in v2).",
+  "demo.sensor.cpu.temperature.falta": "Needs the optional “Luzeira Sensors” module.",
   "demo.sensor.cpu.name": "Processor name",
   "demo.sensor.cpu.name.valor": "8-core processor (simulated)",
   "demo.sensor.memory.usage": "Memory usage",

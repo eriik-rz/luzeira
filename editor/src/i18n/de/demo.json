@@ -37,7 +37,7 @@
   "demo.sensor.cpu.usage": "CPU-Auslastung",
   "demo.sensor.cpu.frequency": "CPU-Takt",
   "demo.sensor.cpu.temperature": "CPU-Temperatur",
-  "demo.sensor.cpu.temperature.falta": "Dafür ist das Temperaturmodul nötig (kommt mit v2).",
+  "demo.sensor.cpu.temperature.falta": "Benötigt das optionale Modul „Luzeira Sensoren“.",
   "demo.sensor.cpu.name": "Prozessorname",
   "demo.sensor.cpu.name.valor": "8-Kern-Prozessor (simuliert)",
   "demo.sensor.memory.usage": "Speicherauslastung",

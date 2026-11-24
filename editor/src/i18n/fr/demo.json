@@ -37,7 +37,7 @@
   "demo.sensor.cpu.usage": "Utilisation du CPU",
   "demo.sensor.cpu.frequency": "Fréquence du CPU",
   "demo.sensor.cpu.temperature": "Température du CPU",
-  "demo.sensor.cpu.temperature.falta": "Le module de température est nécessaire (prévu dans la v2).",
+  "demo.sensor.cpu.temperature.falta": "Nécessite le module facultatif « Luzeira Capteurs ».",
   "demo.sensor.cpu.name": "Nom du processeur",
   "demo.sensor.cpu.name.valor": "Processeur 8 cœurs (simulé)",
   "demo.sensor.memory.usage": "Utilisation mémoire",

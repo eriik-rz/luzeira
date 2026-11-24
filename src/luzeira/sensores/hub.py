@@ -78,11 +78,15 @@ def _log_failure(step: str, source: SensorSource, exc: Exception) -> None:
 
 
 def default_hub() -> SensorHub:
-    """Hub con las fuentes de v1: sistema (psutil) y GPU (NVML si hay NVIDIA; si no,
-    lo que da Windows para cualquier marca)."""
+    """Hub con las fuentes: sistema (psutil), módulo opcional de sensores (temperatura de
+    la CPU; sin él, «—») y GPU (NVML si hay NVIDIA; si no, lo que da Windows para
+    cualquier marca)."""
     from luzeira.sensores.gpu import GpuSource
+    from luzeira.sensores.modulo import ModuleSource
     from luzeira.sensores.nvidia import NvidiaSource
     from luzeira.sensores.sistema import SystemSource
     from luzeira.sensores.windows_gpu import WindowsGpuSource
 
-    return SensorHub([SystemSource(), GpuSource(NvidiaSource(), WindowsGpuSource())])
+    return SensorHub(
+        [SystemSource(), ModuleSource(), GpuSource(NvidiaSource(), WindowsGpuSource())]
+    )

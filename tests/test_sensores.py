@@ -84,10 +84,14 @@ def fake(monkeypatch):
     return fp
 
 
-def make_source(fp: FakePsutil, physical_nics=None) -> sistema.SystemSource:
+def make_source(fp: FakePsutil, physical_nics=None, frequency=None) -> sistema.SystemSource:
     # Sin ``physical_nics`` se cuentan todas: los nombres falsos no son de este equipo.
+    # Sin ``frequency`` no se abren los contadores de Windows de verdad.
     return sistema.SystemSource(
-        clock=lambda: fp.now, physical_nics=physical_nics, memory=sistema._psutil_memory
+        clock=lambda: fp.now,
+        physical_nics=physical_nics,
+        memory=sistema._psutil_memory,
+        frequency=frequency,
     )
 
 
@@ -97,7 +101,7 @@ def test_system_sensor_ids_follow_contract(fake):
     assert all(SENSOR_ID.match(i) for i in ids)
     assert "disk.usage.c" in ids
     assert "disk.usage.d" not in ids  # el lector de CD no es unidad fija
-    assert "cpu.temperature" in ids
+    assert "cpu.temperature" not in ids  # la da el módulo opcional (``modulo``)
     assert len(ids) == len(set(ids))
 
 
@@ -235,7 +239,7 @@ def test_cpu_usage_from_time_deltas(fake):
     assert src.read_all()["cpu.usage"] == Reading(75.0, "%")
 
 
-def test_static_values_and_cpu_temperature_reason(fake, monkeypatch):
+def test_static_values(fake, monkeypatch):
     monkeypatch.setattr(sistema.time, "time", lambda: 7200.0)
     r = make_source(fake).read_all()
     assert r["memory.total"] == Reading(32.0, "GB")
@@ -243,15 +247,18 @@ def test_static_values_and_cpu_temperature_reason(fake, monkeypatch):
     assert r["memory.usage"] == Reading(75.0, "%")
     assert r["disk.usage.c"] == Reading(42.5, "%")
     assert r["system.uptime"] == Reading(2.0, "h")
-    assert r["cpu.temperature"].value is None
-    assert "sensores avanzados" in r["cpu.temperature"].reason
+    assert "cpu.temperature" not in r
 
 
-def test_cpu_frequency_is_withheld_on_windows(fake, monkeypatch):
+def test_cpu_frequency_on_windows_comes_from_its_reader_never_from_psutil(fake, monkeypatch):
     monkeypatch.setattr(sistema.sys, "platform", "win32")
+    # Sin lector: «—», nunca los 3001 MHz nominales que da psutil.
     r = make_source(fake).read_all()
     assert r["cpu.frequency"].value is None
-    assert "nominal" in r["cpu.frequency"].reason
+    assert r["cpu.frequency"].reason
+    # Con lector (en la app, los contadores PDH de ``cpu_frecuencia``): su lectura.
+    src = make_source(fake, frequency=lambda: Reading(3990, "MHz"))
+    assert src.read_all()["cpu.frequency"] == Reading(3990, "MHz")
     monkeypatch.setattr(sistema.sys, "platform", "linux")
     assert make_source(fake).read_all()["cpu.frequency"] == Reading(3001, "MHz")
 

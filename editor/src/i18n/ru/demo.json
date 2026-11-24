@@ -37,7 +37,7 @@
   "demo.sensor.cpu.usage": "Загрузка CPU",
   "demo.sensor.cpu.frequency": "Частота CPU",
   "demo.sensor.cpu.temperature": "Температура CPU",
-  "demo.sensor.cpu.temperature.falta": "Нужен модуль температуры (появится в v2).",
+  "demo.sensor.cpu.temperature.falta": "Нужен дополнительный модуль «Luzeira Датчики».",
   "demo.sensor.cpu.name": "Название процессора",
   "demo.sensor.cpu.name.valor": "8-ядерный процессор (имитация)",
   "demo.sensor.memory.usage": "Использование памяти",

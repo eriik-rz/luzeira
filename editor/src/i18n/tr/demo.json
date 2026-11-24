@@ -37,7 +37,7 @@
   "demo.sensor.cpu.usage": "CPU kullanımı",
   "demo.sensor.cpu.frequency": "CPU frekansı",
   "demo.sensor.cpu.temperature": "CPU sıcaklığı",
-  "demo.sensor.cpu.temperature.falta": "Sıcaklık modülü gerekiyor (v2'de gelecek).",
+  "demo.sensor.cpu.temperature.falta": "İsteğe bağlı “Luzeira Sensörler” modülü gerekir.",
   "demo.sensor.cpu.name": "İşlemci adı",
   "demo.sensor.cpu.name.valor": "8 çekirdekli işlemci (simülasyon)",
   "demo.sensor.memory.usage": "Bellek kullanımı",
