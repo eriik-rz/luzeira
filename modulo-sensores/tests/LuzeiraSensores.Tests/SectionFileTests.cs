@@ -42,7 +42,10 @@ public sealed class SectionFileTests : IDisposable
     {
         string folder = Folder();
         Assert.Null(SectionFile.TryOpen(folder, out string? problem));
-        Assert.Contains("Owner", problem);
+        // Sin elevar, la carpeta es del usuario: se rechaza por el propietario. Elevado (la
+        // CI de GitHub), Windows da la propiedad a Administradores y lo que falla es la DACL
+        // heredada, sin proteger. Las dos son la carpeta de otro: se rechaza igual.
+        Assert.Matches("Owner|NotProtected", problem);
         Assert.False(File.Exists(Path.Combine(folder, SectionFile.FileName)));
     }
 
