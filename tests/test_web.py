@@ -188,6 +188,29 @@ def test_each_page_has_a_csp_without_scripts(rel):
     assert rules["base-uri"] == ["'none'"]
 
 
+class _Frames(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.frames: list[dict[str, str | None]] = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "iframe":
+            self.frames.append(dict(attrs))
+
+
+@pytest.mark.parametrize("rel", ["index.html", "en/index.html"])
+def test_the_demo_runs_in_a_sandbox_without_its_origin(rel):
+    # R1-06 (C-77.3): la demo corre con origen opaco, así que un fallo en el editor no
+    # alcanza a la portada ni a nada del dominio. Funciona porque GitHub Pages sirve con
+    # «Access-Control-Allow-Origin: *» (los módulos y los fetch de la demo pasan a ser
+    # cross-origin); medido en Chrome el 2026-11-25, con la vista previa pintada.
+    page = _Frames()
+    page.feed((WEB / rel).read_text(encoding="utf-8"))
+    assert page.frames
+    for frame in page.frames:
+        assert frame.get("sandbox") == "allow-scripts"
+
+
 def _web_script():
     spec = importlib.util.spec_from_file_location("web_script", REPO / "scripts" / "web.py")
     module = importlib.util.module_from_spec(spec)
