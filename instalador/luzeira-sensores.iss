@@ -252,6 +252,7 @@ Type: files; Name: "{app}\{#ServiceExe}"
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Excludes: "*.pdb,createdump.exe,mscordbi.dll,mscordaccore*.dll,Microsoft.DiaSymReader.Native.amd64.dll,msquic.dll"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 Source: "..\modulo-sensores\TERCEROS.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\modulo-sensores\licencias\*.txt"; DestDir: "{app}\licencias"; Flags: ignoreversion
 
 [Registry]
 ; Origen del Visor de eventos (los logs del servicio van solo ahí). El fichero de

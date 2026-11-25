@@ -166,3 +166,28 @@ def test_uninstaller_never_deletes_recursively():
     delete = iss.split("procedure DeleteDataFolder;", 1)[1].split("\nend;", 1)[0]
     assert "IsExpectedSddl(FolderSddl(Path), '{#DataFolderSddl}')" in delete
     assert delete.index("IsExpectedSddl") < delete.index("DeleteFile(")
+
+
+def test_every_license_named_in_the_notices_ships_with_the_module():
+    # C-72: MPL-2.0, LGPL-2.1, Apache-2.0 y MIT obligan a llevar su texto con el binario.
+    notices = (MODULE / "TERCEROS.txt").read_text(encoding="utf-8")
+    named = set(re.findall(r"licencias\\([\w.-]+\.txt)", notices))
+    shipped = {p.name for p in (MODULE / "licencias").glob("*.txt")}
+    assert named == shipped
+    assert len(shipped) >= 6
+    iss = (ROOT / "instalador" / "luzeira-sensores.iss").read_text(encoding="utf-8")
+    assert r'Source: "..\modulo-sensores\licencias\*.txt"; DestDir: "{app}\licencias"' in iss
+
+
+def test_uninstaller_waits_longer_than_luzeira_takes_to_let_go_of_the_file():
+    # C-77.6: Luzeira tiene sensores.bin abierto sin FILE_SHARE_DELETE (ADR-008) y lo
+    # suelta cuando lleva STALE_SECONDS sin cambiar, más un ciclo de lectura. El
+    # desinstalador para el servicio y reintenta el borrado: tiene que esperar más que eso.
+    iss = (ROOT / "instalador" / "luzeira-sensores.iss").read_text(encoding="utf-8")
+    delete = iss.split("procedure DeleteDataFolder;", 1)[1].split("\nend;", 1)[0]
+    tries = int(re.search(r"for I := 1 to (\d+) do", delete).group(1))
+    pause = int(re.search(r"Sleep\((\d+)\)", delete).group(1)) / 1000
+    read_cycle = 1.5  # el refresco más lento de los sensores
+    assert tries * pause > 2 * (modulo.STALE_SECONDS + read_cycle)
+    uninstall = iss.split("procedure CurUninstallStepChanged", 1)[1]
+    assert uninstall.index("StopService;") < uninstall.index("DeleteDataFolder;")
