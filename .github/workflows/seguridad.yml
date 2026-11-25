@@ -47,6 +47,13 @@ jobs:
     # En Windows: pip-audit solo mira los paquetes que se instalarían en esta plataforma
     # (marcadores sys_platform), y los de la app son de Windows (pywin32, pythonnet…).
     runs-on: windows-2025
+    # En Windows, sin esto los pasos de varias líneas van con PowerShell, que no se
+    # para cuando falla un programa (npm, pytest, dotnet): solo contaba el último. Así
+    # pasó en verde un lint roto (PR #5 de Dependabot, 2026-11-25). Git Bash, con -eo
+    # pipefail: el primer fallo para el paso. Los pasos con «shell: pwsh» siguen igual.
+    defaults:
+      run:
+        shell: bash
     timeout-minutes: 15
     permissions:
       contents: read

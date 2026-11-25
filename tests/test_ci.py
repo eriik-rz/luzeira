@@ -220,3 +220,31 @@ def test_release_uses_the_same_tool_versions_as_the_build_script():
     # Inno Setup: la misma versión cuyos binarios fija INNO_SHA256.
     assert "innosetup-7.1.1-x64.exe" in text
     assert "Inno Setup 7.1.1" in Path(emp.__file__).read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)
+def test_multiline_steps_on_windows_stop_at_the_first_failure(path):
+    # En Windows, «run:» va por defecto con PowerShell, que no se para cuando falla un
+    # programa: el paso solo daba el resultado del último comando. Un lint roto salió en
+    # verde (PR #5 de Dependabot, 2026-11-25). Cada paso de varias líneas de un job de
+    # Windows va con bash (-eo pipefail) o con un «shell: pwsh» explícito y sus «throw».
+    for name, job in _jobs(path).items():
+        if "runs-on: windows" not in job:
+            continue
+        job_bash = re.search(
+            r"^    defaults:\n      run:\n(?:        .*\n)*?        shell: bash$", job, re.MULTILINE
+        )
+        for step in re.split(r"^      - ", job, flags=re.MULTILINE)[1:]:
+            block = re.search(r"^        run: \|\n((?:          .*\n?|\s*\n)+)", step, re.MULTILINE)
+            if not block:
+                continue
+            commands = [
+                line
+                for line in block.group(1).splitlines()
+                if line.strip() and not line.strip().startswith("#")
+            ]
+            if len(commands) < 2:
+                continue
+            shell = re.search(r"^        shell: (\w+)", step, re.MULTILINE)
+            effective = shell.group(1) if shell else ("bash" if job_bash else "por defecto")
+            assert effective in {"bash", "pwsh"}, f"{path.name}/{name}: {commands[0].strip()}"
