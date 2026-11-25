@@ -18,7 +18,9 @@ Pasos (cada uno se explica en su función):
 5. Precompila a ``.pyc`` reproducibles y fija las fechas de todos los ficheros.
 6. Copia ``LICENSE``, ``README.md`` y genera ``TERCEROS.txt`` con las licencias.
 7. Compila el instalador con ISCC (versión sacada de ``pyproject.toml``).
-8. Genera ``dist/Luzeira-<versión>-portable.zip`` y ``dist/SHA256SUMS``, y dice tamaños.
+8. (opcional, ``--modulo``) publica el módulo de sensores (.NET) y compila su instalador,
+   ``dist/LuzeiraSensores-<versión del módulo>-setup.exe`` (ADR-007).
+9. Genera ``dist/Luzeira-<versión>-portable.zip`` y ``dist/SHA256SUMS``, y dice tamaños.
 
 Red: solo la que use ``uv`` para bajar de PyPI las wheels ya fijadas en ``uv.lock``.
 """
@@ -29,6 +31,7 @@ import argparse
 import contextlib
 import email.parser
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -44,6 +47,10 @@ ROOT = Path(__file__).resolve().parent.parent
 ISS = ROOT / "instalador" / "luzeira.iss"
 ICON = ROOT / "src" / "luzeira" / "recursos" / "luzeira.ico"
 EDITOR_INDEX = ROOT / "src" / "luzeira" / "editor" / "web" / "index.html"
+MODULE_DIR = ROOT / "modulo-sensores"
+MODULE_ISS = ROOT / "instalador" / "luzeira-sensores.iss"
+#: El runtime de .NET que va dentro del módulo (``RuntimeFrameworkVersion``, ADR-008).
+MODULE_RUNTIME = "10.0.15"
 DEFAULT_ISCC = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Inno Setup 7" / "ISCC.exe"
 
 #: Versión del Python embebible que se espera (la de ``.python-version`` y el desarrollo).
@@ -532,6 +539,88 @@ def build_installer(iscc: Path, src: Path, out: Path, version: str, defines: lis
     return out / f"Luzeira-{version}-instalador.exe"
 
 
+# --- 8. Módulo de sensores (opcional) ----------------------------------------------------
+
+
+def module_version() -> str:
+    """La versión del módulo (``<Version>`` de ``Directory.Build.props``): va aparte de la
+    de Luzeira, porque se instala y se actualiza por separado."""
+    props = (MODULE_DIR / "Directory.Build.props").read_text(encoding="utf-8")
+    found = re.findall(r"<Version>([^<]*)</Version>", props)
+    if len(found) != 1 or not VERSION_RE.fullmatch(found[0]):
+        sys.exit(f"La versión del módulo en Directory.Build.props no es X.Y.Z: {found}")
+    return found[0]
+
+
+def find_dotnet() -> Path:
+    """El ``dotnet`` del PATH (el de la CI) o el instalado por usuario en esta máquina, el
+    primero que tenga el SDK de ``global.json``: el de ``Program Files`` suele ser solo el
+    runtime, sin SDK (medido: «No .NET SDKs were found»)."""
+    candidates = [shutil.which("dotnet")]
+    candidates.append(
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "dotnet", "dotnet.exe")
+    )
+    for candidate in candidates:
+        if not candidate or not os.path.isfile(candidate):
+            continue
+        # Desde la carpeta del módulo, «dotnet --version» respeta global.json: falla si
+        # ese SDK no está.
+        probe = subprocess.run(  # noqa: S603 — ruta comprobada, argumentos fijos
+            [candidate, "--version"], cwd=MODULE_DIR, capture_output=True, check=False
+        )
+        if probe.returncode == 0:
+            return Path(candidate)
+    sys.exit("No encuentro dotnet con el SDK que fija modulo-sensores/global.json.")
+
+
+def check_module_publish(publish: Path) -> None:
+    """Lo mismo que comprueba ci.yml (ADR-008, punto 2): sin startup hooks, con el runtime
+    fijado y sin empaquetar en un solo fichero (que se descomprimiría en %TEMP%)."""
+    config = json.loads((publish / "LuzeiraSensores.runtimeconfig.json").read_text("utf-8"))
+    options = config["runtimeOptions"]
+    if (
+        options.get("configProperties", {}).get("System.StartupHookProvider.IsSupported")
+        is not False
+    ):
+        sys.exit("El módulo publicado admite startup hooks. No se empaqueta.")
+    if options["includedFrameworks"][0]["version"] != MODULE_RUNTIME:
+        sys.exit(f"El módulo no lleva el runtime {MODULE_RUNTIME}. No se empaqueta.")
+    for name in ("coreclr.dll", "LuzeiraSensores.dll", "LibreHardwareMonitorLib.dll"):
+        if not (publish / name).is_file():
+            sys.exit(f"Falta {name} en el módulo publicado (¿fichero único?).")
+
+
+def build_module(dotnet: Path, iscc: Path, build: Path, out: Path) -> Path:
+    """Publica el servicio en limpio (dependencias del lock, firmas exigidas por
+    ``nuget.config``) y compila su instalador, que sí pide administrador."""
+    version = module_version()
+    publish = build / "modulo-sensores"
+    if publish.exists():
+        shutil.rmtree(publish)
+    log(f"Módulo de sensores {version} → {publish}")
+    env = {**os.environ, "DOTNET_CLI_TELEMETRY_OPTOUT": "1", "DOTNET_NOLOGO": "1"}
+    run(
+        [str(dotnet), "restore", str(MODULE_DIR / "LuzeiraSensores.slnx"), "--locked-mode"], env=env
+    )
+    project = MODULE_DIR / "src" / "LuzeiraSensores"
+    publish_cmd = [str(dotnet), "publish", str(project), "-c", "Release", "--no-restore"]
+    run([*publish_cmd, "-o", str(publish)], env=env)
+    check_module_publish(publish)
+    check_inno(iscc)
+    run(
+        [
+            str(iscc),
+            "/Qp",
+            f"/DAppVersion={version}",
+            f"/DSourceDir={publish}",
+            f"/DOutputDir={out}",
+            f"/DIconFile={ICON}",
+            str(MODULE_ISS),
+        ]
+    )
+    return out / f"LuzeiraSensores-{version}-setup.exe"
+
+
 def build_portable(src: Path, dest: Path, epoch: int) -> None:
     """Zip con entradas ordenadas, fecha fija y permisos fijos: misma build → mismos bytes."""
     stamp = time.gmtime(max(epoch, 315532800))[:6]  # el formato zip no admite antes de 1980
@@ -685,6 +774,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--sin-instalador", action="store_true", help="no llamar a ISCC")
     p.add_argument(
+        "--modulo",
+        action="store_true",
+        help="también el instalador del módulo de sensores (necesita el SDK de .NET)",
+    )
+    p.add_argument(
         "--define",
         action="append",
         default=[],
@@ -697,6 +791,8 @@ def main(argv: list[str] | None = None) -> int:
         with contextlib.suppress(AttributeError, ValueError):
             stream.reconfigure(errors="replace")
     check_defines(args.define)
+    if args.modulo and args.sin_instalador:
+        sys.exit("--modulo es un instalador: no va con --sin-instalador.")
     if args.define and args.salida.resolve() == (ROOT / "dist").resolve():
         # Un instalador con mutex o claves de prueba no puede acabar en dist/ con el
         # nombre del de verdad.
@@ -749,6 +845,9 @@ def main(argv: list[str] | None = None) -> int:
     portable = out / f"Luzeira-{version}-portable.zip"
     build_portable(app_dir, portable, epoch)
     artifacts.append(portable)
+    if args.modulo:
+        # En SHA256SUMS con lo demás: lo cubren la attestation y la firma de SHA256SUMS.
+        artifacts.append(build_module(find_dotnet(), args.iscc, args.build.resolve(), out))
     # Formato de «sha256sum» (dos espacios, LF): se comprueba con «sha256sum -c» o a mano
     # con Get-FileHash en PowerShell.
     sums = "".join(f"{sha256(a)}  {a.name}\n" for a in artifacts)

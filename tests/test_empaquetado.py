@@ -597,3 +597,59 @@ def test_github_runner_user_is_not_personal_data(tmp_path, monkeypatch):
     monkeypatch.delenv("GITHUB_ACTIONS")  # en un PC, el usuario sí cuenta
     with pytest.raises(SystemExit):
         emp.check_no_personal_paths(tmp_path)
+
+
+# --- módulo de sensores (--modulo) ------------------------------------------------------
+
+
+def test_module_version_comes_from_its_own_props():
+    # El módulo se versiona aparte de Luzeira (se instala y actualiza por separado).
+    props = (ROOT / "modulo-sensores" / "Directory.Build.props").read_text(encoding="utf-8")
+    assert f"<Version>{emp.module_version()}</Version>" in props
+
+
+def _publish(tmp_path, *, hooks=False, runtime="10.0.15", missing=None):
+    import json
+
+    config = {
+        "runtimeOptions": {
+            "includedFrameworks": [{"name": "Microsoft.NETCore.App", "version": runtime}],
+            "configProperties": {"System.StartupHookProvider.IsSupported": hooks},
+        }
+    }
+    (tmp_path / "LuzeiraSensores.runtimeconfig.json").write_text(json.dumps(config), "utf-8")
+    for name in ("coreclr.dll", "LuzeiraSensores.dll", "LibreHardwareMonitorLib.dll"):
+        if name != missing:
+            (tmp_path / name).write_bytes(b"")
+    return tmp_path
+
+
+def test_a_good_module_publish_passes(tmp_path):
+    emp.check_module_publish(_publish(tmp_path))
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [{"hooks": True}, {"runtime": "10.0.14"}, {"missing": "coreclr.dll"}],
+    ids=["startup-hooks", "otro-runtime", "fichero-unico"],
+)
+def test_a_module_publish_that_ci_would_reject_is_not_packaged(tmp_path, bad):
+    # Lo mismo que ci.yml (ADR-008, punto 2): la release no puede saltarse lo que la CI
+    # exige, porque la release no pasa por ci.yml.
+    with pytest.raises(SystemExit):
+        emp.check_module_publish(_publish(tmp_path, **bad))
+
+
+def test_module_runtime_matches_the_project():
+    project = ROOT / "modulo-sensores" / "src" / "LuzeiraSensores" / "LuzeiraSensores.csproj"
+    props = project.read_text(encoding="utf-8")
+    assert f"<RuntimeFrameworkVersion>{emp.MODULE_RUNTIME}</RuntimeFrameworkVersion>" in props
+
+
+def test_release_builds_tests_and_attests_the_module():
+    release = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    assert "--modulo" in release
+    assert "global-json-file: modulo-sensores/global.json" in release
+    assert "dotnet test" in release
+    # dist/*.exe ya cubre LuzeiraSensores-*-setup.exe en la attestation y en la subida.
+    assert release.count("dist/*.exe") >= 2

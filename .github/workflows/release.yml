@@ -3,6 +3,8 @@
 # con artifact attestations y deja la release EN BORRADOR. Quien mantiene el proyecto la
 # firma a mano (scripts/firmar.py: manifest.json + .sig con su clave, que no está en
 # GitHub, ADR-006) y la publica. Con releases inmutables, ya no cambia una vez publicada.
+# Con --modulo sale también el instalador del módulo de sensores (ADR-007): va en
+# SHA256SUMS con lo demás, así que lo cubren la attestation y la firma de SHA256SUMS.
 #
 # Seguridad (skill seguridad-luzeira):
 # - Permisos mínimos por job; ninguno por defecto. Tres jobs: «build» ejecuta el código de
@@ -30,6 +32,9 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1" # sin telemetría de dotnet en la build
+      DOTNET_NOLOGO: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -42,6 +47,11 @@ jobs:
         with:
           node-version-file: editor/.nvmrc
           package-manager-cache: false # sin caché también aquí (zizmor: cache-poisoning)
+      # El SDK de .NET que fija global.json, para el módulo de sensores (ADR-007). Sin
+      # caché: setup-dotnet no la activa salvo que se le pida.
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: modulo-sensores/global.json
 
       - name: La etiqueta coincide con la versión de pyproject.toml
         shell: pwsh
@@ -55,6 +65,8 @@ jobs:
         run: |
           uv run --frozen pytest
           uv run --frozen ruff check
+          dotnet restore modulo-sensores/LuzeiraSensores.slnx --locked-mode
+          dotnet test modulo-sensores/LuzeiraSensores.slnx -c Release --no-restore
 
       - name: Python embebible (empaquetar.py comprueba su SHA-256)
         shell: pwsh
@@ -75,10 +87,10 @@ jobs:
           $p = Start-Process descargas/innosetup.exe -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/CURRENTUSER","/DIR=`"$dir`"" -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "Inno Setup no se instaló ($($p.ExitCode))" }
 
-      - name: Instalador, portable y SHA256SUMS
+      - name: Instalador, portable, instalador del módulo y SHA256SUMS
         env:
           npm_config_ignore_scripts: "true" # el «npm ci» de empaquetar.py, sin postinstall
-        run: uv run --frozen python scripts/empaquetar.py --python-embebible descargas/python-embed.zip --editor
+        run: uv run --frozen python scripts/empaquetar.py --python-embebible descargas/python-embed.zip --editor --modulo
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
