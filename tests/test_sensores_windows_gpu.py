@@ -866,7 +866,13 @@ def _real_chosen_luid() -> int | None:
     src = WindowsGpuSource(background=False, sleep=lambda s: __import__("time").sleep(0.3))
     try:
         src.read_all()
-        return src._started.adapter.luid if src._started is not None else None
+        if src._started is None:
+            return None
+        # «Microsoft Basic Render Driver» (VEN 1414): lo que da Windows sin tarjeta, como
+        # en los runners de GitHub. Sin GPU de verdad, no hay nada real que comprobar.
+        if src._started.adapter.vendor_id == 0x1414:
+            return None
+        return src._started.adapter.luid
     finally:
         src.close()
 

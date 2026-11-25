@@ -2,15 +2,32 @@
 
 from __future__ import annotations
 
+import functools
 import subprocess
 import sys
 import uuid
+from pathlib import Path
 
 import pytest
 
+from luzeira.sistema import permisos
 from luzeira.sistema.instancia import SingleInstance
 
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="solo Windows")
+
+
+@functools.cache
+def new_object_owner() -> str:
+    """El propietario que Windows da a lo que crea este proceso: el usuario, o el grupo
+    Administradores si el proceso está elevado (la CI de GitHub corre elevada)."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        probe = Path(tmp) / "propietario"
+        probe.write_bytes(b"")
+        owner = permisos.path_security(probe).owner
+    assert owner is not None
+    return owner
 
 
 @pytest.fixture
@@ -260,7 +277,8 @@ def test_real_objects_get_the_medium_label_and_count_as_ours(name):
         assert lock.acquire() and not lock.foreign
         security = permisos.handle_security(lock._handle, kernel_object=True)
         assert security.integrity == permisos.INTEGRITY_MEDIUM
-        assert security.owner == permisos.current_user_sid()
+        # El usuario; elevado (la CI), Windows se lo da a Administradores.
+        assert security.owner in {permisos.current_user_sid(), new_object_owner()}
         assert instancia.object_is_ours(lock._handle)
         # Un objeto sin etiqueta (Windows lo trata como medio) también es nuestro.
         k32 = ctypes.WinDLL("kernel32", use_last_error=True)

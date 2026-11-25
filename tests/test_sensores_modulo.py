@@ -5,10 +5,12 @@ El fichero lo escribe otro programa: todo lo que trae se trata como datos no fia
 
 from __future__ import annotations
 
+import functools
 import os
 import random
 import struct
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -459,6 +461,20 @@ def test_no_dacl_means_anyone_can_write():
 windows_only = pytest.mark.skipif(sys.platform != "win32", reason="ficheros de Windows")
 
 
+@functools.cache
+def new_object_owner() -> str:
+    """El propietario que Windows da a lo que crea este proceso: el usuario, o el grupo
+    Administradores si el proceso está elevado (la CI de GitHub corre elevada)."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        probe = Path(tmp) / "propietario"
+        probe.write_bytes(b"")
+        owner = permisos.path_security(probe).owner
+    assert owner is not None
+    return owner
+
+
 def _set_dacl(path, sddl):
     """Pone a ``path`` la DACL de ``sddl`` (protegida si empieza por ``D:P``)."""
     import ctypes
@@ -523,7 +539,8 @@ def _reader(folder, **kwargs):
 
 
 def _me_as_owner():
-    return frozenset({permisos.current_user_sid()})
+    # El dueño de lo que crea el test: el usuario, o Administradores si corre elevado.
+    return frozenset({new_object_owner()})
 
 
 @windows_only
@@ -542,6 +559,8 @@ def test_real_reader_without_the_module_finds_nothing(tmp_path, module_dir):
 
 @windows_only
 def test_real_reader_rejects_a_file_owned_by_a_normal_user(module_dir):
+    if new_object_owner() != permisos.current_user_sid():
+        pytest.skip("elevado (la CI): lo que crea es de Administradores, no del usuario")
     # Cualquiera puede crear una carpeta con ese nombre (en ProgramData, también): su
     # propietario es el usuario, no SYSTEM ni Administradores. Con los permisos bien
     # puestos (para que solo pueda fallar por el propietario).

@@ -51,6 +51,8 @@ def test_needles_include_the_git_email(monkeypatch):
     emp = _load_packager()
     monkeypatch.setattr(emp, "_git_emails", lambda: {"alguien@ejemplo.org"})
     monkeypatch.setenv("COMPUTERNAME", "EQUIPO-PRUEBA")
+    # En GitHub Actions solo se busca el email (on_github_runner): aquí, como en un PC.
+    monkeypatch.setattr(emp, "on_github_runner", lambda: False)
     needles = emp.personal_needles()
     assert "alguien@ejemplo.org" in needles and "equipo-prueba" in needles
 
