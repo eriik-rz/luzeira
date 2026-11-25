@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    La lógica del módulo que se puede probar sin administrador ni PawnIO (encargo, punto 3):
+    el formato del fichero, el seqlock, la comprobación de la carpeta, el mapeo de
+    sensores y el fichero mapeado (su comprobación se inyecta en los tests: una carpeta
+    temporal es del usuario, no de SYSTEM). No depende de LibreHardwareMonitor ni de ningún paquete.
+  -->
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <RootNamespace>LuzeiraSensores.Core</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="LuzeiraSensores" />
+    <InternalsVisibleTo Include="LuzeiraSensores.Tests" />
+  </ItemGroup>
+</Project>

@@ -1,9 +1,11 @@
 # Análisis estático de CodeQL (R3-04), configuración avanzada: Python (núcleo), JavaScript
-# y TypeScript (editor) y los propios workflows. Sin compilar nada (build-mode: none).
+# y TypeScript (editor) y los propios workflows, sin compilar nada (build-mode: none); y
+# C# (el módulo de sensores, ADR-007), que CodeQL tiene que ver compilar (build-mode: manual).
 #
 # Seguridad (skill seguridad-luzeira):
 # - Permisos mínimos: leer el repo y subir los resultados a «Security → Code scanning».
-# - Actions fijadas por SHA (github/codeql-action v4.39.3, resuelto el 2026-11-24).
+# - Actions fijadas por SHA (github/codeql-action v4.39.3, resuelto el 2026-11-24;
+#   actions/setup-dotnet v6.1.0, el 2026-11-25).
 # - ⚠ Con la «configuración por defecto» de CodeQL activada en GitHub, esta no se procesa:
 #   tiene que estar desactivada (el 2026-11-24 lo estaba: «not-configured»).
 name: codeql
@@ -43,3 +45,32 @@ jobs:
       - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           category: /language:${{ matrix.language }}
+
+  analizar-csharp:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write # subir los resultados
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: modulo-sensores/global.json
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: csharp
+          build-mode: manual
+      - name: Compilar el módulo
+        working-directory: modulo-sensores
+        run: |
+          dotnet restore LuzeiraSensores.slnx --locked-mode
+          dotnet build LuzeiraSensores.slnx -c Release --no-restore
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: /language:csharp

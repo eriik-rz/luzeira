@@ -1,7 +1,7 @@
 # Comprobaciones de cada push a main y de cada pull request: los mismos «verdes» que en
 # local (.claude/CLAUDE.md). Solo lee el repo: sin secretos ni permisos de escritura.
 # Actions fijadas por SHA (skill seguridad-luzeira; precedente: tj-actions, CVE-2025-30066).
-# Versiones y SHA resueltos con la API de GitHub el 2026-11-18.
+# Versiones y SHA resueltos con la API de GitHub el 2026-11-18 (setup-dotnet, el 2026-11-25).
 name: ci
 
 on:
@@ -30,6 +30,11 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: editor/.nvmrc
+      # El SDK de .NET del módulo de sensores: sin él, tests/test_modulo_servicio.py (el
+      # test cruzado C# ↔ Python) se saltaría.
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: modulo-sensores/global.json
       - name: Python
         run: |
           uv run --frozen pytest
@@ -43,3 +48,41 @@ jobs:
           npm run lint
           npm test
           npm run build
+
+  # El servicio opcional «Luzeira Sensores» (ADR-007, ADR-008). Sin permisos propios: los
+  # de todo el workflow (solo leer). La caché de NuGet empieza vacía, así que cada
+  # paquete pasa por la comprobación de firma de modulo-sensores/nuget.config.
+  modulo-sensores:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: modulo-sensores
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: modulo-sensores/global.json
+      - name: Restaurar (lock y firmas)
+        run: dotnet restore LuzeiraSensores.slnx --locked-mode
+      - name: Tests
+        run: dotnet test LuzeiraSensores.slnx -c Release --no-restore
+      - name: Publicar en limpio
+        shell: pwsh
+        run: |
+          if (Test-Path publish) { Remove-Item -Recurse -Force publish }
+          dotnet publish src/LuzeiraSensores -c Release --no-restore -o publish
+      - name: Publicación sin bundle, sin startup hooks y con el runtime fijado (ADR-008, punto 2)
+        shell: pwsh
+        run: |
+          $rc = Get-Content publish/LuzeiraSensores.runtimeconfig.json -Raw | ConvertFrom-Json
+          if ($rc.runtimeOptions.configProperties.'System.StartupHookProvider.IsSupported' -ne $false) { throw "startup hooks activados" }
+          if ($rc.runtimeOptions.includedFrameworks[0].version -ne "10.0.15") { throw "otro runtime de .NET" }
+          foreach ($f in "coreclr.dll", "LuzeiraSensores.dll", "LibreHardwareMonitorLib.dll") {
+            if (-not (Test-Path "publish/$f")) { throw "falta $f: ¿fichero único?" }
+          }

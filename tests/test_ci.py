@@ -145,12 +145,53 @@ def test_codeql_covers_python_javascript_and_actions():
     assert "security-events: write" in text
 
 
+def test_codeql_builds_the_sensors_module():
+    # ADR-007, punto 8: CodeQL para C#, viendo compilar el módulo (build-mode: manual).
+    job = _jobs(ROOT / ".github" / "workflows" / "codeql.yml")["analizar-csharp"]
+    assert "languages: csharp" in job and "build-mode: manual" in job
+    assert "global-json-file: modulo-sensores/global.json" in job
+    assert "dotnet restore LuzeiraSensores.slnx --locked-mode" in job
+    assert "dotnet build" in job
+    assert (
+        job.index("codeql-action/init@")
+        < job.index("dotnet build")
+        < job.index("codeql-action/analyze@")
+    )
+
+
+def test_ci_builds_and_tests_the_sensors_module():
+    jobs = _jobs(ROOT / ".github" / "workflows" / "ci.yml")
+    job = jobs["modulo-sensores"]
+    assert "global-json-file: modulo-sensores/global.json" in job
+    assert "dotnet restore LuzeiraSensores.slnx --locked-mode" in job
+    assert "dotnet test LuzeiraSensores.slnx" in job
+    # Publicación en limpio y comprobada (ADR-008, punto 2).
+    assert job.index("Remove-Item -Recurse -Force publish") < job.index("dotnet publish")
+    assert "System.StartupHookProvider.IsSupported" in job and "coreclr.dll" in job
+    assert '"10.0.15"' in job
+    csproj = _text(ROOT / "modulo-sensores" / "src" / "LuzeiraSensores" / "LuzeiraSensores.csproj")
+    assert "<RuntimeFrameworkVersion>10.0.15</RuntimeFrameworkVersion>" in csproj
+    # El job de Python tiene el SDK: si no, el test cruzado C# ↔ Python se saltaría.
+    assert "global-json-file: modulo-sensores/global.json" in jobs["verdes"]
+
+
+def test_sensors_module_restores_only_signed_packages_from_nuget_org():
+    text = _text(ROOT / "modulo-sensores" / "nuget.config")
+    assert "<clear />" in text and text.count('<add key="nuget.org"') == 1
+    assert '<add key="signatureValidationMode" value="require" />' in text
+    assert "<owners>" in text and "<packageSourceMapping>" in text
+    props = _text(ROOT / "modulo-sensores" / "Directory.Build.props")
+    assert "<RestoreLockedMode>true</RestoreLockedMode>" in props
+
+
 def test_dependabot_watches_every_ecosystem_with_cooldown():
     text = _text(ROOT / ".github" / "dependabot.yml")
     blocks = text.split("- package-ecosystem: ")[1:]
     found = {b.split("\n", 1)[0]: b for b in blocks}
-    assert set(found) == {"github-actions", "uv", "npm"}
+    assert set(found) == {"github-actions", "uv", "npm", "nuget", "dotnet-sdk"}
     assert "directory: /editor" in found["npm"]
+    assert "directory: /modulo-sensores" in found["nuget"]
+    assert "directory: /modulo-sensores" in found["dotnet-sdk"]
     for block in found.values():
         assert "interval: weekly" in block
         assert "default-days: 7" in block

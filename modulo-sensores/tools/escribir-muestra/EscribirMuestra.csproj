@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Herramienta de PRUEBA, no se distribuye: escribe un sensores.bin de ejemplo con el
+    escritor real (LuzeiraSensores.Core) para que tests/test_modulo_servicio.py lo lea
+    con el lector de Luzeira (modulo.parse_section). Así el formato lo comprueban los dos
+    programas, no dos copias de la misma tabla.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>EscribirMuestra</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\LuzeiraSensores.Core\LuzeiraSensores.Core.csproj" />
+  </ItemGroup>
+</Project>

@@ -87,6 +87,10 @@ class RealFrequencyCounters:
 GENERIC_READ = 0x80000000
 READ_CONTROL = 0x00020000
 FILE_READ_ATTRIBUTES = 0x0080
+#: Con solo READ_CONTROL|FILE_READ_ATTRIBUTES Windows no aplica el modo de compartir al
+#: handle de la carpeta, y se podría renombrar aunque no se comparta el borrado (medido
+#: el 2026-11-25 en el servicio del módulo). Pedir también listar la carpeta lo impide.
+FILE_LIST_DIRECTORY = 0x0001
 FILE_SHARE_READ = 0x1
 FILE_SHARE_WRITE = 0x2
 OPEN_EXISTING = 3
@@ -312,7 +316,9 @@ class RealModuleFileReader:
     def _open(self) -> bool:
         k = self._k32
         folder = self._create(
-            self._folder, READ_CONTROL | FILE_READ_ATTRIBUTES, FILE_FLAG_BACKUP_SEMANTICS
+            self._folder,
+            READ_CONTROL | FILE_READ_ATTRIBUTES | FILE_LIST_DIRECTORY,
+            FILE_FLAG_BACKUP_SEMANTICS,
         )
         if folder is None:
             return False

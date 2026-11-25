@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    El servicio de Windows «LuzeiraSensores» (ADR-007 y ADR-008).
+
+    Publicación (ADR-008, punto 2), siempre así:
+      dotnet publish src/LuzeiraSensores -c Release -o publish
+    con la carpeta publish/ BORRADA antes: publish no quita ficheros de una versión
+    anterior, y el instalador copia todo lo que haya.
+    - self-contained para win-x64: lleva su propio .NET y no depende del que haya;
+    - en una CARPETA normal, sin PublishSingleFile: un fichero único extraería las DLL
+      nativas a la carpeta temporal de SYSTEM, donde no las controlamos;
+    - sin startup hooks (System.StartupHookProvider.IsSupported=false en el
+      runtimeconfig.json): así ninguna variable de entorno puede inyectar código;
+    - sin recortar (trimming): LibreHardwareMonitor usa reflexión.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>LuzeiraSensores</AssemblyName>
+    <RootNamespace>LuzeiraSensores</RootNamespace>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <!-- El .NET que va dentro del binario SYSTEM, fijado (no «el último parche que tenga
+         el SDK»). El runtime pack no entra en packages.lock.json: lo fija esta línea y
+         lo comprueba la firma (nuget.config). Subirlo a mano con cada parche de .NET. -->
+    <RuntimeFrameworkVersion>10.0.15</RuntimeFrameworkVersion>
+    <UseAppHost>true</UseAppHost>
+    <PublishSingleFile>false</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>false</IncludeNativeLibrariesForSelfExtract>
+    <PublishTrimmed>false</PublishTrimmed>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <StartupHookSupport>false</StartupHookSupport>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Un servicio pequeño: recolector de basura sencillo, sin hilos de más. -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="LibreHardwareMonitorLib" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" />
+    <ProjectReference Include="..\LuzeiraSensores.Core\LuzeiraSensores.Core.csproj" />
+  </ItemGroup>
+</Project>

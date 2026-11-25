@@ -1,0 +1,6 @@
+# Salida de dotnet build / publish / test: se genera, nunca se sube.
+bin/
+obj/
+publish/
+TestResults/
+*.user

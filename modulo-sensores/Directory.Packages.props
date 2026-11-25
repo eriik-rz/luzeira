@@ -1,0 +1,16 @@
+<Project>
+  <!--
+    Versiones EXACTAS (entre corchetes: ni más nuevas ni más viejas) de todos los paquetes.
+    Comprobadas en la API de NuGet el 2026-11-25; licencias en TERCEROS.txt.
+    Las dependencias de estas (transitivas) las fija packages.lock.json de cada proyecto.
+  -->
+  <ItemGroup>
+    <!-- El servicio -->
+    <PackageVersion Include="LibreHardwareMonitorLib" Version="[0.9.6]" />
+    <PackageVersion Include="System.ServiceProcess.ServiceController" Version="[10.0.15]" />
+    <!-- Solo los tests -->
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="[18.11.0]" />
+    <PackageVersion Include="xunit" Version="[2.9.3]" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="[3.1.5]" />
+  </ItemGroup>
+</Project>
