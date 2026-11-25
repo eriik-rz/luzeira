@@ -15,6 +15,8 @@
   "pantallas.no_puedo_abrir": "Ich kann das Display ({device}) nicht öffnen.",
   "pantallas.no_puedo_abrir_reintento": "Ich kann das Display ({device}) nicht öffnen. Ich versuche es weiter.",
   "pantallas.conexion_perdida": "Die Verbindung zum Display ist weg. Wurde das USB-Kabel abgezogen?",
+  "pantallas.imagen_cortada": "Das Bild ist mittendrin abgebrochen, und das Display wartet vielleicht noch auf den Rest. Zieh es ab und steck es wieder ein: Ich versuche es erneut, sobald du es wieder anschließt, sonst in einer Weile.",
+  "pantallas.estado_desenchufar": "Das Display antwortet auch nach vielen Versuchen nicht. Zieh es ab und steck es wieder ein; bis dahin versuche ich es ab und zu weiter.",
   "pantallas.estado_arrancando": "Luzeira startet…",
   "pantallas.estado_conectando": "Display gefunden. Bild wird vorbereitet…",
   "pantallas.estado_en_reposo": "Display aus, solange der PC im Energiesparmodus ist.",

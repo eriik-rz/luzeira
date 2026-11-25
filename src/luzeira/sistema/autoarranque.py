@@ -25,8 +25,10 @@ from __future__ import annotations
 import logging
 import subprocess
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
+
+from luzeira.sistema import permisos
 
 try:  # winreg solo existe en Windows; fuera de él el módulo se importa igual.
     import winreg
@@ -48,6 +50,84 @@ class AutostartError(RuntimeError):
 
     Su mensaje no llega al usuario: la bandeja lo registra y enseña su propio aviso
     (``bandeja.autoarranque_fallo``). Por eso va en español, como los logs (C-62)."""
+
+
+class UnsafeAppFolder(AutostartError):
+    """La carpeta de Luzeira la pueden cambiar otros usuarios del PC: no se activa (R4-06).
+
+    A diferencia de ``AutostartError``, **su mensaje sí es para el usuario** (traducido,
+    ``sistema.autoarranque_carpeta_insegura``): la bandeja debe enseñarlo tal cual."""
+
+
+#: Clave del catálogo con el aviso de ``UnsafeAppFolder``.
+UNSAFE_FOLDER_MESSAGE = "sistema.autoarranque_carpeta_insegura"
+
+
+def app_folders() -> list[Path]:
+    """Las carpetas de las que depende la línea de ``Run``: la del intérprete, la de la
+    app que la contiene y la del paquete ``luzeira`` con la suya. En la portable son
+    ``<carpeta>\\python`` y ``<carpeta>``; en desarrollo, el ``.venv`` y ``src``."""
+    import luzeira
+
+    exe_dir = Path(sys.executable).resolve().parent
+    package_dir = Path(luzeira.__file__).resolve().parent
+    folders: list[Path] = []
+    for folder in (exe_dir, exe_dir.parent, package_dir, package_dir.parent):
+        if folder not in folders:
+            folders.append(folder)
+    return folders
+
+
+def unsafe_folders(
+    folders: Sequence[Path],
+    *,
+    read_security: Callable[[Path], permisos.Security] | None = None,
+    user_sid: str | None = None,
+) -> list[Path]:
+    """Las de ``folders`` que puede cambiar alguien que no sea este usuario, SYSTEM,
+    Administradores o TrustedInstaller (por su DACL o por ser el propietario).
+
+    Concepto: la clave ``Run`` ejecuta, **como este usuario**, el código de esas carpetas.
+    Si otro usuario del PC puede escribir en ellas (pasa al descomprimir la portable en
+    ``C:\\Luzeira``: hereda «Modificar» para Usuarios autentificados de ``C:\\``, medido
+    2026-11-24), puede cambiar ese código y que lo ejecutemos nosotros al iniciar sesión.
+    Una carpeta que no se puede leer cuenta como insegura. ``read_security`` y ``user_sid``
+    se inyectan en los tests."""
+    read = read_security or permisos.path_security
+    me = user_sid or permisos.current_user_sid()
+    allowed = {
+        me,
+        permisos.SID_SYSTEM,
+        permisos.SID_ADMINISTRATORS,
+        permisos.SID_TRUSTED_INSTALLER,
+        # Comodín que solo se usa al heredar: lo que se cree dentro será de quien lo cree,
+        # y crear dentro ya exige un permiso que aquí se vigila.
+        permisos.SID_CREATOR_OWNER,
+    }
+    owners = allowed - {permisos.SID_CREATOR_OWNER}
+    bad: list[Path] = []
+    for folder in folders:
+        try:
+            security = read(folder)
+        except OSError as exc:
+            log.warning("No se pudieron leer los permisos de una carpeta (%s)", type(exc).__name__)
+            bad.append(folder)
+            continue
+        writers = permisos.foreign_writers(security, allowed, permisos.FOLDER_WRITE_RIGHTS)
+        if writers or security.owner not in owners:
+            bad.append(folder)
+    return bad
+
+
+def check_app_folders() -> None:
+    """Lanza ``UnsafeAppFolder`` si alguna carpeta de ``app_folders`` es insegura."""
+    from luzeira.idioma import t
+
+    bad = unsafe_folders(app_folders())
+    if bad:
+        # Sin la ruta en el log: puede llevar el nombre del usuario.
+        log.warning("Otros usuarios pueden cambiar %d carpeta(s) de Luzeira", len(bad))
+        raise UnsafeAppFolder(t(UNSAFE_FOLDER_MESSAGE))
 
 
 def _require_winreg() -> None:
@@ -120,7 +200,9 @@ def enable(command: str, key_path: str = RUN_KEY_PATH, name: str = VALUE_NAME) -
     """Crea o actualiza el valor de autoarranque con ``command``.
 
     Lanza ``ValueError`` si la orden está vacía, tiene saltos de línea o pasa de 260
-    caracteres, y ``AutostartError`` si el registro rechaza la escritura.
+    caracteres, ``UnsafeAppFolder`` si otros usuarios pueden cambiar la carpeta de la
+    app (R4-06; ver ``unsafe_folders``) y ``AutostartError`` si el registro rechaza la
+    escritura.
     """
     _require_winreg()
     if not command.strip():
@@ -132,6 +214,7 @@ def enable(command: str, key_path: str = RUN_KEY_PATH, name: str = VALUE_NAME) -
             f"La orden de autoarranque tiene {len(command)} caracteres y Windows admite "
             f"{MAX_COMMAND_LENGTH} como máximo."  # i18n: no
         )
+    check_app_folders()
     try:
         with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE) as key:
             winreg.SetValueEx(key, name, 0, winreg.REG_SZ, command)

@@ -9,6 +9,9 @@ Qué hace:
    ningún servidor ni guarda nada.
 4. Copia los temas incluidos a ``_site/demo/temas/`` con su lista (``temas.json``):
    la demo los carga para que se puedan ver todos (``sim/simApi.ts``).
+5. Pone a la demo su política de seguridad (``DEMO_CSP``) en un ``<meta>``: GitHub
+   Pages no deja poner cabeceras. Solo aquí: en ``editor/index.html`` rompería
+   ``npm run dev`` (Vite mete scripts propios), y en la app la pone el servidor local.
 
 Uso: ``uv run python scripts/web.py`` (necesita ``npm ci`` hecho en ``editor/``).
 Para verla: ``uv run python -m http.server -d _site 8000 --bind 127.0.0.1``.
@@ -28,6 +31,27 @@ SITE = ROOT / "_site"
 sys.path.insert(0, str(ROOT / "src"))
 
 from luzeira.marca import draw_mark  # noqa: E402
+
+# Lo que la demo necesita y nada más: sus propios scripts, estilos y temas; imágenes y
+# fuentes de un tema subido se leen como blob:/data:. Es la CSP del servidor local
+# (``luzeira.editor.servidor.CSP``) sin ``frame-ancestors``, que en un <meta> no vale
+# (la portada la enseña en un iframe). ``script-src`` sale de ``default-src 'self'``.
+DEMO_CSP = (
+    "default-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; "
+    "font-src 'self' blob: data:; connect-src 'self'; object-src 'none'; "
+    "base-uri 'none'; form-action 'none'"
+)
+_CHARSET = '<meta charset="UTF-8" />'
+
+
+def add_demo_csp(index: Path) -> None:
+    """Mete la CSP justo después del ``charset`` del ``index.html`` de la demo: antes de
+    cualquier ``<script>``, que si no ya se habría cargado sin ella."""
+    html = index.read_bytes().decode("utf-8")
+    if html.count(_CHARSET) != 1:
+        raise SystemExit(f"{index}: no encuentro {_CHARSET} (¿ha cambiado editor/index.html?)")
+    meta = f'<meta http-equiv="Content-Security-Policy" content="{DEMO_CSP}" />'
+    index.write_bytes(html.replace(_CHARSET, f"{_CHARSET}\n    {meta}").encode("utf-8"))
 
 
 def main() -> int:
@@ -49,6 +73,7 @@ def main() -> int:
         env=env,
         check=True,
     )
+    add_demo_csp(SITE / "demo" / "index.html")
     themes_src = ROOT / "src" / "luzeira" / "recursos" / "temas"
     themes_dst = SITE / "demo" / "temas"
     shutil.copytree(themes_src, themes_dst)

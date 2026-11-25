@@ -222,13 +222,19 @@ class Factory:
         return self.ports[-1]
 
 
-def test_auto_rev_a_by_serial_opens_exactly_as_before(monkeypatch):
-    calls = []
-    monkeypatch.setattr(TuringRevA, "open", classmethod(lambda cls, *a, **k: calls.append((a, k))))
-    factory = Factory()
-    apertura.open_auto([REV_B_PORT, REV_A_COM3, KIPYE_PORT], serial_factory=factory)
-    assert calls == [((None,), {"retries": 1})]  # la misma llamada que hacía open_once
-    assert factory.opened == []
+def test_auto_rev_a_by_serial_opens_exactly_as_before():
+    # Antes este test congelaba la llamada ``TuringRevA.open(None, retries=1)``: con
+    # ``None`` la rev A volvía a buscar su puerto en los puertos REALES del equipo y abría
+    # ``serial.Serial`` de verdad, sin mirar ``ports`` ni ``serial_factory`` (R5-08). Lo que
+    # tiene que seguir igual no es la llamada, sino lo que ve la pantalla: el mismo puerto,
+    # una sola apertura y los mismos bytes que la apertura de siempre de la rev A.
+    factory = Factory(bytes([1] * 6))
+    display = apertura.open_auto([REV_B_PORT, REV_A_COM3, KIPYE_PORT], serial_factory=factory)
+    assert isinstance(display, TuringRevA) and display.device == "COM3"
+    assert factory.opened == ["COM3"]
+    before = Factory(bytes([1] * 6))
+    TuringRevA.open("COM3", retries=1, serial_factory=before)
+    assert factory.ports[0].writes == before.ports[0].writes == [bytes([0x45] * 6)]
 
 
 def test_auto_rev_b_by_serial_uses_its_driver():
@@ -358,3 +364,107 @@ def test_unsupported_model_message_is_coherent():
         apertura.open_auto([REV_C_SLEEPING])
     text = str(info_.value)
     assert "no le mando nada" in text and "intentando" not in text
+
+
+# --- R5: un USB defectuoso o malicioso -------------------------------------------------
+
+CH340_COM5 = com("COM5", 0x1A86, 0x7523, None)  # el chip de muchas impresoras 3D y GRBL
+
+
+def test_rev_a_serial_on_another_usb_is_not_a_rev_a():
+    # R5-07: un Arduino (2341:0043) que anuncia el serie de la rev A no se abre solo ni
+    # sale en la lista cerrada; solo queda el modo avanzado.
+    fake = com("COM9", 0x2341, 0x0043, "USB35INCHIPSV2")
+    assert identify(info(fake)) is None
+    assert compatible_models(info(fake)) == []
+    factory = Factory(bytes([1] * 6))
+    with pytest.raises(DisplayError) as error:
+        apertura.open_auto([fake], serial_factory=factory)
+    assert type(error.value) is DisplayError and factory.opened == []
+
+
+def test_rev_a_serial_on_kipye_usb_is_a_kipye_proposal():
+    found = identify(info(com("COM8", 0x454D, 0x4E41, "USB35INCHIPSV2")))
+    assert (found.model, found.sure) == (KIPYE, False)
+
+
+def test_advanced_choice_without_serial_does_not_follow_the_usb_to_another_com():
+    # R5-01: la pantalla elegida en modo avanzado sobre un CH340 sin serie no se puede
+    # distinguir de otro CH340 (la impresora 3D de al lado). En otro COM no vale: se pregunta.
+    choice = DisplayChoice.for_port(REV_A, info(CH340_COM5), advanced=True)
+    printer = com("COM7", 0x1A86, 0x7523, None)
+    assert match_choice(choice, list_ports([printer])) is None
+    assert match_choice(choice, list_ports([printer, CH340_COM5])).device == "COM5"
+    # El mismo COM con otro USB tampoco es el mismo aparato.
+    assert match_choice(choice, list_ports([com("COM5", 0x2341, 0x0043, None)])) is None
+    factory = Factory()
+    with pytest.raises(ChosenDisplayMissing):
+        apertura.open_chosen(choice, [printer], serial_factory=factory)
+    assert factory.opened == []  # ni un byte a la impresora
+
+
+def test_advanced_choice_with_serial_also_needs_the_same_com():
+    choice = DisplayChoice.for_port(REV_B, info(REV_A_COM3), advanced=True)
+    moved = com("COM10", 0x1A86, 0x5722, "USB35INCHIPSV2")
+    assert match_choice(choice, list_ports([moved])) is None
+
+
+def test_normal_choice_without_serial_needs_the_same_com():
+    # Un 1a86:5722 sin serie elegido de la lista cerrada: el mismo motivo (R5-01).
+    choice = DisplayChoice.for_port(REV_A, info(UNKNOWN_CH552))
+    assert match_choice(choice, list_ports([com("COM2", 0x1A86, 0x5722, None)])) is None
+    assert match_choice(choice, list_ports([UNKNOWN_CH552])).device == "COM9"
+
+
+@pytest.mark.parametrize("model", [REV_A, REV_B, KIPYE])
+def test_advanced_choice_never_matches_a_rev_c(model):
+    # R5-02: la rev C es el único protocolo con órdenes que borran; un tema puede formar
+    # una con sus píxeles si se le manda el protocolo de otro modelo. Ni en modo avanzado.
+    for port in (REV_C_SLEEPING, com("COM13", 0x0525, 0xA4A7, "20080411")):
+        choice = DisplayChoice.for_port(model, info(port), advanced=True)
+        assert match_choice(choice, list_ports([port])) is None
+        factory = Factory()
+        with pytest.raises(ChosenDisplayMissing):
+            apertura.open_chosen(choice, [port], serial_factory=factory)
+        assert factory.opened == []
+
+
+def test_rev_a_that_echoes_its_hello_is_not_a_rev_a():
+    # R5-06: un cable en bucle (o un aparato que repite) devuelve 45 45 45 45 45 45.
+    factory = Factory(bytes([0x45] * 6))
+    choice = DisplayChoice.for_port(REV_A, info(CH340_COM5), advanced=True)
+    with pytest.raises(WrongModel):
+        apertura.open_chosen(choice, [CH340_COM5], serial_factory=factory)
+    assert factory.ports[0].closed
+    assert factory.ports[0].writes == [bytes([0x45] * 6)]  # solo el saludo
+
+
+@pytest.mark.parametrize(("answer", "verified"), [(0x01, True), (0x03, True), (0xFF, False)])
+def test_only_real_rev_a_answers_count_as_verified(answer, verified):
+    # 6 bytes iguales que no son 0x01-0x03 no demuestran nada: sin verificar (el usuario
+    # confirma que se ve bien); antes contaba como rev A verificada.
+    choice = DisplayChoice.for_port(REV_A, info(UNKNOWN_CH552))
+    factory = Factory(bytes([answer] * 6))
+    display = apertura.open_chosen(choice, [UNKNOWN_CH552], serial_factory=factory)
+    assert display.verified is verified
+
+
+def test_confirmed_rev_a_checks_its_hello_too():
+    # El camino de «Sí, es una rev A» (servicio.open_once con puerto) también valida.
+    echo = Factory(bytes([0x45] * 6))
+    with pytest.raises(WrongModel):
+        apertura.open_confirmed_rev_a("COM9", [UNKNOWN_CH552], serial_factory=echo)
+    assert echo.ports[0].closed
+    good = Factory(bytes([1] * 6))
+    display = apertura.open_confirmed_rev_a("COM9", [UNKNOWN_CH552], serial_factory=good)
+    assert isinstance(display, TuringRevA) and display.verified is True
+    silent = apertura.open_confirmed_rev_a("COM9", [UNKNOWN_CH552], serial_factory=Factory())
+    assert silent.verified is True  # el Turing oficial no contesta: con su USB, vale
+
+
+def test_auto_rev_a_uses_the_given_ports_and_factory():
+    # R5-08: antes la rev A volvía a enumerar los puertos del equipo y abría pyserial de
+    # verdad. Con una rev A en ``ports`` y ninguna en el equipo, abre la de ``ports``.
+    factory = Factory()
+    display = apertura.open_auto([REV_A_COM3], serial_factory=factory)
+    assert display.device == "COM3" and factory.opened == ["COM3"]

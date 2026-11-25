@@ -29,5 +29,6 @@
   "cli.editor_modo": "Tryb edytora: ekran nie jest teraz używany.",
   "cli.editor_desarrollo": "Edytor w trybie deweloperskim: otwórz {url}",
   "cli.editor_api": "(API pod adresem {url}). Ctrl+C, żeby zatrzymać.",
+  "cli.editor_puerto_ocupado": "Pod adresem {url} działa inny program, a nie Vite edytora: token nie zostanie pokazany. Zamknij go i uruchom „npm run dev” w editor/.",
   "cli.editor_sin_compilar": "Edytor nie jest zbudowany: uruchom „npm run build” w editor/."
 }

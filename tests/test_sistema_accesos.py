@@ -83,6 +83,23 @@ def test_powershell_by_full_path():
     assert exe.lower().endswith(r"system32\windowspowershell\v1.0\powershell.exe")
 
 
+def test_powershell_does_not_trust_the_environment(monkeypatch, tmp_path):
+    # R4-13: con %SYSTEMROOT% cambiado, se seguiría ejecutando otro «powershell.exe».
+    import sys
+
+    if sys.platform != "win32":
+        pytest.skip("solo Windows")
+    real = accesos.windows_dir()
+    monkeypatch.setenv("SYSTEMROOT", str(tmp_path))
+    monkeypatch.setenv("WINDIR", str(tmp_path))
+    run = FakeRun()
+    accesos.create_shortcut("Desktop", run=run, mark=lambda p: None)
+    exe = run.calls[0][0][0]
+    assert str(tmp_path).lower() not in exe.lower()
+    assert exe.lower().startswith(real.lower())
+    assert (accesos.Path(real) / "System32").is_dir()
+
+
 def test_desktop_shortcut_opens_the_editor_and_start_menu_does_not():
     run = FakeRun()
     accesos.create_shortcut("Desktop", run=run, mark=lambda p: None)

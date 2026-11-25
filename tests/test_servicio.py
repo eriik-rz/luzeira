@@ -730,3 +730,281 @@ def test_a_different_problem_is_still_notified_after_changing_language():
         h.service.apply(Settings(THEME), reload=True)
         h.wait_status(Status.NEEDS_CONFIRMATION)
     assert [s for s, _ in h.statuses][:2] == [Status.NO_DISPLAY, Status.NEEDS_CONFIRMATION]
+
+
+# --- R5-09 / R5-03: no abrir sin fin una pantalla que falla -----------------------------
+
+REPLUG = "Desenchúfala y vuelve a enchufarla"
+
+
+class Ports:
+    """``list_ports`` falso: lo que Windows diría que hay conectado ahora."""
+
+    def __init__(self, *devices: str) -> None:
+        self.devices = list(devices)
+        self.calls = 0
+
+    def __call__(self):
+        from luzeira.pantallas.modelos import PortInfo
+
+        self.calls += 1
+        return [PortInfo(d, 0x1A86, 0x5722, "") for d in self.devices]
+
+
+def test_many_failures_in_a_row_ask_to_replug_and_wait_longer():
+    # R5-09: un puerto que abre pero falla siempre ya no se reabre cada pocos segundos sin
+    # fin (cada apertura reinicia la rev A y le manda el saludo).
+    failing = open_error("COM3", OSError("no abre"))
+    opener = Opener(plan=[failing] * 1000)
+    timings = Timings(
+        tick=0.02,
+        warmup=0.02,
+        backoff_start=0.01,
+        backoff_max=0.02,
+        failures_before_long=4,
+        backoff_long=0.4,
+    )
+    ports = Ports("COM3")
+    with Harness(opener=opener, timings=timings, list_ports=ports) as h:
+        h.wait_for(lambda: REPLUG in h.service.message)
+        assert h.service.status == Status.NO_DISPLAY
+        assert len(opener.calls) == 4
+        h.wait_for(lambda: len(opener.calls) == 5, timeout=2)
+    gaps = [b - a for a, b in itertools.pairwise(opener.times)]
+    assert max(gaps[:3]) < 0.15, gaps  # las primeras, deprisa
+    assert gaps[3] >= 0.35, gaps  # tras la cuarta, la espera larga
+    assert ports.calls >= 2  # mientras, solo se mira la lista de puertos
+
+
+def test_replugging_during_the_long_wait_retries_at_once():
+    failing = open_error("COM3", OSError("no abre"))
+    opener = Opener(plan=[failing] * 3)  # luego, la pantalla funciona
+    timings = Timings(
+        tick=0.02,
+        warmup=0.02,
+        backoff_start=0.01,
+        backoff_max=0.02,
+        failures_before_long=3,
+        backoff_long=60.0,
+    )
+    ports = Ports("COM3")
+    with Harness(opener=opener, timings=timings, list_ports=ports) as h:
+        h.wait_for(lambda: REPLUG in h.service.message)
+        time.sleep(0.1)
+        assert len(opener.calls) == 3  # esperando: no la abre
+        ports.devices = []  # la desenchufan…
+        h.wait_for(lambda: len(opener.calls) == 4)  # …y se intenta al momento
+        h.wait_status(Status.RUNNING)
+
+
+def test_not_found_is_not_counted_as_a_failure():
+    # «No la encuentro» no le manda nada: se sigue mirando cada pocos segundos (RQ-08: al
+    # enchufarla tiene que volver en < 10 s).
+    opener = Opener(plan=[DisplayError("No encuentro la pantalla.")] * 30)
+    timings = Timings(tick=0.02, warmup=0.02, backoff_start=0.01, backoff_max=0.01)
+    timings = Timings(**{**timings.__dict__, "failures_before_long": 3})
+    with Harness(opener=opener, timings=timings, list_ports=Ports()) as h:
+        h.wait_status(Status.RUNNING, timeout=3)
+    assert len(opener.calls) == 31
+    assert not any(REPLUG in str(m) for _s, m in h.statuses)
+
+
+def test_cut_image_on_a_beta_display_waits_for_a_replug():
+    # R5-03: una rev B o Kipye con una imagen a medias puede estar esperando el resto; el
+    # saludo de reabrir se tomaría por píxeles. No se reabre hasta que cambien los puertos.
+    from luzeira.pantallas.comun import ImageCut
+
+    class CutScreen(FakeDisplay):
+        def draw_image(self, image, x=0, y=0):
+            raise ImageCut()
+
+    opener = Opener(make=lambda i, log, fail: CutScreen(log) if i == 0 else FakeDisplay(log))
+    timings = Timings(tick=0.02, warmup=0.02, backoff_start=0.01, backoff_max=0.02)
+    ports = Ports("COM6")
+    with Harness(opener=opener, timings=timings, list_ports=ports) as h:
+        h.wait_for(lambda: REPLUG in h.service.message)
+        assert "sigo intentando" not in h.service.message
+        time.sleep(0.15)
+        assert len(opener.calls) == 1  # ni un saludo a ciegas
+        ports.devices = []
+        h.wait_status(Status.RUNNING)
+    assert len(opener.calls) == 2
+
+
+def test_user_action_retries_at_once_even_while_waiting_for_a_replug():
+    failing = open_error("COM3", OSError("no abre"))
+    opener = Opener(plan=[failing] * 2)
+    timings = Timings(
+        tick=0.02,
+        warmup=0.02,
+        backoff_start=0.01,
+        backoff_max=0.02,
+        failures_before_long=2,
+        backoff_long=60.0,
+    )
+    with Harness(opener=opener, timings=timings, list_ports=Ports("COM3")) as h:
+        h.wait_for(lambda: REPLUG in h.service.message)
+        h.service.apply(Settings(THEME))  # p. ej. «Reintentar» o cambiar algo en el menú
+        h.wait_status(Status.RUNNING)
+
+
+# --- R2-02: un fallo del render no tumba el servicio ----------------------------------
+
+
+class Bomb(Exception):
+    """Lo que lanzaría Pillow con una imagen o fuente trampa (texto con una ruta)."""
+
+
+@pytest.fixture
+def flaky_renderer(monkeypatch):
+    from luzeira import servicio
+    from luzeira.render import Renderer
+
+    fails = {"full_frame": 0, "changed": 0}
+
+    class Flaky(Renderer):
+        def full_frame(self):
+            if fails["full_frame"]:
+                fails["full_frame"] -= 1
+                raise Bomb("C:/Users/alguien/tema/fuente.ttf")
+            return super().full_frame()
+
+        def changed(self):
+            if fails["changed"]:
+                fails["changed"] -= 1
+                raise Bomb("C:/Users/alguien/tema/fuente.ttf")
+            return super().changed()
+
+    monkeypatch.setattr(servicio, "Renderer", Flaky)
+    return fails
+
+
+def test_render_failure_in_full_frame_keeps_the_service_alive(flaky_renderer, caplog):
+    flaky_renderer["full_frame"] = 3
+    with Harness() as h:
+        h.wait_status(Status.THEME_ERROR)
+        assert "Bomb" in h.service.message and "alguien" not in h.service.message
+        h.wait_status(Status.RUNNING)
+        assert h.thread.is_alive()
+        display = h.opener.displays[0]
+        assert ("close",) not in h.opener.calls_of(display)  # la pantalla sigue abierta
+    assert len(h.opener.displays) == 1
+    assert "alguien" not in caplog.text and "Bomb" in caplog.text
+    assert caplog.text.count("Fallo al preparar la imagen") == 1  # no uno por intento
+
+
+def test_render_failure_in_changed_repaints_whole_frame_later(flaky_renderer):
+    offset = [0.0]
+    with Harness(monotonic=lambda: time.monotonic() + offset[0]) as h:
+        h.wait_status(Status.RUNNING)
+        display = h.opener.displays[0]
+        flaky_renderer["changed"] = 1
+        offset[0] += 10.0  # que los widgets caduquen y se pida ``changed`` ya
+        h.wait_status(Status.THEME_ERROR)
+        fulls = h.opener.calls_of(display).count(("full",))
+        h.wait_status(Status.RUNNING)
+        h.wait_for(lambda: h.opener.calls_of(display).count(("full",)) == fulls + 1)
+        assert h.thread.is_alive()
+
+
+def test_render_retries_back_off_instead_of_spinning(flaky_renderer):
+    flaky_renderer["full_frame"] = 1000
+    timings = Timings(tick=0.01, warmup=0.0, backoff_start=0.02, backoff_max=0.05)
+    timings = Timings(**{**timings.__dict__, "render_retry_max": 0.08})
+    with Harness(timings=timings) as h:
+        h.wait_status(Status.THEME_ERROR)
+        time.sleep(0.5)
+        left = flaky_renderer["full_frame"]
+    # 0,01 + 0,02 + 0,04 + 0,08 + 0,08…: unos 8 intentos en 0,5 s, no miles.
+    assert 1000 - left <= 12, 1000 - left
+
+
+def test_confirmed_rev_a_from_the_real_open_path_checks_its_hello(monkeypatch):
+    # R5-06: «Sí, es una rev A» abre con ``open_once(puerto)``, que también tiene que
+    # rechazar un eco. Camino completo, con pyserial y la lista de puertos falsos.
+    from types import SimpleNamespace
+
+    import serial
+    from serial.tools import list_ports
+
+    from luzeira import servicio
+
+    class Echo:
+        def __init__(self, *_a, **_k) -> None:
+            self.writes: list[bytes] = []
+            self.closed = False
+
+        def write(self, data):
+            self.writes.append(bytes(data))
+            return len(data)
+
+        def read(self, size=1):
+            return b"\x45" * size
+
+        def reset_input_buffer(self):
+            pass
+
+        def close(self):
+            self.closed = True
+
+    opened: list[Echo] = []
+    monkeypatch.setattr(serial, "Serial", lambda *a, **k: opened.append(Echo()) or opened[-1])
+    port = SimpleNamespace(device="COM9", vid=0x1A86, pid=0x5722, serial_number=None)
+    monkeypatch.setattr(list_ports, "comports", lambda: [port])
+    with pytest.raises(WrongModel):
+        servicio.open_once("COM9")
+    assert len(opened) == 1 and opened[0].closed
+
+
+def test_sensor_failure_right_after_connecting_does_not_kill_the_service():
+    class FirstPollFails(FakeHub):
+        def poll(self) -> None:
+            super().poll()
+            if self.polls == 1:
+                raise KeyError("sensor")
+
+    h = Harness()
+    h.hub = FirstPollFails()
+    with h:
+        h.wait_status(Status.RUNNING)
+        assert h.thread.is_alive()
+
+
+def test_display_that_opens_but_always_fails_ends_up_asking_to_replug():
+    # Remate R5-09 (m24): el puerto abre bien pero la pantalla falla al encender, una y
+    # otra vez. Sin contar estos fallos se reabriría (y reiniciaría la rev A) cada 3 s.
+    timings = Timings(
+        tick=0.02,
+        warmup=0.02,
+        backoff_start=0.01,
+        backoff_max=0.02,
+        failures_before_long=4,
+        backoff_long=60.0,
+    )
+    opener = Opener(make=lambda index, log, fail: DeadScreen(log))
+    with Harness(opener=opener, timings=timings, list_ports=Ports("COM3")) as h:
+        h.wait_for(lambda: REPLUG in h.service.message)
+        time.sleep(0.1)
+        assert len(opener.displays) == 4  # y ahí se queda esperando
+
+
+def test_reconnections_that_reach_an_image_do_not_ask_to_replug():
+    # Remate R5-09 (m34): perder la pantalla y recuperarla con imagen 10 veces seguidas no
+    # es «falla siempre»: cada imagen completa pone la cuenta a cero.
+    timings = Timings(
+        tick=1.0,
+        warmup=0.0,
+        backoff_start=0.5,
+        backoff_max=0.5,
+        failures_before_long=4,
+        backoff_long=1e9,
+    )
+    opener = Opener(fail_on_draw={i: 2 for i in range(10)})  # imagen entera y luego se pierde
+    # Reloj que salta 2 s en cada mirada: los widgets caducan ya y cada tick trae un
+    # parche (el que falla), sin esperas reales.
+    clock = itertools.count(0.0, 2.0).__next__
+    with Harness(opener=opener, timings=timings, list_ports=Ports("COM3"), monotonic=clock) as h:
+        h.wait_for(lambda: len(opener.displays) == 11, timeout=10)
+        h.wait_status(Status.RUNNING)
+    assert all(d.failed_at is not None for d in opener.displays[:10])
+    assert not any(REPLUG in str(m) for _s, m in h.statuses)

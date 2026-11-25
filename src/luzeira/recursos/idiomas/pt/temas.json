@@ -10,12 +10,14 @@
   "temas.fichero_grande": "{what} “{rel}” ocupa {size} MB; o máximo é {max} MB.",
   "temas.tipo_falso": "{what} “{rel}” não é de verdade um arquivo .{ext}.",
   "temas.gif_largo": "O GIF “{rel}” tem mais de {max} quadros; use um mais curto.",
+  "temas.gif_pesado": "O GIF “{rel}” exige memória demais para ser decodificado (mais de {mpx} milhões de pixels somando todos os quadros); use um menor ou mais curto.",
   "temas.imagen_enorme": "A imagem “{rel}” mede {width}x{height} pixels; o máximo é {max}x{max}.",
   "temas.imagen_bomba": "A imagem “{rel}” é grande demais (possível bomba).",
   "temas.imagen_danada": "A imagem “{rel}” está corrompida ou não é uma imagem válida.",
   "temas.imagen_extension": "A imagem “{rel}” tem uma extensão não permitida.",
   "temas.fuente_danada": "A fonte “{rel}” está corrompida ou não pode ser lida.",
   "temas.fuente_falla": "A fonte “{rel}” está corrompida: falha ao desenhar texto no tamanho {size}.",
+  "temas.fuente_enorme": "A fonte “{rel}” desenha letras desproporcionais: no tamanho {size} elas saem mais de {max} vezes maiores do que o pedido.",
   "temas.pydantic.missing": "falta este campo",
   "temas.pydantic.extra_forbidden": "campo desconhecido (não existe neste formato)",
   "temas.pydantic.string_pattern_mismatch": "o valor não tem o formato esperado",
@@ -66,5 +68,6 @@
   "temas.zip.no_seguro": "O zip não é seguro: “{name}” {problem}.",
   "temas.zip.repetido": "O zip tem o arquivo “{rel}” repetido.",
   "temas.zip.sale": "O zip não é seguro: “{name}” sai da pasta.",
-  "temas.zip.danado": "Não é possível ler “{name}” do zip: está corrompido."
+  "temas.zip.danado": "Não é possível ler “{name}” do zip: está corrompido.",
+  "temas.zip.inesperado": "Não foi possível importar “{name}” por causa de um erro inesperado."
 }

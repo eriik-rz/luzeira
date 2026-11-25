@@ -51,6 +51,19 @@ NO_VALUE = "—"  # RQ-05: un sensor sin valor nunca se pinta como 0
 # saltaba ~40 % de los ticks (medido por el revisor de la fase 3).
 TICK_TOLERANCE = 0.25
 
+# R2-02: Pillow rasteriza el texto **entero** antes de recortarlo a la caja. Con una
+# fuente de métricas infladas, unas letras piden cientos de megapíxeles (CPU, memoria o
+# ``DecompressionBombError``). Antes de pintar con la fuente del tema se mide el texto
+# (``getbbox`` no rasteriza): si ocupa más de 4 veces su caja y más de 2 Mpx, se usa la
+# de Luzeira. Un texto normal cabe en su caja (lo exige test_temas_incluidos); uno largo
+# que se sale un poco, también pasa. 4 x 2048x2048 (la caja más grande) = el límite de
+# Pillow que fija el cargador (``Image.MAX_IMAGE_PIXELS``).
+# R3: la de Luzeira también puede pasarse (200 «⬤» a tamaño 300 son 34 Mpx, y Pillow da
+# error por encima de 33,5 Mpx): con ella, el texto que no cabe se recorta antes de
+# rasterizarlo (``_fit_text``). Lo recortado quedaba fuera de la caja: no se ve.
+TEXT_BOX_FACTOR = 4
+MAX_TEXT_PIXELS = 2_000_000
+
 
 @dataclass(frozen=True)
 class Patch:
@@ -135,6 +148,52 @@ def _fit_cover(image: Image.Image, size: tuple[int, int]) -> Image.Image:
     return ImageOps.fit(image, size, Image.Resampling.LANCZOS)
 
 
+def _text_too_big(
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont, text: str, anchor: str, box: tuple[int, int]
+) -> bool:
+    """¿Pintar ``text`` con ``font`` pediría un lienzo absurdo para una caja ``box``?"""
+    left, top, right, bottom = font.getbbox(text, anchor=anchor)
+    area = max(0, right - left) * max(0, bottom - top)
+    return area > max(TEXT_BOX_FACTOR * box[0] * box[1], MAX_TEXT_PIXELS)
+
+
+def _cut(text: str, n: int, anchor: str) -> str:
+    """Los ``n`` caracteres de ``text`` que se ven según el anclaje: el principio si va a
+    la izquierda, el final si va a la derecha y el centro si va centrado."""
+    if anchor[0] == "l":
+        return text[:n]
+    if anchor[0] == "r":
+        return text[len(text) - n :]
+    start = (len(text) - n) // 2
+    return text[start : start + n]
+
+
+def _fit_text(
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont, text: str, anchor: str, box: tuple[int, int]
+) -> str:
+    """``text`` recortado hasta que pintarlo no pida un lienzo absurdo para ``box``.
+
+    Atajo: una fuente de confianza (la de Luzeira, Segoe, las CJK de Windows) dibuja cada
+    letra en menos de 3x3 veces su tamaño; si ni así se pasaría, no se mide nada (medir
+    cuesta ~0,3 ms y el reloj cambia de texto cada segundo). Si no, búsqueda binaria del
+    trozo más largo que cabe.
+    """
+    limit = max(TEXT_BOX_FACTOR * box[0] * box[1], MAX_TEXT_PIXELS)
+    size = getattr(font, "size", 0) or 0
+    if size and len(text) * 3 * size * 3 * size <= limit:
+        return text
+    if not _text_too_big(font, text, anchor, box):
+        return text
+    lo, hi = 0, len(text)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if _text_too_big(font, _cut(text, mid, anchor), anchor, box):
+            hi = mid - 1
+        else:
+            lo = mid
+    return _cut(text, lo, anchor)
+
+
 def _interval(widget: ClockWidget | SensorWidget | BarWidget) -> float:
     """Cada cuánto se repinta. El reloj, en cada tick (solo se envía si cambia el texto)."""
     return getattr(widget, "interval", 0.0)
@@ -186,8 +245,12 @@ class Renderer:
         self.theme = theme
         self._font_for_uncached = font_for
         self._fonts: dict[Style, ImageFont.FreeTypeFont | ImageFont.ImageFont] = {}
-        # (estilo, texto) → fuente con que se pinta (C-65: la de CJK si le faltan letras).
-        self._text_fonts: dict[tuple[Style, str], ImageFont.FreeTypeFont | ImageFont.ImageFont] = {}
+        # (estilo, texto, caja, anclaje) → (fuente con que se pinta, texto que se pinta):
+        # C-65, la de CJK si le faltan letras; R3, el texto recortado si no cabe.
+        self._text_fonts: dict[tuple, tuple[ImageFont.FreeTypeFont | ImageFont.ImageFont, str]] = {}
+        # Estilos cuya fuente del tema ya ha fallado o dibuja desproporcionado: se pintan
+        # con la de Luzeira desde entonces (y el aviso sale una vez, no en cada tick).
+        self._broken_fonts: set[Style] = set()
         self._read_sensor = read_sensor
         self._files = dict(files or {})
         self._now = now
@@ -206,19 +269,48 @@ class Renderer:
         return font
 
     def _font_for_text(
-        self, style: Style, text: str
-    ) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-        """La fuente del estilo, o la de CJK de Windows si a esa le faltan letras del
-        texto. En caché: mirar los glifos pinta cada letra, y el reloj cambia cada segundo
-        (por eso se vacía al llegar a un tope)."""
-        key = (style, text)
-        font = self._text_fonts.get(key)
-        if font is None:
+        self,
+        style: Style,
+        text: str,
+        box: tuple[int, int] | None = None,
+        anchor: str = "lm",
+    ) -> tuple[ImageFont.FreeTypeFont | ImageFont.ImageFont, str]:
+        """(fuente, texto a pintar). La fuente del estilo, o la de CJK de Windows si a esa
+        le faltan letras del texto. En caché: mirar los glifos pinta cada letra, y el reloj
+        cambia cada segundo (por eso se vacía al llegar a un tope).
+
+        Con ``box`` (la caja del widget): si la fuente del tema dibujaría el texto
+        desproporcionado o falla al medirlo, la de Luzeira (R2-02); y con la de Luzeira,
+        el texto recortado a lo que no pide un lienzo absurdo (R3)."""
+        key = (style, text, box, anchor)
+        found = self._text_fonts.get(key)
+        if found is None:
             if len(self._text_fonts) >= 256:
                 self._text_fonts.clear()
-            font = font_for_text(self._font_for(style), style, text, idioma.current())
-            self._text_fonts[key] = font
-        return font
+            found = self._choose_font(style, text, box, anchor)
+            self._text_fonts[key] = found
+        return found
+
+    def _choose_font(
+        self, style: Style, text: str, box: tuple[int, int] | None, anchor: str
+    ) -> tuple[ImageFont.FreeTypeFont | ImageFont.ImageFont, str]:
+        lang = idioma.current()
+        if style.font and style not in self._broken_fonts:
+            try:
+                font = font_for_text(self._font_for(style), style, text, lang)
+                if box is None or not _text_too_big(font, text, anchor, box):
+                    return font, text
+                log.warning(
+                    "La fuente del tema dibuja el texto desproporcionado; uso la de Luzeira."
+                )
+            except (OSError, ValueError, Image.DecompressionBombError):
+                # Mirar los glifos (CJK) rasteriza letra a letra: también puede fallar.
+                log.warning("La fuente del tema falló al medir el texto; uso la de Luzeira.")
+            self._broken_fonts.add(style)
+        if style.font:
+            style = style.model_copy(update={"font": None})
+        font = font_for_text(self._font_for(style), style, text, lang)
+        return font, (text if box is None else _fit_text(font, text, anchor, box))
 
     # --- capas fijas ---------------------------------------------------------------
 
@@ -271,23 +363,33 @@ class Renderer:
 
     def _draw_text(self, tile: Image.Image, text: str, style: Style) -> None:
         draw = ImageDraw.Draw(tile)
-        font = self._font_for_text(style, text)
         y = tile.height // 2
         x, anchor = {
             "left": (0, "lm"),
             "center": (tile.width // 2, "mm"),
             "right": (tile.width, "rm"),
         }[style.align]
-        try:
-            draw.text((x, y), text, font=font, fill=style.color, anchor=anchor)
-        except OSError:
-            # Una fuente del tema puede pasar la validación y fallar con ciertos glifos o
-            # tamaños (bytecode de hinting roto). Se cae a la fuente de Luzeira en vez de
-            # tumbar la app; no se registra el mensaje (puede llevar rutas personales).
-            log.warning("La fuente del tema falló al pintar; uso la de Luzeira.")
-            plain = style.model_copy(update={"font": None})
-            fallback = self._font_for_text(plain, text)
-            draw.text((x, y), text, font=fallback, fill=style.color, anchor=anchor)
+        # Dos intentos como mucho: con la fuente del tema y, si falla, con la de Luzeira.
+        for _ in range(2):
+            font, visible = self._font_for_text(style, text, tile.size, anchor)
+            try:
+                draw.text((x, y), visible, font=font, fill=style.color, anchor=anchor)
+                return
+            except (OSError, ValueError, Image.DecompressionBombError):
+                # Una fuente del tema puede pasar la validación y fallar con ciertos
+                # glifos o tamaños (bytecode de hinting roto, «OSError»; o un glifo
+                # inflado que pide un lienzo enorme, «DecompressionBombError», que no
+                # hereda de OSError). Se cae a la fuente de Luzeira en vez de tumbar la
+                # app; no se registra el mensaje (puede llevar rutas personales).
+                if style.font and style not in self._broken_fonts:
+                    log.warning("La fuente del tema falló al pintar; uso la de Luzeira.")
+                    self._broken_fonts.add(style)
+                    self._text_fonts.clear()  # lo cacheado con esa fuente ya no vale
+                    continue
+                # Ni con la de Luzeira: no debería pasar (el texto ya va recortado), pero
+                # un texto en blanco es mejor que parar la pantalla entera.
+                log.warning("No se pudo pintar un texto del tema; se deja en blanco.")
+                return
 
     def _draw_bar(self, tile: Image.Image, widget: BarWidget, reading: Reading) -> None:
         draw = ImageDraw.Draw(tile)

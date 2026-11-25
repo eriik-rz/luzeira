@@ -353,13 +353,14 @@ def test_display_menu_offers_both_models_only_when_the_serial_does_not_decide(ap
     ]
 
 
-def test_advanced_mode_offers_every_port_and_every_model(app):
+def test_advanced_mode_offers_every_port_but_rev_c_and_every_model(app):
+    # La rev C (COM11) ya no sale en el modo avanzado (R5-02): es el único protocolo de la
+    # familia con órdenes que borran; antes este test la daba por buena.
     ports = submenu(app, "Pantalla", "Modo avanzado (cualquier puerto)")
     assert [p.text for p in ports] == [
         "Dispositivo serie USB (COM3)",
         "Serie estándar sobre el vínculo Bluetooth (COM4)",
         "Dispositivo serie USB (COM8)",
-        "COM11",
     ]
     models = [m.text for m in ports[1].submenu.items]
     assert len(models) == 3 and all("revisión C" not in m for m in models)
@@ -670,7 +671,9 @@ def test_settings_snapshot_offers_the_same_closed_list_as_the_menu(app, settings
     assert rev_a["warning"] is None and not rev_a["beta"]
     assert "rayas" in kipye["warning"]  # el texto de la Kipye, sin saludo
     assert rev_c["id"] is None  # se ve, pero no se puede elegir
-    assert len(snap["advanced"]) == 4 * 3  # 4 puertos x 3 modelos con driver
+    # 3 puertos x 3 modelos con driver: la rev C no sale en el modo avanzado (R5-02).
+    assert len(snap["advanced"]) == 3 * 3
+    assert not any(o["id"].startswith("avanzado:COM11:") for o in snap["advanced"])
     assert all("Cuidado" in o["warning"] for o in snap["advanced"])
     assert all("action" not in o for o in snap["choices"] + snap["advanced"])
 
@@ -698,6 +701,24 @@ def test_settings_sets_autostart_to_the_asked_value(settings, monkeypatch):
     settings.update(brightness=None, flip=None, autostart=True)
     settings.update(brightness=None, flip=None, autostart=False)
     assert calls == ["on", "off"]
+
+
+def test_unsafe_app_folder_is_explained_not_a_generic_failure(app, settings, monkeypatch):
+    # R4-06: la portable en una carpeta que otros usuarios pueden cambiar no se pone a
+    # arrancar con Windows, y el usuario ve por qué (no «no he podido»).
+    def refuse(cmd):
+        raise bandeja.autoarranque.UnsafeAppFolder("carpeta compartida: muévela")
+
+    monkeypatch.setattr(bandeja.autoarranque, "enable", refuse)
+    with pytest.raises(bandeja.EditorError) as exc:
+        settings.update(brightness=None, flip=None, autostart=True)
+    assert exc.value.status == 409
+    assert "carpeta compartida" in str(exc.value)
+    notes = []
+    monkeypatch.setattr(app, "_notify", notes.append)
+    monkeypatch.setattr(app, "_autostart_state", lambda: bandeja.StartupState.OFF)
+    app._toggle_autostart()
+    assert notes == ["carpeta compartida: muévela"]
 
 
 def test_settings_beta_choice_needs_confirmation(app, settings, chosen, answers):
@@ -1238,3 +1259,30 @@ def test_a_theme_error_is_told_again_only_if_it_changes(app, tmp_path):
     assert "theme.json is missing" in app.icon.title
     app._show_status(Status.THEME_ERROR, failure(tmp_path / "no-existe"))  # otro fallo
     assert len(app.notes) == 2
+
+
+def test_editor_requests_in_a_loop_leave_one_task_and_at_most_one_per_second(app, monkeypatch):
+    # R4-09: cualquier proceso del usuario puede señalar «abre el editor» en bucle. Antes
+    # cada señal era una tarea más en una cola sin límite (y robar el foco otra vez).
+    opened = []
+    monkeypatch.setattr(app, "_open_editor", lambda: opened.append(True))
+    for i in range(1000):
+        app._editor_requested(now=100.0 + i)  # aunque pase el segundo: hay una pendiente
+    assert app._pending_calls.qsize() == 1
+    app._drain()
+    assert opened == [True]
+    app._editor_requested(now=100.5)  # ya atendida, pero aún no ha pasado 1 s
+    assert app._pending_calls.qsize() == 0
+    app._editor_requested(now=101.2)
+    assert app._pending_calls.qsize() == 1
+    app._drain()
+    assert opened == [True, True]
+
+
+def test_editor_requests_from_other_copies_go_through_the_limit():
+    # El aviso de otra copia entra por ``_editor_requested`` (con su tope), no directo a
+    # la cola: si alguien vuelve a enchufarlo a ``_post``, este test cae.
+    import inspect
+
+    source = inspect.getsource(bandeja.TrayApp.run)
+    assert "requests.listen(self._editor_requested)" in source

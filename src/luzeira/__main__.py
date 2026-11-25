@@ -188,6 +188,50 @@ def _run(args: argparse.Namespace) -> int:
     return 0
 
 
+# Lo que tiene la página de nuestro Vite (``editor/index.html``) y no la de otro.
+VITE_MARKER = b"<title>Luzeira"
+
+
+def _vite_port_state(origin: str, timeout: float = 3.0) -> str:
+    """¿Quién hay en el puerto de Vite? ``"free"``, ``"ours"`` (el Vite del editor) u
+    ``"other"`` (otro programa: p. ej. el Vite de otro proyecto, que también usa 5173).
+
+    Primero se intenta ocupar el puerto un instante: si se puede, está libre (sin
+    conectar a nadie). Si no, se pide la página y se mira si es la del editor.
+
+    ⚠ Solo mira **una vez, al arrancar**. El flujo de ``vite.config.ts`` arranca Vite
+    *después* (necesita el puerto de la API): si en ese momento el 5173 está libre y
+    luego lo coge otro programa antes que nuestro Vite (que con ``strictPort`` no
+    arranca), la dirección con el token que ya se imprimió acabaría en ese programa.
+    Corta el caso habitual (el otro Vite ya abierto), no ese.
+    """
+    import http.client
+    import socket
+    from urllib.parse import urlsplit
+
+    parts = urlsplit(origin)
+    host, port = parts.hostname or "127.0.0.1", parts.port or 80
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        probe.bind((host, port))
+        return "free"
+    except OSError:
+        pass
+    finally:
+        probe.close()
+    conn = http.client.HTTPConnection(host, port, timeout=timeout)
+    try:
+        conn.request("GET", "/", headers={"Accept": "text/html"})
+        page = conn.getresponse().read(256 * 1024)
+    except (OSError, http.client.HTTPException):
+        return "other"
+    finally:
+        conn.close()
+    return "ours" if VITE_MARKER in page else "other"
+
+
 def _editor(dev: bool) -> int:
     """Editor sin bandeja: para probarlo o para trabajar en la interfaz."""
     from luzeira.config import load_config, save_config
@@ -199,6 +243,12 @@ def _editor(dev: bool) -> int:
 
     exit_codes: list[int] = []
     vite = DEV_ORIGIN
+    if dev and _vite_port_state(vite) == "other":
+        # La dirección con el token se abriría en la página de ese otro programa, que
+        # podría leerlo (el fragmento «#…» lo ve el JavaScript de la página) y, con el
+        # CORS abierto a ese origen, usar la API. No se arranca nada.
+        print(t("cli.editor_puerto_ocupado", url=vite))
+        return 1
     link = EditorLink(
         apply_theme=apply_theme,
         status=lambda: ("stopped", t("cli.editor_modo")),

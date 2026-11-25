@@ -10,12 +10,14 @@
   "temas.fichero_grande": "{what}「{rel}」のサイズは {size} MB です。上限は {max} MB です。",
   "temas.tipo_falso": "{what}「{rel}」は実際には .{ext} ファイルではありません。",
   "temas.gif_largo": "GIF「{rel}」のフレーム数が {max} を超えています。もっと短い GIF を使ってください。",
+  "temas.gif_pesado": "GIF「{rel}」は展開に必要なメモリが多すぎます（全フレーム合計で {mpx}00万ピクセル超）。もっと小さいか短い GIF を使ってください。",
   "temas.imagen_enorme": "画像「{rel}」のサイズは {width}x{height} ピクセルです。上限は {max}x{max} です。",
   "temas.imagen_bomba": "画像「{rel}」が大きすぎます (圧縮爆弾の可能性があります)。",
   "temas.imagen_danada": "画像「{rel}」は破損しているか、有効な画像ではありません。",
   "temas.imagen_extension": "画像「{rel}」の拡張子は使用できません。",
   "temas.fuente_danada": "フォント「{rel}」は破損しているか、読み取れません。",
   "temas.fuente_falla": "フォント「{rel}」は破損しています。サイズ {size} で文字を描画できません。",
+  "temas.fuente_enorme": "フォント「{rel}」は文字の大きさが異常です。サイズ {size} で指定の {max} 倍を超える大きさで描画されます。",
   "temas.pydantic.missing": "この項目がありません",
   "temas.pydantic.extra_forbidden": "不明な項目です (この形式には存在しません)",
   "temas.pydantic.string_pattern_mismatch": "値の形式が正しくありません",
@@ -66,5 +68,6 @@
   "temas.zip.no_seguro": "この zip ファイルは安全ではありません: 「{name}」{problem}。",
   "temas.zip.repetido": "zip ファイル内でファイル「{rel}」が重複しています。",
   "temas.zip.sale": "この zip ファイルは安全ではありません: 「{name}」がフォルダーの外に出ます。",
-  "temas.zip.danado": "zip ファイルから「{name}」を読み取れません。破損しています。"
+  "temas.zip.danado": "zip ファイルから「{name}」を読み取れません。破損しています。",
+  "temas.zip.inesperado": "予期しないエラーのため、「{name}」をインポートできませんでした。"
 }

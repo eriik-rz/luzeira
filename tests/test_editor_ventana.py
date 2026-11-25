@@ -198,6 +198,10 @@ class FakeWindow:
         self.questions = []
         self.calls = []
         self.closed = False
+        self.current_url = None  # lo que pywebview daría con get_current_url()
+
+    def get_current_url(self):
+        return self.current_url
 
     def evaluate_js(self, script, callback=None):
         self.calls.append(("js", script))
@@ -328,7 +332,11 @@ def test_window_process_gets_token_through_the_bridge_not_the_url(monkeypatch):
     assert created["args"][0] == "Luzeira — Editor de temas"  # sin «language»: el de Windows
     # Con el idioma en la query, para los textos de antes de hablar con la API (C-62).
     assert created["args"][1] == "http://127.0.0.1:5000/?lang=es"
+    # El puente solo da el token con el editor local cargado en la ventana (R1-02).
+    created["window"].current_url = "http://127.0.0.1:5000/?lang=es"
     assert created["kwargs"]["js_api"].token() == "secreto"
+    created["window"].current_url = "https://evil.example/"
+    assert created["kwargs"]["js_api"].token() is None
     start = dict(created["start"])
     # El icono de Luzeira en la barra de tareas, no el de pythonw.exe.
     assert Path(start.pop("icon")).name == "luzeira.ico"
@@ -369,3 +377,79 @@ def test_window_process_rejects_garbage_config(monkeypatch):
     _fake_webview(monkeypatch)
     monkeypatch.setattr(sys, "stdin", io.StringIO("esto no es json\n"))
     assert ventana.run_window_from_stdin() == ventana.EXIT_BAD_CONFIG
+
+
+# --- Revisión de seguridad R1 ---------------------------------------------------------
+
+
+class _UrlWindow:
+    def __init__(self, url):
+        self.url = url
+
+    def get_current_url(self):
+        return self.url
+
+
+@pytest.mark.parametrize(
+    "current",
+    [
+        "https://evil.example/",
+        "http://127.0.0.1:5001/",  # otro servidor local: otro origen
+        "http://127.0.0.1:5000@evil.example/",
+        "http://localhost:5000/",
+        "file:///C:/x.html",
+        "",
+        None,
+    ],
+)
+def test_bridge_gives_the_token_only_to_the_local_editor(current):
+    """R1-02: pywebview inyecta el puente en cualquier página de la ventana; si la ventana
+    acaba en otra web, esa web no se lleva el token."""
+    bridge = ventana._Bridge("secreto", "http://127.0.0.1:5000/?lang=es")
+    assert bridge.token() is None  # sin ventana todavía, tampoco
+    bridge._attach(_UrlWindow(current))
+    assert bridge.token() is None
+    bridge._attach(_UrlWindow("http://127.0.0.1:5000/?lang=en#x"))  # control: así sí
+    assert bridge.token() == "secreto"
+
+
+def test_bridge_does_not_publish_its_window_to_the_page():
+    """pywebview publica a la página todo lo que no empieza por «_»."""
+    bridge = ventana._Bridge("secreto", "http://127.0.0.1:5000/")
+    public = [name for name in dir(bridge) if not name.startswith("_")]
+    assert public == ["token"]
+
+
+@pytest.mark.parametrize(
+    "url,opened",
+    [
+        ("https://github.com/eriik-rz/luzeira", True),
+        ("http://example.com/", False),
+        ("file:///C:/Windows/System32/calc.exe", False),
+        ("ms-settings:privacy", False),
+        ("javascript:alert(1)", False),
+        ("https:///sin-host", False),
+    ],
+)
+def test_external_links_only_https(url, opened):
+    """R1-10: lo que la página abre con window.open va a ``webbrowser.open``: solo https."""
+    calls = []
+    module = types.SimpleNamespace(open=lambda u, *a, **k: calls.append(u) or True)
+    ventana._guard_external_links(module)
+    ventana._guard_external_links(module)  # dos veces no lo envuelve dos veces
+    assert module.open(url) is opened
+    assert calls == ([url] if opened else [])
+
+
+def test_window_process_guards_webbrowser(monkeypatch):
+    import webbrowser
+
+    calls = []
+    monkeypatch.setattr(webbrowser, "open", lambda u, *a, **k: calls.append(u) or True)
+    _fake_webview(monkeypatch)
+    monkeypatch.setattr(
+        sys, "stdin", io.StringIO('{"url": "http://127.0.0.1:5000/", "token": "t"}\n')
+    )
+    assert ventana.run_window_from_stdin() == 0
+    assert webbrowser.open("file:///C:/x") is False
+    assert calls == []

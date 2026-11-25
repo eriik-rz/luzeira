@@ -15,6 +15,8 @@
   "pantallas.no_puedo_abrir": "Nie mogę otworzyć ekranu ({device}).",
   "pantallas.no_puedo_abrir_reintento": "Nie mogę otworzyć ekranu ({device}). Próbuję dalej.",
   "pantallas.conexion_perdida": "Utracono połączenie z ekranem. Czy kabel USB został odłączony?",
+  "pantallas.imagen_cortada": "Obraz urwał się w połowie i ekran może wciąż czekać na resztę. Odłącz go i podłącz ponownie: spróbuję znowu, gdy tylko go podłączysz, a jeśli nie, za jakiś czas.",
+  "pantallas.estado_desenchufar": "Ekran nie odpowiada mimo wielu prób. Odłącz go i podłącz ponownie; w międzyczasie będę co jakiś czas próbować dalej.",
   "pantallas.estado_arrancando": "Uruchamianie Luzeiry…",
   "pantallas.estado_conectando": "Znaleziono ekran. Przygotowywanie obrazu…",
   "pantallas.estado_en_reposo": "Ekran wyłączony, gdy komputer jest uśpiony.",

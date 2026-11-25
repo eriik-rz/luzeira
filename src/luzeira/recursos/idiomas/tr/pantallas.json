@@ -15,6 +15,8 @@
   "pantallas.no_puedo_abrir": "Ekran açılamıyor ({device}).",
   "pantallas.no_puedo_abrir_reintento": "Ekran açılamıyor ({device}). Denemeye devam ediyorum.",
   "pantallas.conexion_perdida": "Ekranla bağlantı kesildi. USB kablosu mu çıktı?",
+  "pantallas.imagen_cortada": "Görüntü yarıda kesildi ve ekran hâlâ kalanını bekliyor olabilir. Ekranı çıkarıp yeniden tak: yeniden taktığında, takmazsan da biraz sonra tekrar deneyeceğim.",
+  "pantallas.estado_desenchufar": "Ekran birçok denemeye rağmen yanıt vermiyor. Ekranı çıkarıp yeniden tak; bu arada ara sıra denemeye devam edeceğim.",
   "pantallas.estado_arrancando": "Luzeira başlatılıyor…",
   "pantallas.estado_conectando": "Ekran bulundu. Görüntü hazırlanıyor…",
   "pantallas.estado_en_reposo": "Bilgisayar uyku modundayken ekran kapalı.",

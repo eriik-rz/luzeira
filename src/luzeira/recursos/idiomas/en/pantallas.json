@@ -15,6 +15,8 @@
   "pantallas.no_puedo_abrir": "I can't open the display ({device}).",
   "pantallas.no_puedo_abrir_reintento": "I can't open the display ({device}). I'll keep trying.",
   "pantallas.conexion_perdida": "The connection to the display was lost. Was the USB cable unplugged?",
+  "pantallas.imagen_cortada": "The image was cut off halfway and the display may still be waiting for the rest. Unplug it and plug it back in: I'll try again as soon as you reconnect it or, otherwise, in a little while.",
+  "pantallas.estado_desenchufar": "The display isn't responding after many attempts. Unplug it and plug it back in; meanwhile, I'll keep trying every now and then.",
   "pantallas.estado_arrancando": "Starting Luzeira…",
   "pantallas.estado_conectando": "Display found. Getting the image ready…",
   "pantallas.estado_en_reposo": "Display off while the computer is asleep.",

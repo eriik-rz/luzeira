@@ -556,3 +556,210 @@ def test_a_theme_error_is_the_same_notice_in_every_language(tmp_path, theme_json
     english = notice()
     assert idioma.ident(spanish) == idioma.ident(english)
     assert idioma.again(spanish) == str(english)  # el español, reescrito: todo en inglés
+
+
+# --- R2: temas maliciosos compartidos (revisión de seguridad R2) ------------------------
+
+REPO_FONT = (
+    Path(__file__).parent.parent / "src" / "luzeira" / "recursos" / "fuentes" / "regular.ttf"
+)
+
+
+def gif_frame(x: int, y: int) -> bytes:
+    """Un fotograma GIF de 1x1 en (x, y): descriptor + datos LZW del píxel 0."""
+    return b"\x2c" + struct.pack("<HHHH", x, y, 1, 1) + b"\x00" + b"\x02\x02\x44\x01\x00"
+
+
+def growing_gif(*frames: tuple[int, int], canvas: tuple[int, int] = (1, 1)) -> bytes:
+    """GIF hecho a mano con lienzo de 1x1 (o ``canvas``). Si un fotograma cae fuera,
+    Pillow agranda el lienzo al leer su cabecera: el fichero pesa bytes y pide
+    megapíxeles (R2-01)."""
+    head = b"GIF89a" + struct.pack("<HH", *canvas) + b"\x80\x00\x00" + b"\x00\x00\x00\xff\xff\xff"
+    return head + b"".join(gif_frame(x, y) for x, y in frames) + b"\x3b"
+
+
+def test_gif_frame_that_grows_the_canvas_is_rejected_fast(tmp_path: Path) -> None:
+    import time
+    import warnings
+
+    data = growing_gif((0, 0), (5000, 5000))
+    assert len(data) < 100
+    folder = write_theme(tmp_path / "t", bg("anim.gif"))
+    (folder / "anim.gif").write_bytes(data)
+    start = time.perf_counter()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", Image.DecompressionBombWarning)
+        with pytest.raises(ThemeError, match="máximo es 4096"):
+            load_theme(folder)
+    assert time.perf_counter() - start < 1
+
+
+def test_gif_total_decoded_pixels_are_bounded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Fotogramas x área del lienzo: se baja el tope para no fabricar 64 Mpx de GIF.
+    monkeypatch.setattr(cargar, "MAX_GIF_PIXELS", 100)
+    folder = write_theme(tmp_path / "t", bg("anim.gif"))
+    (folder / "anim.gif").write_bytes(gif_bytes(10))  # 10 x 4x4 = 160 px
+    with pytest.raises(ThemeError, match="demasiada memoria"):
+        load_theme(folder)
+
+
+def test_gif_and_pillow_limits_fit_the_screen() -> None:
+    # Una animación de 300 fotogramas a pantalla completa (480x320) cabe; el límite de
+    # Pillow es explícito, el de una imagen del tema (no los ~89 Mpx por defecto).
+    assert cargar.MAX_GIF_PIXELS >= cargar.MAX_GIF_FRAMES * 480 * 320
+    assert Image.MAX_IMAGE_PIXELS == cargar.MAX_IMAGE_SIDE**2
+
+
+def theme_font_with_units_per_em(units: int) -> bytes:
+    """La fuente libre de Luzeira con ``head.unitsPerEm`` cambiado: con menos unidades
+    por eme, FreeType dibuja cada letra más grande de lo pedido (métricas infladas)."""
+    data = bytearray(REPO_FONT.read_bytes())
+    offset, _ = sfnt_table(bytes(data), b"head")
+    data[offset + 18 : offset + 20] = struct.pack(">H", units)
+    return bytes(data)
+
+
+def test_font_with_inflated_metrics_is_rejected(tmp_path: Path) -> None:
+    from PIL import ImageFont
+
+    data = theme_font_with_units_per_em(200)  # el original tiene 2048: ~10 veces más grande
+    font = ImageFont.truetype(io.BytesIO(data), 20)
+    _, top, _, bottom = font.getbbox("W")
+    assert bottom - top > 4 * 20  # precondición: de verdad sale desproporcionada
+    folder = write_theme(tmp_path / "t", font_widget("f.ttf"))
+    (folder / "f.ttf").write_bytes(data)
+    with pytest.raises(ThemeError, match="desproporcionadas"):
+        load_theme(folder)
+
+
+def test_font_that_bombs_when_painting_is_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # DecompressionBombError hereda de Exception, no de OSError: antes se escapaba.
+    from PIL import ImageDraw
+
+    def bomb(*args: object, **kwargs: object) -> None:
+        raise Image.DecompressionBombError("bomba")
+
+    folder = write_theme(tmp_path / "t", font_widget("f.ttf"))
+    shutil.copy(REPO_FONT, folder / "f.ttf")
+    monkeypatch.setattr(ImageDraw.ImageDraw, "text", bomb)
+    with pytest.raises(ThemeError, match="falla al pintar texto a tamaño 20"):
+        load_theme(folder)
+
+
+def test_theme_json_with_bom_loads(tmp_path: Path) -> None:
+    # R2-09: el Bloc de notas lo guardaba con BOM; el menú lo enseñaba y luego no cargaba.
+    folder = write_theme(tmp_path / "t", b"\xef\xbb\xbf" + json.dumps(base_theme()).encode())
+    assert load_theme(folder).theme.name == "Prueba"
+
+
+def test_symlinked_file_inside_the_theme_is_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Crear un enlace simbólico de verdad pide permisos en Windows, y una junction no
+    # sirve: solo enlaza carpetas y Python 3.12 no la cuenta como ``is_symlink``. Así
+    # que se simula: un fichero bueno, dentro de la carpeta, que dice ser un enlace.
+    folder = write_theme(tmp_path / "t", bg("x.png"))
+    (folder / "x.png").write_bytes(png_bytes())
+    load_theme(folder)  # precondición: sin el enlace, vale
+    real = Path.is_symlink
+    monkeypatch.setattr(Path, "is_symlink", lambda self: self.name == "x.png" or real(self))
+    with pytest.raises(ThemeError, match="no existe"):
+        load_theme(folder)
+
+
+# --- R3: remate de la revisión ---------------------------------------------------------
+
+
+def test_normal_animated_gif_fits_the_budget(tmp_path: Path) -> None:
+    # 480x480 x 300 fotogramas = 69 Mpx: un GIF animado normal (con el tope de 64 Mpx de
+    # R2 se rechazaba). Se cuenta el lienzo entero por fotograma, no lo que pesa.
+    folder = write_theme(tmp_path / "t", bg("anim.gif"))
+    (folder / "anim.gif").write_bytes(growing_gif(*[(0, 0)] * 300, canvas=(480, 480)))
+    load_theme(folder)
+
+
+def test_gif_over_the_budget_is_rejected_fast(tmp_path: Path) -> None:
+    import time
+
+    # 17 fotogramas sobre un lienzo de 4096x4096 = 285 Mpx: uno más que el tope.
+    folder = write_theme(tmp_path / "t", bg("anim.gif"))
+    (folder / "anim.gif").write_bytes(growing_gif(*[(0, 0)] * 17, canvas=(4096, 4096)))
+    start = time.perf_counter()
+    with pytest.raises(ThemeError, match="demasiada memoria"):
+        load_theme(folder)
+    assert time.perf_counter() - start < 3
+
+
+def font_with_wide_advances(factor: int) -> bytes:
+    """La fuente libre de Luzeira con el avance de cada letra (``hmtx``) multiplicado:
+    solo crece a lo ancho; las letras miden de alto lo mismo."""
+    data = bytearray(REPO_FONT.read_bytes())
+    hhea, _ = sfnt_table(bytes(data), b"hhea")
+    count = struct.unpack(">H", data[hhea + 34 : hhea + 36])[0]
+    hmtx, _ = sfnt_table(bytes(data), b"hmtx")
+    for i in range(count):
+        at = hmtx + 4 * i
+        advance = struct.unpack(">H", data[at : at + 2])[0]
+        data[at : at + 2] = struct.pack(">H", min(advance * factor, 0xFFFF))
+    return bytes(data)
+
+
+def test_font_inflated_only_in_width_is_rejected(tmp_path: Path) -> None:
+    from PIL import ImageFont
+
+    data = font_with_wide_advances(10)
+    font = ImageFont.truetype(io.BytesIO(data), 20)
+    left, top, right, bottom = font.getbbox(cargar.FONT_SAMPLE)
+    # Precondición: solo se pasa a lo ancho.
+    assert bottom - top <= 4 * 20 < (right - left) / len(cargar.FONT_SAMPLE)
+    folder = write_theme(tmp_path / "t", font_widget("f.ttf"))
+    (folder / "f.ttf").write_bytes(data)
+    with pytest.raises(ThemeError, match="desproporcionadas"):
+        load_theme(folder)
+
+
+def test_font_inflated_only_in_height_is_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Una fuente real que solo crezca a lo alto pide reescribir sus contornos: se simula
+    # con getbbox (lo único que mira la comprobación), 5 veces el tamaño de alto.
+    from PIL import ImageFont
+
+    monkeypatch.setattr(
+        ImageFont.FreeTypeFont, "getbbox", lambda self, text, *a, **k: (0, 0, 10, 5 * self.size)
+    )
+    folder = write_theme(tmp_path / "t", font_widget("f.ttf"))
+    shutil.copy(REPO_FONT, folder / "f.ttf")
+    with pytest.raises(ThemeError, match="desproporcionadas"):
+        load_theme(folder)
+
+
+def test_open_validated_image_has_a_size_cap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Cambiada en disco tras la carga por una más grande que MAX_FILE_BYTES.
+    path = tmp_path / "x.png"
+    path.write_bytes(png_bytes())
+    monkeypatch.setattr(cargar, "MAX_FILE_BYTES", 10)
+    with pytest.raises(ThemeError, match="demasiado grande"):
+        open_validated_image(path, "png")
+
+
+def test_file_that_grows_while_read_is_not_used(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # fstat dice menos de lo que hay: el fichero está creciendo y lo leído sería un trozo.
+    path = tmp_path / "x.png"
+    path.write_bytes(png_bytes())
+    real = cargar.os.fstat
+
+    class Smaller:
+        def __init__(self, st: os.stat_result) -> None:
+            self.st_size = st.st_size - 10
+
+    monkeypatch.setattr(cargar.os, "fstat", lambda fd: Smaller(real(fd)))
+    assert cargar._read_bounded(path) is None

@@ -10,10 +10,13 @@
   "sistema.actualizar_descarga_grande": "Der Download ist größer als erwartet.",
   "sistema.actualizar_no_puede": "Diese Luzeira-Kopie kann nicht nach Updates suchen.",
   "sistema.actualizar_instalador_distinto": "Das heruntergeladene Setup stimmt nicht mit dem signierten überein. Ich öffne es nicht.",
+  "sistema.actualizar_elevada": "Luzeira läuft als Administrator und aktualisiert sich so nicht. Schließe Luzeira, starte sie ganz normal und versuche es noch einmal.",
+  "sistema.actualizar_lenta": "Der Download von GitHub ist zu langsam. Versuche es später noch einmal.",
   "sistema.ventana_titulo": "Luzeira – Design-Editor",
   "sistema.ventana_sin_guardar": "Es gibt ungespeicherte Änderungen ({reason}). Trotzdem schließen?",
   "sistema.ventana_pendiente_errores": "es gibt rot markierte Fehler",
   "sistema.ventana_pendiente_incluido": "es sind Änderungen an einem mitgelieferten Design; nutze „Speichern unter“, um sie zu behalten",
   "sistema.ventana_pendiente_fallo": "das Speichern ist fehlgeschlagen",
-  "sistema.ventana_pendiente_desconocido": "ich konnte nicht prüfen, ob noch etwas zu speichern ist"
+  "sistema.ventana_pendiente_desconocido": "ich konnte nicht prüfen, ob noch etwas zu speichern ist",
+  "sistema.autoarranque_carpeta_insegura": "Ich aktiviere den Start mit Windows nicht: Andere Benutzer dieses PCs können den Ordner von Luzeira ändern. Entpacke die portable Version erneut in einen eigenen Ordner (zum Beispiel Dokumente); Verschieben reicht nicht, weil die Berechtigungen erhalten bleiben. Oder nutze das Installationsprogramm."
 }

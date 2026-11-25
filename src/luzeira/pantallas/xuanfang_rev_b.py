@@ -28,13 +28,16 @@ from PIL import Image
 
 from luzeira.idioma import Text
 from luzeira.pantallas.comun import (
+    IMAGE_TIMEOUT,
     DisplayError,
+    ImageCut,
     NoAnswer,
     Orientation,
     SerialFactory,
     Transport,
     WrongModel,
     open_probed,
+    write_all,
 )
 from luzeira.pantallas.rgb565 import to_rgb565_be
 from luzeira.pantallas.turing_rev_a import aligned_rect
@@ -98,10 +101,15 @@ class XuanFangRevB:
     verified = True  # si abre, es que ha contestado al saludo como una rev B
 
     def __init__(
-        self, transport: Transport, *, sleep: Callable[[float], None] = time.sleep
+        self,
+        transport: Transport,
+        *,
+        sleep: Callable[[float], None] = time.sleep,
+        monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         self._transport = transport
         self._sleep = sleep
+        self._monotonic = monotonic  # reloj del plazo por imagen
         self.device: str | None = None
         self.orientation = Orientation.PORTRAIT
         self.flagship = False
@@ -146,10 +154,7 @@ class XuanFangRevB:
     # --- comandos -------------------------------------------------------------
 
     def _write(self, data: bytes) -> None:
-        try:
-            self._transport.write(data)
-        except OSError as exc:
-            raise DisplayError(Text("pantallas.conexion_perdida")) from exc
+        write_all(self._transport, data)
 
     def _send(self, command: Command, data: bytes = b"") -> None:
         self._write(packet(command, data))
@@ -222,7 +227,10 @@ class XuanFangRevB:
 
     def draw_image(self, image: Image.Image, x: int = 0, y: int = 0) -> None:
         """Pinta ``image`` con su esquina superior izquierda en (x, y); lo que se salga
-        se recorta."""
+        se recorta.
+
+        Si los píxeles se cortan a medias (o no salen en ``IMAGE_TIMEOUT``), la pantalla
+        puede quedarse esperando el resto: :class:`ImageCut`, no un error cualquiera."""
         if not (0 <= x < self.width and 0 <= y < self.height):
             raise ValueError(
                 f"({x}, {y}) está fuera de la pantalla {self.width}x{self.height}"  # i18n: no
@@ -243,9 +251,16 @@ class XuanFangRevB:
             x, y = self.width - x - w, self.height - y - h
         # Coordenadas inclusivas, 16 bits big-endian cada una: x0, y0, x1, y1.
         box = b"".join(v.to_bytes(2, "big") for v in (x, y, x + w - 1, y + h - 1))
-        self._send(Command.DISPLAY_BITMAP, box)
         data = to_rgb565_be(region)
         chunk = self.width * 8
-        for start in range(0, len(data), chunk):
-            self._write(data[start : start + chunk])
+        deadline = self._monotonic() + IMAGE_TIMEOUT
+        # Desde la cabecera: si se corta ahí, tampoco se sabe cuántos bytes ha tomado.
+        try:
+            self._send(Command.DISPLAY_BITMAP, box)
+            for start in range(0, len(data), chunk):
+                if self._monotonic() > deadline:
+                    raise DisplayError(Text("pantallas.conexion_perdida"))
+                self._write(data[start : start + chunk])
+        except DisplayError as exc:
+            raise ImageCut() from exc
         self._sleep(BITMAP_COOLDOWN)

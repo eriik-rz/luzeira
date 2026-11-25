@@ -14,6 +14,7 @@ después.
 from __future__ import annotations
 
 import logging
+import re
 import time
 from collections.abc import Callable
 from typing import Any
@@ -74,6 +75,7 @@ class NvidiaSource:
         self._failures = 0
         self._closed = False
         self._name: str | None = None
+        self._pci: tuple[int, int, int] | None = None
         self._sensors = self._build_sensors()
         self._try_start()
 
@@ -83,6 +85,7 @@ class NvidiaSource:
             pynvml.nvmlInit()
             self._initialized = True
             self._handle = pynvml.nvmlDeviceGetHandleByIndex(self._index)
+            self._pci = _read_pci_address(self._handle)
         except Exception as exc:
             # Solo se registra el tipo de error: el mensaje puede incluir rutas del
             # equipo. A nivel info solo la primera vez, para no llenar el registro.
@@ -110,6 +113,12 @@ class NvidiaSource:
     def has_gpu(self) -> bool:
         """Si NVML funciona y tiene la GPU (tras el último ``read_all``)."""
         return self._handle is not None
+
+    @property
+    def pci_address(self) -> tuple[int, int, int] | None:
+        """Bus, dispositivo y función PCI de esta GPU; ``None`` si no hay GPU o NVML no
+        lo dice. ``gpu.GpuSource`` lo compara con el de Windows."""
+        return self._pci  # ``_release`` lo borra al soltar la GPU
 
     def read_all(self) -> dict[str, Reading]:
         if self._handle is None:
@@ -186,12 +195,41 @@ class NvidiaSource:
         """Suelta la GPU y apaga NVML si estaba arrancado (sin marcar la fuente cerrada)."""
         self._handle = None
         self._name = None
+        self._pci = None
         if self._initialized:
             self._initialized = False
             try:
                 pynvml.nvmlShutdown()
             except Exception as exc:
                 log.debug("Fallo al cerrar NVML (%s).", type(exc).__name__)
+
+
+# «00000000:07:00.0»: dominio, bus, dispositivo y función, en hexadecimal.
+_BUS_ID = re.compile(r"^([0-9a-fA-F]{1,8}):([0-9a-fA-F]{1,2}):([0-9a-fA-F]{1,2})\.([0-7])$")
+
+
+def parse_pci_bus_id(raw: str | bytes) -> tuple[int, int, int] | None:
+    """Bus, dispositivo y función del ``busId`` de NVML (``nvmlDeviceGetPciInfo``).
+
+    Solo vale el dominio 0: Windows (D3DKMT) no da el dominio, así que con otro no se
+    podría saber si es la misma tarjeta. En un PC de casa el dominio es siempre 0
+    (medido: «00000000:07:00.0» en la RTX 4070 SUPER).
+    """
+    text = raw.decode(errors="replace") if isinstance(raw, bytes) else str(raw)
+    m = _BUS_ID.match(text.strip())
+    if m is None or int(m.group(1), 16) != 0:
+        return None
+    bus, device, function = (int(m.group(i), 16) for i in (2, 3, 4))
+    return (bus, device, function) if device <= 31 else None
+
+
+def _read_pci_address(handle: Any) -> tuple[int, int, int] | None:
+    """Se pide una vez al arrancar. Si NVML no lo da, ``None`` (no es un fallo de la GPU)."""
+    try:
+        return parse_pci_bus_id(pynvml.nvmlDeviceGetPciInfo(handle).busId)
+    except Exception as exc:
+        log.debug("NVML no da la dirección PCI (%s).", type(exc).__name__)
+        return None
 
 
 def _failure(exc: Exception) -> str:

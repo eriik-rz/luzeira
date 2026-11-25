@@ -38,7 +38,6 @@ pintar en la siguiente imagen.
 
 from __future__ import annotations
 
-import contextlib
 import hmac
 import io
 import json
@@ -47,8 +46,10 @@ import os
 import re
 import secrets
 import socket
+import sys
 import tempfile
 import threading
+import time
 from collections import OrderedDict
 from collections.abc import Callable
 from datetime import datetime
@@ -74,6 +75,7 @@ from luzeira.temas.modelo import (
     TextWidget,
     localized,
 )
+from luzeira.temas.rutas import is_reserved_windows_name
 
 from .ajustes import SettingsBackend, parse_answer, parse_display, parse_update
 from .almacen import EditorError, ThemeStore, friendly_theme_error, parse_json, parse_theme
@@ -108,6 +110,26 @@ STATIC_TYPES = {
     ".map": "application/json",
 }
 _STATIC_SEGMENT = re.compile(r"^[A-Za-z0-9_\-][A-Za-z0-9_.\-]{0,100}$")
+# ``Content-Length``: solo cifras ASCII. ``str.isdigit()`` no vale: da True con «²» (que
+# llega en una cabecera, decodificada en latin-1) y luego ``int("²")`` lanza ValueError.
+_CONTENT_LENGTH = re.compile(r"[0-9]{1,10}")
+# Métodos que se apuntan en el log tal cual; cualquier otra cosa sale como «?».
+_KNOWN_METHODS = frozenset({"GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"})
+# Conexiones a la vez. El editor usa unas pocas (WebView2 abre como mucho 6 por
+# servidor); sin tope, 500 conexiones a medio abrir eran 500 hilos esperando.
+MAX_CONNECTIONS = 32
+# Plazo **total** para recibir la línea de petición y las cabeceras. El ``timeout`` de
+# 30 s es por cada lectura: quien manda un byte cada 29 s tendría el hilo para siempre.
+HEADER_DEADLINE = 10.0
+# Plazo total para leer el cuerpo, **solo** cuando el token ya es bueno (lo más grande
+# son 20 MB de un .zip, que por localhost tardan menos de un segundo). Hasta entonces
+# sigue corriendo el plazo de las cabeceras: quien no tiene token no ocupa un hueco más.
+BODY_DEADLINE = 60.0
+# Cuerpo que se lee y se tira de una petición rechazada antes de comprobar el token (para
+# que el 403 llegue en vez de un «error de red»). Con más, se cierra sin leerlo.
+DENIED_DRAIN = 64 * 1024
+# Cortes de conexión del otro lado: no son fallos del editor (se apuntan en DEBUG).
+_CONNECTION_ERRORS = (ConnectionError, TimeoutError)
 
 # La página del editor solo carga lo suyo y solo habla con este servidor.
 CSP = (
@@ -244,12 +266,29 @@ def find_missing_glyphs(theme, files, moment: datetime | None = None) -> list[di
         text = "".join(ch for ch in text if not ch.isspace())
         if not text:
             continue
-        # La misma que usa el motor: con la de CJK de Windows si a la del tema le faltan.
-        font = font_for_text(resolve_font(widget.style, files), widget.style, text, lang)
-        missing = missing_glyphs(font, text)
+        missing = _missing_in_font(widget.style, files, text, lang)
         if missing:
             found.append({"index": index, "chars": "".join(dict.fromkeys(missing))})
     return found
+
+
+def _missing_in_font(style, files, text: str, lang: str) -> list[str]:
+    """Letras de ``text`` que no tiene la fuente con que se pinta (la misma que usa el
+    motor: con la de CJK de Windows si a la del tema le faltan).
+
+    Mirarlas rasteriza letra a letra: una fuente del tema que pasa la validación (solo
+    pinta una muestra) puede fallar con un glifo inflado («DecompressionBombError», que
+    no hereda de OSError) o roto (OSError). Entonces el motor pinta con la de Luzeira
+    (``render/motor.py``), así que se miran las letras en esa. Si también falla, no se
+    avisa de nada: mejor sin aviso que un 500 en cada vista previa.
+    """
+    for theme_files in (files, None):  # None: sin la fuente del tema (la de Luzeira)
+        try:
+            font = font_for_text(resolve_font(style, theme_files), style, text, lang)
+            return missing_glyphs(font, text)
+        except (OSError, ValueError, Image.DecompressionBombError):
+            log.warning("Una fuente falló al mirar sus letras; se prueba con la de Luzeira.")
+    return []
 
 
 def _sensor_row(info: SensorInfo, reading: Reading) -> dict:
@@ -485,6 +524,39 @@ class _HTTPServer(ThreadingHTTPServer):
     # cerrar» (como en Linux) sino dejar que dos sockets se aten al mismo puerto.
     allow_reuse_address = False
     editor: EditorServer
+    max_connections = MAX_CONNECTIONS
+
+    def __init__(self, *args, **kwargs) -> None:
+        # Un hueco por conexión: se coge al aceptarla y se suelta al cerrarla.
+        self._slots = threading.BoundedSemaphore(self.max_connections)
+        super().__init__(*args, **kwargs)
+
+    def process_request(self, request, client_address) -> None:
+        """Con todos los huecos ocupados, la conexión nueva se cierra sin crear hilo."""
+        if not self._slots.acquire(blocking=False):
+            log.debug("Editor: demasiadas conexiones a la vez; se cierra una nueva.")
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self._slots.release()  # no llegó a haber hilo que lo soltara
+            raise
+
+    def process_request_thread(self, request, client_address) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._slots.release()
+
+    def handle_error(self, request, client_address) -> None:
+        """Lo que se escapa de un hilo: solo el tipo, nunca la traza (``socketserver``
+        la imprime entera, con rutas que pueden llevar el nombre del usuario)."""
+        exc = sys.exc_info()[1]
+        if isinstance(exc, _CONNECTION_ERRORS):
+            log.debug("Editor: conexión cortada (%s).", type(exc).__name__)
+        else:
+            log.error("Error interno del editor (%s).", type(exc).__name__)
 
     def server_bind(self) -> None:
         # Quitar SO_REUSEADDR no impide que **otro** socket use SO_REUSEADDR para atarse
@@ -495,6 +567,35 @@ class _HTTPServer(ThreadingHTTPServer):
         if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
         super().server_bind()
+
+
+class _DeadlineReader(io.RawIOBase):
+    """Lee del socket con un plazo total opcional (``deadline``, en ``time.monotonic``).
+
+    Con plazo, cada lectura espera como mucho lo que queda de él (y nunca más que
+    ``idle``); al acabarse, ``TimeoutError``, que ``http.server`` ya trata cerrando la
+    conexión. Sin plazo, solo ``idle`` por lectura. El plazo lo pone el manejador: el de
+    las cabeceras al esperar cada petición y, si el token es bueno, el del cuerpo.
+    """
+
+    def __init__(self, sock: socket.socket, idle: float) -> None:
+        super().__init__()
+        self._sock = sock
+        self._idle = idle
+        self.deadline: float | None = None
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, buffer) -> int:
+        wait = self._idle
+        if self.deadline is not None:
+            left = self.deadline - time.monotonic()
+            if left <= 0:
+                raise TimeoutError("plazo de las cabeceras agotado")  # i18n: no (interno)
+            wait = min(wait, left)
+        self._sock.settimeout(wait)
+        return self._sock.recv_into(buffer)
 
 
 def _route_label(path: str) -> str:
@@ -515,6 +616,8 @@ class _Handler(BaseHTTPRequestHandler):
     server_version = "Luzeira"
     sys_version = ""
     timeout = 30  # una conexión lenta no se queda un hilo para siempre
+    header_deadline = HEADER_DEADLINE
+    body_deadline = BODY_DEADLINE
     error_content_type = "application/json; charset=utf-8"
 
     @property
@@ -526,16 +629,49 @@ class _Handler(BaseHTTPRequestHandler):
 
     server: _HTTPServer
 
+    # --- conexión: plazo para las cabeceras ---
+
+    def setup(self) -> None:
+        super().setup()
+        # El ``rfile`` de siempre, pero sobre un lector con plazo total (ver arriba).
+        self.rfile.close()
+        self._reader = _DeadlineReader(self.connection, self.timeout)
+        self.rfile = io.BufferedReader(self._reader)
+
+    def handle_one_request(self) -> None:
+        # Cuenta desde que se espera la petición: también corta una conexión keep-alive
+        # que se queda callada ocupando un hueco.
+        self._reader.deadline = time.monotonic() + self.header_deadline
+        self._authorized = False  # hasta que el token sea bueno (ver ``_drain``)
+        super().handle_one_request()
+
     # --- logs: sin rutas ni nombres del usuario ---
 
     def log_request(self, code: int | str = "-", size: int | str = "-") -> None:
-        log.debug("Editor: %s %s -> %s", self.command, _route_label(self.path), code)
+        # Un método desconocido llega tal cual lo mandó el otro lado: no se apunta.
+        method = self.command if self.command in _KNOWN_METHODS else "?"
+        log.debug("Editor: %s %s -> %s", method, _route_label(self.path), code)
 
     def log_error(self, format: str, *args: object) -> None:
         log.debug("Editor: petición rechazada por el servidor HTTP.")
 
     def log_message(self, format: str, *args: object) -> None:
         pass
+
+    def send_error(self, code: int, message: str | None = None, explain: str | None = None) -> None:
+        """Errores del propio ``http.server`` sin su texto: el de un método desconocido
+        repite lo que mandó el otro lado («Unsupported method ('{}GET')»)."""
+        super().send_error(code)
+
+    def end_headers(self) -> None:
+        """Cabeceras de seguridad en **todas** las respuestas, también en los errores que
+        responde ``http.server`` sin pasar por ``_send``."""
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Cache-Control", "no-store")
+        # Ninguna otra web puede cargar nuestras respuestas (ni como <img> ni <script>).
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+        super().end_headers()
 
     # --- métodos ---
 
@@ -559,12 +695,16 @@ class _Handler(BaseHTTPRequestHandler):
     def _send(
         self, code: int, body: bytes, content_type: str, extra: dict[str, str] | None = None
     ) -> None:
+        # El cuerpo que la ruta no ha leído (``aplicar`` recibe ``{}`` y no lo mira) se
+        # lee aquí: si se quedara en el socket, con keep-alive sería el principio de la
+        # siguiente petición («{}GET /api/info» -> 501). Si no se puede leer, se cierra.
+        complete = self._drain()
+        # La última lectura pudo dejar el socket con lo poco que quedaba de plazo: para
+        # escribir, el ``timeout`` de siempre.
+        self.connection.settimeout(self.timeout)
         self.send_response(code)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Referrer-Policy", "no-referrer")
-        self.send_header("Cache-Control", "no-store")
         origin = self.headers.get("Origin")
         editor = self.server.editor
         if editor.dev_origin is not None and origin == editor.dev_origin:
@@ -573,9 +713,8 @@ class _Handler(BaseHTTPRequestHandler):
             self.send_header("Vary", "Origin")
         for key, value in (extra or {}).items():
             self.send_header(key, value)
-        if code >= 400:
-            # El cuerpo de la petición puede no haberse leído: no se reutiliza la conexión.
-            self._drain()
+        if code >= 400 or not complete:
+            # Un error, o un cuerpo que no se ha podido leer: no se reutiliza la conexión.
             self.close_connection = True
             self.send_header("Connection", "close")
         self.end_headers()
@@ -596,7 +735,7 @@ class _Handler(BaseHTTPRequestHandler):
         lengths = self.headers.get_all("Content-Length") or []
         if len(lengths) != 1:
             raise EditorError(411, t("servidor.falta_longitud"))
-        if not lengths[0].isdigit():
+        if not _CONTENT_LENGTH.fullmatch(lengths[0]):
             raise EditorError(400, t("servidor.longitud_no_valida"))
         length = int(lengths[0])
         if length > limit:
@@ -607,24 +746,37 @@ class _Handler(BaseHTTPRequestHandler):
             raise EditorError(400, t("servidor.datos_incompletos"))
         return data
 
-    def _drain(self) -> None:
-        """Lee y tira el cuerpo que no se ha leído antes de responder un error.
+    def _drain(self) -> bool:
+        """Lee y tira el cuerpo que nadie ha leído antes de responder. True si no queda
+        nada de él en el socket (la conexión se puede reutilizar). **Nunca lanza.**
 
         Si se cierra la conexión con datos sin leer, Windows la resetea y el navegador ve
-        un «error de red» en vez del 403/413 con su mensaje. Solo hasta ``MAX_DRAIN``.
+        un «error de red» en vez del 403/413 con su mensaje. Solo hasta ``MAX_DRAIN`` y,
+        si la petición no ha pasado el token, solo hasta ``DENIED_DRAIN`` (y dentro del
+        plazo de las cabeceras, que sigue corriendo): un cuerpo que gotea sin token no
+        retiene el hilo.
         """
         if getattr(self, "_consumed", True):
-            return
+            # Ya leído por la ruta (o petición que no pasó por ``_handle``). Si se leyó a
+            # medias, ``_body`` da 400 y el 400 cierra la conexión igualmente.
+            return True
         self._consumed = True
+        if self.headers.get("Transfer-Encoding"):
+            return False  # por trozos (chunked): no se lee, se cierra
         lengths = self.headers.get_all("Content-Length") or []
-        if len(lengths) != 1 or not lengths[0].isdigit() or int(lengths[0]) > MAX_DRAIN:
-            return
+        if not lengths:
+            return True  # sin cuerpo
+        if len(lengths) != 1 or not _CONTENT_LENGTH.fullmatch(lengths[0]):
+            return False
         left = int(lengths[0])
+        if left > (MAX_DRAIN if getattr(self, "_authorized", False) else DENIED_DRAIN):
+            return False
         try:
             while left > 0 and (chunk := self.rfile.read(min(left, 64 * 1024))):
                 left -= len(chunk)
         except OSError:
-            pass
+            return False
+        return left == 0
 
     def _json_body(self) -> object:
         return parse_json(self._body(MAX_JSON_BODY))
@@ -634,11 +786,17 @@ class _Handler(BaseHTTPRequestHandler):
     def _handle(self, method: str) -> None:
         editor = self.server.editor
         self._consumed = False
+        # El plazo de las cabeceras sigue corriendo hasta que el token sea bueno.
         try:
             if not editor.host_ok(self.headers.get_all("Host") or []):
                 return self._deny()
             origins = self.headers.get_all("Origin") or []
             if not editor.origin_ok(origins):
+                return self._deny()
+            # El navegador dice de dónde viene la petición: de otra web, nunca (también
+            # para los estáticos). Sin la cabecera (cliente que no es navegador), pasa.
+            fetch_site = self.headers.get_all("Sec-Fetch-Site") or []
+            if any(v.strip().lower() == "cross-site" for v in fetch_site):
                 return self._deny()
             split = urlsplit(self.path)
             if method == "OPTIONS":
@@ -646,17 +804,34 @@ class _Handler(BaseHTTPRequestHandler):
             if split.path.startswith("/api/"):
                 if not editor.token_ok(self.headers.get_all(TOKEN_HEADER) or []):
                     return self._deny()
+                # Con token: el cuerpo tiene su propio plazo total, más largo.
+                self._authorized = True
+                self._reader.deadline = time.monotonic() + self.body_deadline
                 return self._api(method, split.path, split.query)
             if method == "GET":
                 return self._static(split.path)
             raise EditorError(404, t("servidor.no_existe"))
         except EditorError as exc:
-            self._json(exc.status, exc.body())
+            self._reply_error(exc.status, exc.body())
+        except _CONNECTION_ERRORS as exc:
+            # El otro lado cortó (cerró la pestaña, canceló el fetch): no es un fallo.
+            log.debug("Editor: conexión cortada (%s).", type(exc).__name__)
+            self.close_connection = True
         except Exception as exc:
             # Solo el tipo: el mensaje y la traza pueden llevar rutas con el usuario.
             log.error("Error interno del editor (%s).", type(exc).__name__)
-            with contextlib.suppress(OSError):
-                self._json(500, {"error": t("servidor.error_interno")})
+            self._reply_error(500, {"error": t("servidor.error_interno")})
+
+    def _reply_error(self, code: int, data: object) -> None:
+        """Responde un error sin dejar que un fallo al escribirlo se escape del hilo."""
+        # Si una respuesta se quedó a medias (cabeceras en el búfer sin enviar), se tira:
+        # si no, saldrían dos líneas de estado seguidas («403 … 500»).
+        self._headers_buffer = []
+        try:
+            self._json(code, data)
+        except OSError as exc:
+            log.debug("Editor: no se pudo responder (%s).", type(exc).__name__)
+            self.close_connection = True
 
     def _preflight(self, origins: list[str]) -> None:
         editor = self.server.editor
@@ -772,6 +947,11 @@ class _Handler(BaseHTTPRequestHandler):
         if not parts:
             parts = ["index.html"]
         if len(parts) > 4 or not all(_STATIC_SEGMENT.match(p) and ".." not in p for p in parts):
+            raise EditorError(404, t("servidor.no_existe"))
+        # «COM3.js», «NUL.html», «con/x.css»: nombres de dispositivo de Windows. Se cortan
+        # **antes** de tocar el disco: ``resolve`` o ``is_file`` abrirían el dispositivo
+        # (COM3 puede ser justo el puerto de la pantalla).
+        if any(is_reserved_windows_name(p) for p in parts):
             raise EditorError(404, t("servidor.no_existe"))
         target = root.joinpath(*parts)
         if not target.resolve().is_relative_to(root) or target.is_symlink() or not target.is_file():

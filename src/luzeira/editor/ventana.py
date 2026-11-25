@@ -31,6 +31,7 @@ import logging
 import subprocess
 import sys
 import threading
+import webbrowser
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -199,14 +200,84 @@ class EditorWindow:
             process.terminate()
 
 
+def _same_origin(a: str, b: str) -> bool:
+    """¿Mismo esquema, host y puerto? (lo que el navegador llama «origen»)."""
+    try:
+        pa, pb = urlsplit(a), urlsplit(b)
+        return (pa.scheme, pa.netloc, pa.port) == (pb.scheme, pb.netloc, pb.port)
+    except ValueError:
+        return False
+
+
 class _Bridge:
-    """Lo que la página puede pedir a Python por ``window.pywebview.api``. Solo el token."""
+    """Lo que la página puede pedir a Python por ``window.pywebview.api``. Solo el token.
 
-    def __init__(self, token: str) -> None:
+    🔑 pywebview inyecta este puente en **cualquier** página que cargue la ventana, no
+    solo en la nuestra. Si algo la llevara a otra web (un enlace, una redirección), esa
+    web podría pedir el token. Así que solo se da si la página que hay ahora mismo en la
+    ventana es el editor local, del mismo origen con que se abrió. Lo que empieza por
+    «_» no lo ve la página (pywebview solo publica lo que no empieza por «_»).
+    """
+
+    def __init__(self, token: str, editor_url: str) -> None:
         self._token = token
+        self._editor_url = editor_url
+        self._window: Any = None  # se pone al crear la ventana (``_attach``)
 
-    def token(self) -> str:
-        return self._token
+    def _attach(self, window: Any) -> None:
+        self._window = window
+
+    def token(self) -> str | None:
+        window = self._window
+        if window is None:
+            return None
+        try:
+            # pywebview 6.2.1 (``platforms/edgechromium.py``) guarda aquí un ``str`` al
+            # cargar (``load_url``) pero, tras navegar, lo que da ``SourceChanged``
+            # (``sender.Source``, un ``System.Uri`` de .NET que pythonnet no convierte).
+            # ``str`` vale para los dos: con pythonnet, ``str(Uri(...))`` devuelve la URL
+            # tal cual (comprobado con «http://127.0.0.1:51234/?lang=es»).
+            current = str(window.get_current_url() or "")
+        except Exception:
+            return None
+        if is_local_editor_url(current) and _same_origin(current, self._editor_url):
+            return self._token
+        # Sin la dirección: puede llevar datos de quien la abrió.
+        log.warning("Una página que no es el editor ha pedido el token: no se le da.")
+        return None
+
+
+def _is_https_link(url: object) -> bool:
+    try:
+        parts = urlsplit(str(url))
+    except ValueError:
+        return False
+    return parts.scheme == "https" and bool(parts.hostname)
+
+
+def _guard_external_links(module: Any = webbrowser) -> None:
+    """Solo enlaces ``https://`` al navegador del sistema.
+
+    pywebview 6.2.1 (``platforms/edgechromium.py``, ``on_new_window_request``) manda
+    cualquier ``window.open`` o enlace con ``target=_blank`` a ``webbrowser.open`` sin
+    mirar el esquema: un ``file:`` o el protocolo de otra app abriría lo que fuera. Su
+    otra opción (``OPEN_EXTERNAL_LINKS_IN_BROWSER = False``) es peor: carga el enlace en
+    esta misma ventana. El editor no abre enlaces hoy; si un día lo hace, serán https.
+    Este proceso solo enseña la ventana: cambiar ``webbrowser.open`` aquí no afecta a
+    nada más.
+    """
+    original = module.open
+    if getattr(original, "_luzeira_guard", False):
+        return
+
+    def guarded(url: object, *args: Any, **kwargs: Any) -> bool:
+        if _is_https_link(url):
+            return original(str(url), *args, **kwargs)
+        log.warning("Enlace bloqueado: la ventana del editor solo abre enlaces https.")
+        return False
+
+    guarded._luzeira_guard = True  # type: ignore[attr-defined]
+    module.open = guarded
 
 
 class _WindowController:
@@ -383,15 +454,18 @@ def run_window_from_stdin() -> int:
     if not _webview2_ready(webview):
         log.error("Falta Microsoft Edge WebView2 Runtime: no se abre el editor.")
         return EXIT_NO_WEBVIEW2
+    _guard_external_links()
+    bridge = _Bridge(token, url)
     window = webview.create_window(
         t(WINDOW_TITLE),
         url,
-        js_api=_Bridge(token),
+        js_api=bridge,
         width=1280,
         height=820,
         min_size=(960, 640),
         background_color="#12151c",
     )
+    bridge._attach(window)
     controller = _WindowController(window)
     window.events.closing += controller.on_closing
     window.events.minimized += controller.on_minimized

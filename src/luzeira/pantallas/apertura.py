@@ -34,10 +34,51 @@ from luzeira.pantallas.modelos import (
     match_choice,
     model_by_key,
 )
-from luzeira.pantallas.turing_rev_a import TuringRevA
+from luzeira.pantallas.turing_rev_a import Command, TuringRevA
 from luzeira.pantallas.xuanfang_rev_b import XuanFangRevB
 
 MSG_NOT_FOUND = "pantallas.no_encuentro"  # clave del catálogo (el mensaje de la rev A)
+
+# Lo que contesta al saludo una UsbPCMonitor de verdad: 6 bytes iguales a 0x01 (3,5"),
+# 0x02 (5") o 0x03 (7"). El Turing oficial no contesta nada.
+REV_A_HELLO_ANSWERS = frozenset({0x01, 0x02, 0x03})
+
+
+def check_rev_a_answer(display: TuringRevA, usb_id: tuple[int, int] | None) -> bool:
+    """¿Lo que ha contestado al saludo un puerto que el usuario dice que es una rev A lo
+    demuestra? Devuelve ``verified``; si demuestra lo contrario, cierra y :class:`WrongModel`.
+
+    - 6 bytes iguales a 0x01-0x03: una UsbPCMonitor. Verificada.
+    - 🔴 Su propio saludo de vuelta (6 x 0x45): eso es un eco (un cable o un aparato que
+      devuelve lo que recibe), no una pantalla (R5-06). Otra cosa que no tiene saludo.
+    - Otros 6 bytes iguales: no es la respuesta de ningún modelo conocido, pero tampoco
+      demuestra que no lo sea. Sin verificar: el usuario confirma que se ve bien.
+    - Nada: el Turing oficial no contesta, así que solo cuenta con el USB de la rev A.
+    - Cualquier otra cosa: ahí no hay una rev A.
+    """
+    answer = display.hello_answer
+    device = display.device or "?"
+    if not answer:
+        return usb_id == VID_PID_CH552
+    if len(answer) == 6 and len(set(answer)) == 1 and answer[0] != Command.HELLO:
+        return answer[0] in REV_A_HELLO_ANSWERS
+    display.close()
+    raise WrongModel(device, REV_A.label_text)
+
+
+def open_confirmed_rev_a(
+    device: str,
+    ports: Iterable | None = None,
+    *,
+    serial_factory: SerialFactory | None = None,
+):
+    """Abre como rev A el puerto que el usuario ha confirmado (un ``1a86:5722`` sin serie
+    conocido) y comprueba su saludo como la elegida a mano (R5-06): un eco o una respuesta
+    que no es de una rev A → :class:`WrongModel`, con el puerto ya cerrado."""
+    port = next((p for p in list_ports(ports) if p.device == device), None)
+    display = TuringRevA.open(device, retries=1, serial_factory=serial_factory)
+    display.verified = check_rev_a_answer(display, port.usb_id if port else None)
+    return display
 
 
 def open_auto(
@@ -50,8 +91,10 @@ def open_auto(
 
     Por orden:
 
-    1. Una rev A reconocida por su serie → ``TuringRevA.open(None, retries=1)``, lo mismo
-       que se hacía antes de C-44 (busca ella sola su puerto).
+    1. Una rev A reconocida por su serie (y su USB) → ``TuringRevA.open`` de ese puerto,
+       con la misma apertura y los mismos bytes que antes de C-44. Antes se le pasaba
+       ``None`` y ella volvía a buscar su puerto en los puertos reales del equipo, sin mirar
+       ``ports`` ni ``serial_factory`` (R5-08): ahora abre el que se ha identificado aquí.
     2. Una rev B reconocida por su serie → su driver, que saluda y comprueba la respuesta.
     3. Un ``1a86:5722`` sin serie conocido → :class:`ConfirmationNeeded` (rev A o rev B:
        decide el usuario), como antes.
@@ -68,8 +111,9 @@ def open_auto(
     def first(model, *, sure: bool) -> PortInfo | None:
         return next((p for p, i in found if i.model is model and i.sure is sure), None)
 
-    if first(REV_A, sure=True) is not None:
-        return TuringRevA.open(None, retries=1)
+    port = first(REV_A, sure=True)
+    if port is not None:
+        return TuringRevA.open(port.device, retries=1, serial_factory=serial_factory)
     port = first(REV_B, sure=True)
     if port is not None:
         return XuanFangRevB.open(port.device, serial_factory=serial_factory, sleep=sleep)
@@ -109,15 +153,7 @@ def open_chosen(
         raise ChosenDisplayMissing()
     if model is REV_A:
         display = TuringRevA.open(port.device, retries=1, serial_factory=serial_factory)
-        # El Turing oficial no contesta al saludo y las UsbPCMonitor contestan 6 bytes
-        # iguales. Cualquier otra cosa es que ahí no hay una rev A.
-        answer = display.hello_answer
-        if answer and not (len(answer) == 6 and len(set(answer)) == 1):
-            display.close()
-            raise WrongModel(port.device, REV_A.label_text)
-        # Sin respuesta solo cuenta como rev A con su USB (el Turing oficial no contesta):
-        # en otro puerto, el silencio no demuestra nada.
-        display.verified = bool(answer) or port.usb_id == VID_PID_CH552
+        display.verified = check_rev_a_answer(display, port.usb_id)
         return display
     if model is REV_B:
         return XuanFangRevB.open(port.device, serial_factory=serial_factory, sleep=sleep)

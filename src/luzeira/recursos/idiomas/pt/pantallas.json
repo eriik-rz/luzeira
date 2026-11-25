@@ -15,6 +15,8 @@
   "pantallas.no_puedo_abrir": "Não consigo abrir a tela ({device}).",
   "pantallas.no_puedo_abrir_reintento": "Não consigo abrir a tela ({device}). Continuo tentando.",
   "pantallas.conexion_perdida": "A conexão com a tela foi perdida. O USB foi desconectado?",
+  "pantallas.imagen_cortada": "A imagem foi cortada no meio e a tela pode continuar esperando o resto. Desconecte e conecte de novo: tento outra vez assim que você a reconectar ou, se não, daqui a pouco.",
+  "pantallas.estado_desenchufar": "A tela não responde depois de muitas tentativas. Desconecte e conecte de novo; enquanto isso, continuo tentando de vez em quando.",
   "pantallas.estado_arrancando": "Iniciando a Luzeira…",
   "pantallas.estado_conectando": "Tela encontrada. Preparando a imagem…",
   "pantallas.estado_en_reposo": "Tela desligada enquanto o PC está em suspensão.",

@@ -15,6 +15,8 @@
   "pantallas.no_puedo_abrir": "ディスプレイ ({device}) を開けません。",
   "pantallas.no_puedo_abrir_reintento": "ディスプレイ ({device}) を開けません。引き続き試しています。",
   "pantallas.conexion_perdida": "ディスプレイとの接続が切れました。USB ケーブルが抜けていませんか？",
+  "pantallas.imagen_cortada": "画像の送信が途中で途切れ、ディスプレイが残りを待ったままになっている可能性があります。いったん抜いてから挿し直してください。挿し直したらすぐに、挿し直さなくてもしばらくしたら再試行します。",
+  "pantallas.estado_desenchufar": "何度試してもディスプレイが応答しません。いったん抜いてから挿し直してください。その間も時々再試行します。",
   "pantallas.estado_arrancando": "Luzeira を起動しています…",
   "pantallas.estado_conectando": "ディスプレイが見つかりました。画像を準備しています…",
   "pantallas.estado_en_reposo": "PC がスリープ中のため、ディスプレイをオフにしています。",

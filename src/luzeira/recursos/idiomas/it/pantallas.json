@@ -15,6 +15,8 @@
   "pantallas.no_puedo_abrir": "Non riesco ad aprire lo schermo ({device}).",
   "pantallas.no_puedo_abrir_reintento": "Non riesco ad aprire lo schermo ({device}). Continuo a provare.",
   "pantallas.conexion_perdida": "Connessione con lo schermo persa. Il cavo USB si è staccato?",
+  "pantallas.imagen_cortada": "L’immagine si è interrotta a metà e lo schermo potrebbe aspettare ancora il resto. Scollegalo e ricollegalo: riproverò appena lo ricolleghi o, altrimenti, tra un po’.",
+  "pantallas.estado_desenchufar": "Lo schermo non risponde dopo molti tentativi. Scollegalo e ricollegalo; nel frattempo riproverò ogni tanto.",
   "pantallas.estado_arrancando": "Avvio di Luzeira…",
   "pantallas.estado_conectando": "Schermo trovato. Preparo l'immagine…",
   "pantallas.estado_en_reposo": "Schermo spento mentre il PC è in sospensione.",

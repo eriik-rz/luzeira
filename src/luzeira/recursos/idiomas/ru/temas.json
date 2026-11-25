@@ -10,12 +10,14 @@
   "temas.fichero_grande": "{what} «{rel}»: занимает {size} MB, а максимум — {max} MB.",
   "temas.tipo_falso": "{what} «{rel}»: на самом деле это не файл .{ext}.",
   "temas.gif_largo": "В GIF «{rel}» слишком много кадров (максимум: {max}); возьмите покороче.",
+  "temas.gif_pesado": "GIF «{rel}» требует слишком много памяти при распаковке (больше {mpx} млн пикселей во всех кадрах вместе); возьмите поменьше или покороче.",
   "temas.imagen_enorme": "Размер изображения «{rel}» — {width}x{height} пикс.; максимум — {max}x{max}.",
   "temas.imagen_bomba": "Изображение «{rel}» слишком большое (возможно, это «бомба»).",
   "temas.imagen_danada": "Изображение «{rel}» повреждено или не является изображением.",
   "temas.imagen_extension": "У изображения «{rel}» недопустимое расширение.",
   "temas.fuente_danada": "Шрифт «{rel}» повреждён или не читается.",
   "temas.fuente_falla": "Шрифт «{rel}» повреждён: не удаётся вывести текст размером {size}.",
+  "temas.fuente_enorme": "Шрифт «{rel}» рисует буквы непропорционально: в размере {size} они выходят больше чем в {max} раза крупнее заданного.",
   "temas.pydantic.missing": "поле не заполнено",
   "temas.pydantic.extra_forbidden": "неизвестное поле (в этом формате его нет)",
   "temas.pydantic.string_pattern_mismatch": "значение не в ожидаемом формате",
@@ -66,5 +68,6 @@
   "temas.zip.no_seguro": "Zip-архив небезопасен: «{name}» — {problem}.",
   "temas.zip.repetido": "В zip-архиве файл «{rel}» повторяется.",
   "temas.zip.sale": "Zip-архив небезопасен: «{name}» выходит за пределы папки.",
-  "temas.zip.danado": "Не удаётся прочитать «{name}» из zip-архива: файл повреждён."
+  "temas.zip.danado": "Не удаётся прочитать «{name}» из zip-архива: файл повреждён.",
+  "temas.zip.inesperado": "Не удалось импортировать «{name}» из-за непредвиденной ошибки."
 }

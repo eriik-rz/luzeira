@@ -29,5 +29,6 @@
   "cli.editor_modo": "Mode éditeur : l’écran n’est pas utilisé pour l’instant.",
   "cli.editor_desarrollo": "Éditeur en développement : ouvrez {url}",
   "cli.editor_api": "(API sur {url}). Ctrl+C pour arrêter.",
+  "cli.editor_puerto_ocupado": "Un autre programme que le Vite de l’éditeur tourne sur {url} : le jeton n’est pas affiché. Fermez-le et lancez « npm run dev » dans editor/.",
   "cli.editor_sin_compilar": "L’éditeur n’est pas compilé : exécutez « npm run build » dans editor/."
 }

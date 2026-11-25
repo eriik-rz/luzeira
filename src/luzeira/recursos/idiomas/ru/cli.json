@@ -29,5 +29,6 @@
   "cli.editor_modo": "Режим редактора: экран сейчас не используется.",
   "cli.editor_desarrollo": "Редактор в режиме разработки: откройте {url}",
   "cli.editor_api": "(API на {url}). Ctrl+C — остановить.",
+  "cli.editor_puerto_ocupado": "По адресу {url} работает другая программа, а не Vite редактора: токен не показывается. Закройте её и запустите «npm run dev» в editor/.",
   "cli.editor_sin_compilar": "Редактор не собран: выполните «npm run build» в editor/."
 }

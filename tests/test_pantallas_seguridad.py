@@ -15,8 +15,8 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from luzeira.pantallas import apertura, kipye_rev_d, turing_rev_a, xuanfang_rev_b
-from luzeira.pantallas.comun import Orientation
+from luzeira.pantallas import apertura, comun, kipye_rev_d, turing_rev_a, xuanfang_rev_b
+from luzeira.pantallas.comun import DisplayError, ImageCut, Orientation
 from luzeira.pantallas.modelos import KIPYE, REV_A, REV_B, DisplayChoice, list_ports
 from luzeira.pantallas.turing_rev_a import Command as RevACommand
 from luzeira.pantallas.turing_rev_a import PortMatch, TuringRevA
@@ -116,28 +116,48 @@ def test_kipye_only_ever_sends_its_commands():
     assert_kipye_safe(port.writes)
 
 
-def assert_kipye_safe(writes: list[bytes]) -> None:
+def assert_kipye_safe(writes: list[bytes], *, min_commands: int = 100) -> None:
+    """Lee el flujo de la Kipye como la pantalla. Los píxeles de cada imagen tienen que ser
+    justo los de la última ventana (43 41: x0, x1, y0, y1 inclusivas): si sobraran, la
+    pantalla tomaría los de más por órdenes (revisor R5-10: antes no se cruzaban)."""
     in_picture = False
     seen = 0
+    window: int | None = None  # bytes de píxeles que pide la última ventana
+    pixels = 0
     for w in writes:
         assert w[0] not in FORBIDDEN, w.hex(" ")
         if w == bytes.fromhex("44 00 00 00"):
-            assert not in_picture
-            in_picture = True
+            assert not in_picture and window is not None, "imagen sin ventana"
+            in_picture, pixels = True, 0
         elif w == bytes.fromhex("41 00 00 00"):
             assert in_picture
-            in_picture = False
+            assert pixels == window, f"{pixels} bytes de píxeles para una ventana de {window}"
+            in_picture, window = False, None
         elif in_picture:
             assert w[0] == 0x50 and 2 <= len(w) <= 64, w[:4].hex(" ")  # píxeles
+            pixels += len(w) - 1
             continue
         elif w[:2] == bytes.fromhex("43 43"):
             assert len(w) == 4 and int.from_bytes(w[2:], "big") <= 500
         elif w[:2] == bytes.fromhex("43 41"):
             assert len(w) == 10
+            x0, x1, y0, y1 = (int.from_bytes(w[i : i + 2], "big") for i in (2, 4, 6, 8))
+            assert 0 <= x0 <= x1 < 320 and 0 <= y0 <= y1 < 480, w.hex(" ")
+            window = (x1 - x0 + 1) * (y1 - y0 + 1) * 2
         else:
             assert w in KIPYE_ALLOWED, w.hex(" ")
         seen += 1
-    assert not in_picture and seen > 100
+    assert not in_picture and seen > min_commands
+
+
+def test_kipye_reader_catches_pixels_that_do_not_match_the_window():
+    # El lector, probado al revés: un paquete con píxeles de más cae.
+    window = bytes.fromhex("43 41 00 00 00 00 00 00 00 00")  # 1 píxel = 2 bytes
+    start, end = bytes.fromhex("44 00 00 00"), bytes.fromhex("41 00 00 00")
+    assert_kipye_safe([window, start, bytes.fromhex("50 12 34"), end], min_commands=2)
+    with pytest.raises(AssertionError):
+        too_many = bytes.fromhex("50 12 34 56 78")
+        assert_kipye_safe([window, start, too_many, end], min_commands=2)
 
 
 def rev_a_commands(writes: list[bytes]) -> list[int]:
@@ -198,12 +218,16 @@ class Factory:
         return [w for port in self.ports for w in port.writes]
 
 
-def test_rev_a_never_sends_reset_even_when_used_hard():
+@pytest.mark.parametrize("hello", [0x01, 0x02, 0x03])  # 3,5", 5" y 7" (R5-10)
+def test_rev_a_never_sends_reset_even_when_used_hard(hello):
     # La rev A no es beta y sus comandos normales caen en el rango de bytes de la rev C,
     # así que aquí se vigila lo suyo: ningún RESET en todo el flujo, leído como la pantalla.
-    port = Recorder(bytes([1] * 6))
-    display = TuringRevA(port)
-    display.hello()
+    # Con los tres tamaños: en la de 7" las coordenadas de 10 bits llegan a 1023. Se abre
+    # con ``open`` (que es quien aplica el modelo del saludo): ``hello()`` solo lo devuelve,
+    # y por eso este test con 0x01 siempre ejercitaba el tamaño de 3,5".
+    port = Recorder(bytes([hello] * 6))
+    display = TuringRevA.open("COM3", retries=1, serial_factory=lambda _d: port)
+    assert display.model.width == {1: 320, 2: 480, 3: 600}[hello]
     exercise(display)
     display.clear()
     assert len(rev_a_commands(port.writes)) > 100
@@ -332,3 +356,143 @@ def test_kipye_command_constants_are_the_allowlist():
 def test_rev_a_module_keeps_reset_only_as_documentation():
     # R-02 (fase 2): RESET existe en el enum de la rev A solo para documentar el protocolo.
     assert "Command.RESET" not in inspect.getsource(turing_rev_a.TuringRevA)
+
+
+# --- R5: un USB defectuoso o malicioso -------------------------------------------------
+
+
+class ShortRecorder(Recorder):
+    """Puerto que en la escritura número ``short_at`` devuelve un byte menos de los pedidos,
+    sin excepción: lo que hace pyserial en Windows si se cancela la escritura a medias.
+    (Revisor R5-10: el ``Recorder`` siempre devolvía ``len(data)``.)"""
+
+    def __init__(self, answer: bytes = b"", short_at: int = 1) -> None:
+        super().__init__(answer)
+        self.short_at = short_at
+
+    def write(self, data):
+        super().write(data)
+        return len(data) - 1 if len(self.writes) == self.short_at else len(data)
+
+
+def make_driver(name: str, port: Recorder, **kwargs):
+    if name == "rev_a":
+        return TuringRevA(port, **kwargs)
+    if name == "rev_b":
+        return xuanfang_rev_b.XuanFangRevB(port, sleep=lambda _s: None, **kwargs)
+    return kipye_rev_d.KipyeRevD(port, **kwargs)
+
+
+@pytest.mark.parametrize("name", ["rev_a", "rev_b", "kipye"])
+def test_short_write_is_an_error_and_nothing_more_is_sent(name):
+    # R5-03: escritura parcial sin excepción. Antes se seguía mandando y los bytes de
+    # después se leían desalineados (píxeles tomados por órdenes).
+    port = ShortRecorder(short_at=3)  # la tercera: ya dentro de la imagen en las tres
+    display = make_driver(name, port)
+    with pytest.raises(DisplayError):
+        display.draw_image(Image.new("RGB", (display.width, display.height), "red"))
+    assert len(port.writes) == 3
+
+
+@pytest.mark.parametrize("name", ["rev_a", "rev_b", "kipye"])
+def test_short_command_write_is_an_error(name):
+    with pytest.raises(DisplayError):
+        make_driver(name, ShortRecorder(short_at=1)).set_brightness(50)
+
+
+@pytest.mark.parametrize("name", ["rev_b", "kipye"])
+def test_cut_image_on_a_beta_driver_asks_to_replug(name):
+    # Rev B y Kipye pueden quedarse esperando el resto de la imagen: el error lo dice
+    # (ImageCut) para que el servicio no las salude a ciegas.
+    port = ShortRecorder(short_at=4)
+    display = make_driver(name, port)
+    with pytest.raises(ImageCut, match="Desenchúfala"):
+        display.draw_image(Image.new("RGB", (display.width, display.height), "red"))
+
+
+def test_cut_image_on_rev_a_is_a_plain_connection_error():
+    # La rev A se reinicia al abrir el puerto (medido): reabrir ya la deja limpia.
+    with pytest.raises(DisplayError) as info:
+        TuringRevA(ShortRecorder(short_at=4)).draw_image(Image.new("RGB", (320, 480), "red"))
+    assert not isinstance(info.value, ImageCut)
+
+
+class SlowClock:
+    """Reloj falso que avanza ``step`` segundos cada vez que se mira."""
+
+    def __init__(self, step: float) -> None:
+        self.now = 0.0
+        self.step = step
+
+    def __call__(self) -> float:
+        self.now += self.step
+        return self.now
+
+
+@pytest.mark.parametrize(
+    ("name", "error"), [("rev_a", DisplayError), ("rev_b", ImageCut), ("kipye", ImageCut)]
+)
+def test_image_has_an_absolute_deadline(name, error):
+    # R5-04: cada escritura cabe en su WRITE_TIMEOUT, pero la imagen entera no puede
+    # tardar sin fin. Con un reloj que avanza 1 s por mirada, se corta en cuanto pasa el
+    # plazo, no tras las 121 (o ~4.900) escrituras de una imagen completa.
+    port = Recorder(bytes([1] * 6))
+    display = make_driver(name, port, monotonic=SlowClock(1.0))
+    with pytest.raises(error):
+        display.draw_image(Image.new("RGB", (display.width, display.height), "red"))
+    limit = kipye_rev_d.IMAGE_TIMEOUT if name == "kipye" else comun.IMAGE_TIMEOUT
+    assert len(port.writes) <= limit + 3
+
+
+@pytest.mark.parametrize("name", ["rev_a", "rev_b", "kipye"])
+def test_deadline_does_not_cut_a_normal_image(name):
+    port = Recorder(bytes([1] * 6))
+    display = make_driver(name, port, monotonic=SlowClock(0.001))
+    display.draw_image(Image.new("RGB", (display.width, display.height), "red"))
+
+
+def test_deadline_does_not_change_rev_a_bytes():
+    # El plazo solo corta antes: con tiempo de sobra, los mismos bytes que con el reloj
+    # parado (lo que hacía el driver antes de tener plazo).
+    ticking, stopped = Recorder(bytes([1] * 6)), Recorder(bytes([1] * 6))
+    for port, clock in ((ticking, SlowClock(0.001)), (stopped, SlowClock(0.0))):
+        display = TuringRevA(port, monotonic=clock)
+        display.hello()
+        exercise(display)
+        display.clear()
+    assert ticking.writes == stopped.writes and len(ticking.writes) > 1000
+
+
+def test_kipye_flush_error_is_a_display_error_not_a_crash():
+    # R5-05: vaciar la entrada fuera del try dejaba salir SerialException (un OSError) y
+    # mataba el hilo del servicio, que solo atiende DisplayError.
+    import serial
+
+    class FlushFails(Recorder):
+        def reset_input_buffer(self):
+            raise serial.SerialException("PurgeComm failed")
+
+    display = kipye_rev_d.KipyeRevD(FlushFails())
+    with pytest.raises(DisplayError):
+        display.set_brightness(50)
+    with pytest.raises(DisplayError):
+        display.draw_image(Image.new("RGB", (10, 10)))
+
+
+def test_tests_cannot_open_a_real_serial_port(no_real_serial_ports):
+    # El guardián de ``conftest.py``: ni ``serial.Serial`` ni ``serial_for_url`` ni la
+    # fábrica por defecto de los drivers abren un puerto real, y la lista de puertos del
+    # equipo sale vacía.
+    import serial
+    from serial.tools import list_ports
+
+    from luzeira.pantallas.comun import default_serial_factory
+
+    for opener in (serial.Serial, serial.serial_for_url, default_serial_factory):
+        with pytest.raises(AssertionError, match="puerto real"):
+            opener("COM3")
+    with pytest.raises(AssertionError, match="puerto real"):
+        TuringRevA.open("COM3", retries=1)  # su fábrica por defecto: pyserial de verdad
+    assert list_ports.comports() == []
+    assert len(no_real_serial_ports) == 4
+    no_real_serial_ports.clear()  # los intentos de este test eran a propósito

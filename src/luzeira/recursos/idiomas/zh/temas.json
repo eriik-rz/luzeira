@@ -10,12 +10,14 @@
   "temas.fichero_grande": "{what}“{rel}”大小为 {size} MB；最大为 {max} MB。",
   "temas.tipo_falso": "{what}“{rel}”并不是真正的 .{ext} 文件。",
   "temas.gif_largo": "GIF“{rel}”超过 {max} 帧；请换一个短一些的。",
+  "temas.gif_pesado": "GIF“{rel}”解码时占用内存过多（所有帧合计超过 {mpx} 百万像素）；请换一个更小或更短的。",
   "temas.imagen_enorme": "图片“{rel}”为 {width}x{height} 像素；最大为 {max}x{max}。",
   "temas.imagen_bomba": "图片“{rel}”太大（可能是解压炸弹）。",
   "temas.imagen_danada": "图片“{rel}”已损坏或不是有效的图片。",
   "temas.imagen_extension": "图片“{rel}”的扩展名不被允许。",
   "temas.fuente_danada": "字体“{rel}”已损坏或无法读取。",
   "temas.fuente_falla": "字体“{rel}”已损坏：以 {size} 号大小绘制文字时出错。",
+  "temas.fuente_enorme": "字体“{rel}”绘制的字母比例失常：以 {size} 号大小绘制时，比要求的大 {max} 倍以上。",
   "temas.pydantic.missing": "缺少此字段",
   "temas.pydantic.extra_forbidden": "未知字段（此格式中没有）",
   "temas.pydantic.string_pattern_mismatch": "值的格式不符合要求",
@@ -66,5 +68,6 @@
   "temas.zip.no_seguro": "zip 不安全：“{name}”{problem}。",
   "temas.zip.repetido": "zip 中的文件“{rel}”重复了。",
   "temas.zip.sale": "zip 不安全：“{name}”跳出了文件夹。",
-  "temas.zip.danado": "无法读取 zip 中的“{name}”：已损坏。"
+  "temas.zip.danado": "无法读取 zip 中的“{name}”：已损坏。",
+  "temas.zip.inesperado": "由于意外错误，无法导入“{name}”。"
 }

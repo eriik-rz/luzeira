@@ -29,5 +29,6 @@
   "cli.editor_modo": "Modalità editor: lo schermo ora non viene usato.",
   "cli.editor_desarrollo": "Editor in sviluppo: apri {url}",
   "cli.editor_api": "(API su {url}). Ctrl+C per fermare.",
+  "cli.editor_puerto_ocupado": "Su {url} c'è un altro programma che non è il Vite dell'editor: il token non viene mostrato. Chiudilo e avvia «npm run dev» in editor/.",
   "cli.editor_sin_compilar": "L'editor non è compilato: esegui «npm run build» in editor/."
 }

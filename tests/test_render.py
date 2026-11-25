@@ -11,6 +11,10 @@ from luzeira.render import Renderer, format_clock, format_reading
 from luzeira.sensores.base import Reading
 from luzeira.temas.modelo import SensorWidget, Theme
 
+REPO_FONT = (
+    Path(__file__).parent.parent / "src" / "luzeira" / "recursos" / "fuentes" / "regular.ttf"
+)
+
 
 def font_for(style):
     try:
@@ -378,6 +382,121 @@ def test_broken_theme_font_falls_back_instead_of_crashing():
     frame = Renderer(theme, font_for=font, read_sensor=lambda s: Reading(None, "")).full_frame()
     assert calls == ["rota.ttf", None]  # probó la del tema y cayó a la de Luzeira
     assert frame.crop((0, 0, 100, 40)).getbbox() is not None  # y pintó algo
+
+
+def test_theme_font_that_bombs_when_painting_falls_back():
+    # R2-02: DecompressionBombError no hereda de OSError; antes mataba el hilo del servicio.
+    calls = []
+
+    class BombFont(ImageFont.FreeTypeFont):
+        def getmask2(self, *a, **k):
+            raise Image.DecompressionBombError("bomba")
+
+    bomb = BombFont(str(REPO_FONT), 20)
+
+    def font(style):
+        calls.append(style.font)
+        return bomb if style.font else ImageFont.truetype(str(REPO_FONT), style.size)
+
+    theme = make_theme({"type": "text", "text": "Hola", "style": {"font": "f.ttf"}, "box": box()})
+    frame = Renderer(theme, font_for=font, read_sensor=lambda s: Reading(None, "")).full_frame()
+    assert calls == ["f.ttf", None]
+    assert frame.crop((0, 0, 100, 40)).getbbox() is not None
+
+
+def test_a_failing_theme_font_is_not_tried_again():
+    # El estilo que ya falló se pinta con la de Luzeira desde entonces: ni se reintenta
+    # en cada texto (el reloj cambia cada segundo) ni sale un aviso por tick.
+    tries = []
+
+    class BrokenFont(ImageFont.FreeTypeFont):
+        def getmask2(self, *a, **k):
+            tries.append(1)
+            raise OSError("invalid opcode")
+
+    broken = BrokenFont(str(REPO_FONT), 20)
+
+    def font(style):
+        return broken if style.font else ImageFont.truetype(str(REPO_FONT), style.size)
+
+    style = {"font": "f.ttf"}
+    theme = make_theme(
+        {"type": "text", "text": "Hola", "style": style, "box": box()},
+        {"type": "text", "text": "Adiós", "style": style, "box": box(0, 50)},
+    )
+    frame = Renderer(theme, font_for=font, read_sensor=lambda s: Reading(None, "")).full_frame()
+    assert len(tries) == 1  # el segundo texto ya no la prueba
+    assert frame.crop((0, 50, 100, 90)).getbbox() is not None
+
+
+def test_long_text_with_luzeira_font_is_cut_instead_of_crashing():
+    # R3: sin fuente propia, 200 «⬤» a tamaño 300 piden 34 Mpx, por encima de lo que deja
+    # Pillow (2 x 4096²): antes Renderer() lanzaba DecompressionBombError.
+    # (Image.MAX_IMAGE_PIXELS ya lo fija el cargador, que importa el motor.)
+    theme = make_theme(
+        {"type": "text", "text": "⬤" * 200, "style": {"size": 300}, "box": box(0, 0, 480, 320)}
+    )
+    font = ImageFont.truetype(str(REPO_FONT), 300)
+    left, top, right, bottom = font.getbbox("⬤" * 200, anchor="lm")
+    assert (right - left) * (bottom - top) > 2 * Image.MAX_IMAGE_PIXELS  # precondición
+    r = Renderer(
+        theme,
+        font_for=lambda s: ImageFont.truetype(str(REPO_FONT), s.size),
+        read_sensor=lambda s: Reading(None, ""),
+    )
+    assert r.full_frame().getbbox() is not None  # y pintó lo que se ve, no en blanco
+
+
+def test_text_that_cannot_be_painted_is_left_blank(monkeypatch):
+    # Si ni la de Luzeira puede, el texto se queda en blanco: nunca para la pantalla.
+    from PIL import ImageDraw
+
+    def fail(*a, **k):
+        raise Image.DecompressionBombError("bomba")
+
+    monkeypatch.setattr(ImageDraw.ImageDraw, "text", fail)
+    theme = make_theme({"type": "text", "text": "Hola", "box": box()})
+    r = Renderer(theme, font_for=font_for, read_sensor=lambda s: Reading(None, ""))
+    empty = Renderer(make_theme(), font_for=font_for, read_sensor=lambda s: Reading(None, ""))
+    assert r.full_frame().tobytes() == empty.full_frame().tobytes()
+
+
+def test_theme_font_with_inflated_metrics_is_never_rasterized(tmp_path, monkeypatch):
+    # R2-02: una fuente que dibuja cada letra 10 veces más grande pediría cientos de Mpx
+    # (se mide con getbbox antes de pintar). Se le hace llegar sin pasar por el cargador,
+    # que ya la rechaza: el motor tiene que defenderse solo.
+    from PIL import ImageDraw
+    from test_temas_cargar import theme_font_with_units_per_em
+
+    from luzeira.temas import resolve_font
+
+    inflated = tmp_path / "f.ttf"
+    inflated.write_bytes(theme_font_with_units_per_em(200))
+    files = {"f.ttf": inflated}
+    painted_with = []
+    real_text = ImageDraw.ImageDraw.text
+
+    def spy(self, xy, text, fill=None, font=None, *args, **kwargs):
+        painted_with.append(getattr(font, "path", None))
+        return real_text(self, xy, text, fill, font, *args, **kwargs)
+
+    monkeypatch.setattr(ImageDraw.ImageDraw, "text", spy)
+    widget = {"type": "text", "text": "W" * 30, "box": box(0, 0, 480, 320)}
+    theme = make_theme({**widget, "style": {"font": "f.ttf", "size": 300}})
+    r = Renderer(
+        theme,
+        font_for=lambda s: resolve_font(s, files),
+        read_sensor=lambda s: Reading(None, ""),
+        files=files,
+    )
+    frame = r.full_frame()
+    assert painted_with and str(inflated) not in painted_with
+    # Y queda igual que con la fuente de Luzeira.
+    plain = make_theme({**widget, "style": {"size": 300}})
+    expected = Renderer(
+        plain, font_for=lambda s: resolve_font(s), read_sensor=lambda s: Reading(None, "")
+    )
+    assert frame.tobytes() == expected.full_frame().tobytes()
 
 
 def test_image_widget_requires_validated_file(tmp_path):

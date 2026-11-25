@@ -1,10 +1,11 @@
-"""Lector del módulo opcional de sensores (``modulo``, ADR-007).
+"""Lector del módulo opcional de sensores (``modulo``, ADR-007 y ADR-008).
 
-La sección la escribe otro programa: todo lo que trae se trata como datos no fiables.
+El fichero lo escribe otro programa: todo lo que trae se trata como datos no fiables.
 """
 
 from __future__ import annotations
 
+import os
 import random
 import struct
 import sys
@@ -161,19 +162,37 @@ def test_impossible_or_unknown_values_are_dropped(entry):
 def test_random_bytes_never_crash_the_parser():
     # Fuzz sencillo: con semilla fija, para que un fallo se pueda repetir.
     rng = random.Random(20261124)
-    good = build([("cpu.temperature", 50.0, FLAG_VALID), ("cpu.power", 80.0, FLAG_VALID)])
+    # Una entrada de cada sensor, para que el fuzz pase por el rango de todos (R4-15).
+    good = build([(s.id, (s.low + s.high) / 2, FLAG_VALID) for s in modulo.SENSORS])
+    wild = [float("nan"), float("inf"), -float("inf"), -1e300, 1e300, -0.0]
+    parsed = 0
+    seen: set[str] = set()
     for _ in range(3000):
         data = bytearray(good)
         for _ in range(rng.randint(1, 12)):
             data[rng.randrange(len(data))] = rng.randrange(256)
-        data = bytes(data[: rng.randint(0, len(data))])
+        if rng.random() < 0.5:
+            # Además de bytes sueltos, un valor entero cambiado por uno cualquiera.
+            entry = rng.randrange(len(modulo.SENSORS))
+            value = rng.choice(wild) if rng.random() < 0.1 else rng.uniform(-100.0, 2000.0)
+            struct.pack_into("<d", data, HEADER.size + entry * ENTRY.size + 32, value)
+        if rng.random() < 0.2:
+            # Cortado: casi siempre lo rechaza. Antes se cortaba siempre, y así casi
+            # ningún caso llegaba a leer valores (medido: el fuzz no veía los rangos).
+            data = data[: rng.randint(0, len(data))]
         try:
-            section = parse_section(data)
+            section = parse_section(bytes(data))
         except BadSection:
             continue
+        parsed += 1
         for sid, value in section.values.items():
-            assert sid in {s.id for s in modulo.SENSORS}
-            assert -20.0 <= value <= 1000.0
+            # R4-15: el rango de cada sensor, no uno que valga para todos.
+            sensor = next(s for s in modulo.SENSORS if s.id == sid)
+            assert sensor.low <= value <= sensor.high, (sid, value)
+            seen.add(sid)
+    # Que el fuzz de verdad llegue a los valores de todos los sensores.
+    assert parsed > 500
+    assert seen == {s.id for s in modulo.SENSORS}
 
 
 # --- la fuente -------------------------------------------------------------------------
@@ -300,49 +319,369 @@ def test_default_hub_gets_cpu_temperature_from_the_module():
     assert hub.read("cpu.temperature").value == 50.0
 
 
-@pytest.mark.skipif(sys.platform != "win32", reason="memoria compartida de Windows")
-def test_real_reader_without_the_module_finds_nothing():
-    # En el equipo de pruebas no está instalado el módulo: no existe la sección.
-    from luzeira.sensores.windows_cpu import RealSectionReader
-
-    reader = RealSectionReader(modulo.SECTION_NAME, modulo.SECTION_SIZE)
-    try:
-        assert reader.read() is None
-    finally:
-        reader.close()
-
-
-@pytest.mark.skipif(sys.platform != "win32", reason="memoria compartida de Windows")
-def test_real_reader_ignores_a_section_created_by_a_normal_user():
-    # Cualquiera puede crear una sección en su propio espacio (``Local\\``): su
-    # propietario es el usuario, no SYSTEM, así que el lector debe rechazarla.
-    import ctypes
-    from ctypes import wintypes
-
-    from luzeira.sensores.windows_cpu import RealSectionReader
-
-    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    k32.CreateFileMappingW.restype = wintypes.HANDLE
-    k32.CreateFileMappingW.argtypes = [
-        wintypes.HANDLE,
-        ctypes.c_void_p,
-        wintypes.DWORD,
-        wintypes.DWORD,
-        wintypes.DWORD,
-        wintypes.LPCWSTR,
-    ]
-    name = f"Local\\Luzeira-Prueba-{random.randrange(1 << 30)}"
-    handle = k32.CreateFileMappingW(wintypes.HANDLE(-1), None, 0x04, 0, 4096, name)
-    assert handle
-    try:
-        reader = RealSectionReader(name, modulo.SECTION_SIZE)
-        with pytest.raises(SectionUntrusted):
-            reader.read()
-        reader.close()
-    finally:
-        k32.CloseHandle(handle)
+def test_a_module_that_stops_writing_is_let_go_and_reopened_later():
+    # R4-10 (ADR-008): sin datos nuevos en STALE_SECONDS se suelta el fichero (para que el
+    # servicio pueda volver a crearlo) y no se reabre hasta pasado REOPEN_SECONDS.
+    clock = Clock()
+    src, reader, opened = make(build(sequence=4), clock=clock)
+    assert src.read_all()["cpu.temperature"].value == 55.5
+    clock.now += STALE_SECONDS + 1
+    assert src.read_all()["cpu.temperature"].value is None
+    assert reader.closed
+    reader.closed = False
+    clock.now += REOPEN_SECONDS - 1
+    r = src.read_all()["cpu.temperature"]
+    assert len(opened) == 1  # todavía no
+    assert "no responde" in r.reason  # y no dice «instala el módulo»
+    clock.now += 1
+    # Al reabrir con la misma secuencia sigue sin responder (no parece fresca).
+    assert src.read_all()["cpu.temperature"].value is None
+    assert len(opened) == 2
+    assert reader.closed
+    reader.closed = False
+    clock.now += REOPEN_SECONDS
+    reader.data = build(sequence=6)  # el servicio ha vuelto
+    assert src.read_all()["cpu.temperature"].value == 55.5
+    assert len(opened) == 3
 
 
-def test_header_layout_matches_the_docstring():
+def test_an_untrusted_file_is_reported_while_waiting_to_reopen():
+    clock = Clock()
+    src, _, opened = make(SectionUntrusted(), clock=clock)
+    src.read_all()
+    clock.now += 1
+    assert "no es de fiar" in src.read_all()["cpu.temperature"].reason
+    assert len(opened) == 1
+
+
+def test_the_header_layout_matches_the_docstring():
     data = build(sequence=10)
     assert struct.unpack_from("<Q", data, 24)[0] == 10  # la secuencia, en el offset 24
+
+
+# --- quién puede escribir (la decisión, sin Windows) ------------------------------------
+
+from luzeira.sistema import permisos  # noqa: E402
+
+USER = "S-1-5-21-1-2-3-1001"
+USERS = "S-1-5-32-545"
+FULL = 0x1F01FF
+READ = 0x1200A9
+INHERIT_ONLY = 0x0B  # OBJECT_INHERIT | CONTAINER_INHERIT | INHERIT_ONLY
+
+
+def _security(owner, *aces):
+    return permisos.Security(
+        owner, tuple(permisos.Ace(kind, flags, mask, sid) for sid, mask, flags, kind in aces)
+    )
+
+
+def _ace(sid, mask, flags=0, kind=0):
+    return (sid, mask, flags, kind)
+
+
+#: Lo que debe poner el instalador (ADR-008): SYSTEM y Administradores, todo; Usuarios, leer.
+GOOD = (
+    _ace(permisos.SID_SYSTEM, FULL, 0x3),
+    _ace(permisos.SID_ADMINISTRATORS, FULL, 0x3),
+    _ace(USERS, READ, 0x3),
+)
+
+
+@pytest.mark.parametrize("owner", [permisos.SID_SYSTEM, permisos.SID_ADMINISTRATORS])
+@pytest.mark.parametrize("folder", [True, False])
+def test_system_and_administrators_are_accepted(owner, folder):
+    from luzeira.sensores.windows_cpu import check_security
+
+    check_security(_security(owner, *GOOD), folder=folder, owners=permisos.ADMIN_OWNERS)
+
+
+@pytest.mark.parametrize("owner", [USER, permisos.SID_TRUSTED_INSTALLER, None])
+def test_any_other_owner_is_rejected(owner):
+    from luzeira.sensores.windows_cpu import check_security
+
+    with pytest.raises(SectionUntrusted):
+        check_security(_security(owner, *GOOD), folder=False, owners=permisos.ADMIN_OWNERS)
+
+
+@pytest.mark.parametrize(
+    ("ace", "folder"),
+    [
+        (_ace(permisos.SID_EVERYONE, permisos.FILE_WRITE_DATA), False),
+        (_ace(USERS, permisos.FILE_APPEND_DATA), False),
+        (_ace(USER, permisos.DELETE), False),
+        (_ace(USERS, permisos.WRITE_DAC), False),
+        (_ace(USERS, permisos.WRITE_OWNER), True),
+        (_ace(USERS, permisos.GENERIC_ALL), False),
+        (_ace(USERS, permisos.GENERIC_WRITE, INHERIT_ONLY), True),  # para lo que se cree
+        (_ace(USERS, permisos.FILE_ADD_FILE, 0x2), True),  # lo que hereda de ProgramData
+        (_ace(USERS, permisos.FILE_ADD_SUBDIRECTORY), True),
+        (_ace(USERS, permisos.FILE_DELETE_CHILD), True),
+        (_ace(USERS, READ, 0, kind=0x5), False),  # tipo de ACE raro: se desconfía
+    ],
+)
+def test_write_rights_for_anyone_else_are_rejected(ace, folder):
+    from luzeira.sensores.windows_cpu import check_security
+
+    security = _security(permisos.SID_ADMINISTRATORS, *GOOD, ace)
+    with pytest.raises(SectionUntrusted):
+        check_security(security, folder=folder, owners=permisos.ADMIN_OWNERS)
+
+
+@pytest.mark.parametrize(
+    "ace",
+    [
+        _ace(permisos.SID_TRUSTED_INSTALLER, FULL),
+        _ace(permisos.SID_CREATOR_OWNER, permisos.GENERIC_ALL, INHERIT_ONLY),
+        _ace(permisos.SID_EVERYONE, FULL, 0, kind=permisos.ACCESS_DENIED_ACE_TYPE),
+        _ace(permisos.SID_EVERYONE, READ),  # leer, sí
+    ],
+)
+def test_what_does_not_let_anyone_else_write_is_accepted(ace):
+    from luzeira.sensores.windows_cpu import check_security
+
+    security = _security(permisos.SID_SYSTEM, *GOOD, ace)
+    check_security(security, folder=True, owners=permisos.ADMIN_OWNERS)
+
+
+def test_no_dacl_means_anyone_can_write():
+    from luzeira.sensores.windows_cpu import check_security
+
+    with pytest.raises(SectionUntrusted):
+        check_security(
+            permisos.Security(permisos.SID_SYSTEM, None), folder=False, owners=permisos.ADMIN_OWNERS
+        )
+
+
+# --- el lector de verdad, con ficheros en una carpeta temporal --------------------------
+# Nunca la carpeta real de %ProgramData%: se le pasa la ruta.
+
+windows_only = pytest.mark.skipif(sys.platform != "win32", reason="ficheros de Windows")
+
+
+def _set_dacl(path, sddl):
+    """Pone a ``path`` la DACL de ``sddl`` (protegida si empieza por ``D:P``)."""
+    import ctypes
+
+    adv = ctypes.WinDLL("advapi32", use_last_error=True)
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    sd = ctypes.c_void_p()
+    adv.ConvertStringSecurityDescriptorToSecurityDescriptorW.argtypes = [
+        ctypes.c_wchar_p,
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.c_void_p,
+    ]
+    assert adv.ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, 1, ctypes.byref(sd), None)
+    present, defaulted, dacl = ctypes.c_int(), ctypes.c_int(), ctypes.c_void_p()
+    adv.GetSecurityDescriptorDacl.argtypes = [ctypes.c_void_p] + [ctypes.c_void_p] * 3
+    assert adv.GetSecurityDescriptorDacl(
+        sd, ctypes.byref(present), ctypes.byref(dacl), ctypes.byref(defaulted)
+    )
+    adv.SetNamedSecurityInfoW.argtypes = [
+        ctypes.c_wchar_p,
+        ctypes.c_int,
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+    ]
+    protected = 0x80000000 if sddl.startswith("D:P") else 0x20000000  # PROTECTED / UNPROTECTED
+    status = adv.SetNamedSecurityInfoW(str(path), 1, 0x4 | protected, None, None, dacl, None)
+    k32.LocalFree.argtypes = [ctypes.c_void_p]
+    k32.LocalFree(sd)
+    assert status == 0, status
+
+
+@pytest.fixture
+def module_dir(tmp_path):
+    """Una carpeta como la del módulo, con su fichero; al acabar se le devuelve al
+    usuario el control total para que pytest la pueda borrar."""
+    folder = tmp_path / "Luzeira Sensores"
+    folder.mkdir()
+    (folder / modulo.FILE_NAME).write_bytes(build())
+    yield folder
+    me = permisos.current_user_sid()
+    for path in (folder / modulo.FILE_NAME, folder):
+        if path.exists():
+            _set_dacl(path, f"D:P(A;OICI;FA;;;{me})")
+
+
+def _lock_down(folder, extra=""):
+    """La ACL que pondría el instalador, con el usuario de los tests en el papel de
+    «Usuarios»: él solo lee."""
+    me = permisos.current_user_sid()
+    _set_dacl(folder / modulo.FILE_NAME, f"D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FR;;;{me}){extra}")
+    _set_dacl(folder, f"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;{me})")
+
+
+def _reader(folder, **kwargs):
+    from luzeira.sensores.windows_cpu import RealModuleFileReader
+
+    return RealModuleFileReader(folder, modulo.FILE_NAME, modulo.SECTION_SIZE, **kwargs)
+
+
+def _me_as_owner():
+    return frozenset({permisos.current_user_sid()})
+
+
+@windows_only
+def test_real_reader_without_the_module_finds_nothing(tmp_path, module_dir):
+    reader = _reader(tmp_path / "no-existe")
+    assert reader.read() is None
+    reader.close()
+    # La carpeta bien protegida, pero sin fichero (el servicio aún no lo ha creado).
+    (module_dir / modulo.FILE_NAME).unlink()
+    me = permisos.current_user_sid()
+    _set_dacl(module_dir, f"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;{me})")
+    reader = _reader(module_dir, owners=_me_as_owner())
+    assert reader.read() is None
+    assert reader.closed
+
+
+@windows_only
+def test_real_reader_rejects_a_file_owned_by_a_normal_user(module_dir):
+    # Cualquiera puede crear una carpeta con ese nombre (en ProgramData, también): su
+    # propietario es el usuario, no SYSTEM ni Administradores. Con los permisos bien
+    # puestos (para que solo pueda fallar por el propietario).
+    _lock_down(module_dir)
+    reader = _reader(module_dir)
+    with pytest.raises(SectionUntrusted, match="propietario"):
+        reader.read()
+    assert reader.closed
+
+
+@windows_only
+def test_real_reader_reads_a_well_protected_file_and_never_past_its_size(module_dir):
+    _lock_down(module_dir)
+    reader = _reader(module_dir, owners=_me_as_owner())
+    try:
+        data = reader.read()
+        assert data == build()  # 112 bytes: ni uno más, aunque SECTION_SIZE sea mayor
+        assert parse_section(data).values == {"cpu.temperature": 55.5}
+    finally:
+        reader.close()
+    assert reader.closed
+
+
+@windows_only
+def test_real_reader_accepts_system_and_administrators_as_owners(module_dir):
+    # Un fichero de verdad, con los permisos leídos de verdad pero el propietario
+    # cambiado por el de SYSTEM o Administradores (en tmp_path no se puede poner).
+    _lock_down(module_dir)
+    for owner in (permisos.SID_SYSTEM, permisos.SID_ADMINISTRATORS):
+
+        def security(handle, owner=owner):
+            real = permisos.handle_security(handle)
+            return permisos.Security(owner, real.dacl)
+
+        reader = _reader(module_dir, security=security)
+        try:
+            assert reader.read() == build()
+        finally:
+            reader.close()
+
+
+@windows_only
+def test_real_reader_rejects_a_file_anyone_can_write(module_dir):
+    _lock_down(module_dir, extra="(A;;FA;;;WD)")  # Todos: control total sobre el fichero
+    reader = _reader(module_dir, owners=_me_as_owner())
+    with pytest.raises(SectionUntrusted, match="permisos"):
+        reader.read()
+    assert reader.closed
+
+
+@windows_only
+def test_real_reader_rejects_a_folder_anyone_can_add_files_to(module_dir):
+    _lock_down(module_dir)
+    me = permisos.current_user_sid()
+    _set_dacl(module_dir, f"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;;0x1200a9;;;{me})(A;;0x2;;;WD)")
+    reader = _reader(module_dir, owners=_me_as_owner())
+    with pytest.raises(SectionUntrusted, match="permisos"):
+        reader.read()
+
+
+@windows_only
+def test_real_reader_rejects_a_junction_instead_of_the_folder(module_dir, tmp_path):
+    import _winapi
+
+    _lock_down(module_dir)
+    link = tmp_path / "enlace"
+    _winapi.CreateJunction(str(module_dir), str(link))
+    reader = _reader(link, owners=_me_as_owner())
+    with pytest.raises(SectionUntrusted, match="enlace"):
+        reader.read()
+    assert reader.closed
+
+
+@windows_only
+def test_while_the_reader_holds_the_file_nobody_can_swap_it(module_dir, tmp_path):
+    # El lector abre sin FILE_SHARE_DELETE: mientras lo tiene, ni el fichero ni la carpeta
+    # se pueden renombrar, reemplazar ni borrar (si no, alguien cambiaría lo comprobado
+    # por otra cosa). Los permisos reales dejan al usuario hacer de todo, así que el
+    # único freno es el modo de compartir; la comprobación de permisos se inyecta limpia.
+    clean = permisos.Security(
+        permisos.SID_SYSTEM, tuple(permisos.Ace(kind, f, m, s) for s, m, f, kind in GOOD)
+    )
+    reader = _reader(module_dir, security=lambda _h: clean)
+    target = module_dir / modulo.FILE_NAME
+    other = tmp_path / "otro.bin"
+    other.write_bytes(build(sequence=8))
+    try:
+        assert reader.read() == build()
+        attempts = [
+            lambda: os.replace(other, target),
+            lambda: target.rename(module_dir / "movido.bin"),
+            lambda: target.unlink(),
+            lambda: module_dir.rename(tmp_path / "carpeta-movida"),
+        ]
+        for attempt in attempts:
+            with pytest.raises(PermissionError) as caught:
+                attempt()
+            assert caught.value.winerror in (5, 32)  # acceso denegado / en uso
+        assert reader.read() == build()
+    finally:
+        reader.close()
+    target.unlink()  # ya suelto, sí se puede
+
+
+@windows_only
+def test_real_reader_rejects_a_file_smaller_than_the_header(module_dir):
+    (module_dir / modulo.FILE_NAME).write_bytes(b"LUZSENS\0")
+    _lock_down(module_dir)
+    reader = _reader(module_dir, owners=_me_as_owner())
+    with pytest.raises(OSError, match="pequeño"):
+        reader.read()
+    assert reader.closed
+
+
+@windows_only
+def test_programdata_comes_from_windows_not_from_the_environment(monkeypatch, tmp_path):
+    import os
+
+    from luzeira.sensores.windows_cpu import programdata_dir
+
+    real = os.environ.get("PROGRAMDATA") or os.environ["ALLUSERSPROFILE"]
+    monkeypatch.setenv("PROGRAMDATA", str(tmp_path))
+    monkeypatch.setenv("ALLUSERSPROFILE", str(tmp_path))
+    assert str(programdata_dir()).casefold() == real.casefold()
+
+
+def test_the_default_opener_points_at_programdata(monkeypatch, tmp_path):
+    from luzeira.sensores import windows_cpu
+
+    seen = {}
+
+    class Spy:
+        def __init__(self, folder, name, size):
+            seen.update(folder=folder, name=name, size=size)
+
+    monkeypatch.setattr(windows_cpu, "RealModuleFileReader", Spy)
+    monkeypatch.setattr(windows_cpu, "programdata_dir", lambda: tmp_path)
+    modulo.real_reader()
+    assert seen == {
+        "folder": tmp_path / "Luzeira Sensores",
+        "name": "sensores.bin",
+        "size": modulo.SECTION_SIZE,
+    }

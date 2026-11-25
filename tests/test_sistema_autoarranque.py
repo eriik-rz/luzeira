@@ -33,6 +33,21 @@ def real_run_key_untouched():
     assert _real_run_value() == before
 
 
+#: Los tests que sí pasan por ``check_app_folders`` (los demás la quitan).
+REAL_FOLDER_CHECK = {
+    "test_enable_refuses_with_a_translated_message_and_writes_nothing",
+    "test_the_real_check_reads_the_real_folders",
+}
+
+
+@pytest.fixture(autouse=True)
+def app_folders_are_safe(request, monkeypatch):
+    """La comprobación de la carpeta de la app (R4-06) depende de dónde esté el repo (en
+    la CI, la carpeta de trabajo puede ser de otros): fuera, salvo en sus propios tests."""
+    if request.node.name not in REAL_FOLDER_CHECK:
+        monkeypatch.setattr(autoarranque, "check_app_folders", lambda: None)
+
+
 @pytest.fixture
 def test_key():
     """Ruta de una clave de prueba propia; se borra entera al acabar."""
@@ -177,3 +192,117 @@ def test_default_command_real_environment_fits():
     cmd = autoarranque.default_command()
     assert len(cmd) <= autoarranque.MAX_COMMAND_LENGTH
     assert Path(_argv(cmd)[0]).is_file()
+
+
+# --- La carpeta de la app la pueden cambiar otros (R4-06) -------------------------------
+
+from luzeira.sistema import permisos  # noqa: E402
+
+ME = "S-1-5-21-1-2-3-1001"
+OTHER = "S-1-5-21-1-2-3-1002"
+AUTH_USERS = "S-1-5-11"
+FULL = 0x1F01FF
+READ_EXECUTE = 0x1200A9
+
+
+def _sec(owner, *aces):
+    return permisos.Security(
+        owner, tuple(permisos.Ace(0, flags, mask, sid) for sid, mask, flags in aces)
+    )
+
+
+#: Lo que tiene una carpeta del perfil del usuario (Descargas, Documentos…).
+PROFILE_FOLDER = _sec(
+    ME,
+    (permisos.SID_SYSTEM, FULL, 0x13),
+    (permisos.SID_ADMINISTRATORS, FULL, 0x13),
+    (ME, FULL, 0x13),
+)
+#: Lo que hereda una carpeta nueva en C:\ (leído de C:\ el 2026-11-24): Usuarios
+#: autentificados con «Modificar» para lo que se cree dentro.
+DRIVE_ROOT_CHILD = _sec(
+    ME,
+    (permisos.SID_ADMINISTRATORS, FULL, 0x13),
+    (permisos.SID_SYSTEM, FULL, 0x13),
+    ("S-1-5-32-545", READ_EXECUTE, 0x13),
+    (AUTH_USERS, 0x1301BF, 0x13),
+    (permisos.SID_CREATOR_OWNER, 0x10000000, 0x1B),
+)
+
+
+def _check(security):
+    return autoarranque.unsafe_folders([Path("x")], read_security=lambda _p: security, user_sid=ME)
+
+
+def test_a_folder_of_the_user_is_safe():
+    assert _check(PROFILE_FOLDER) == []
+
+
+def test_a_portable_unzipped_in_the_drive_root_is_not():
+    assert _check(DRIVE_ROOT_CHILD) == [Path("x")]
+
+
+@pytest.mark.parametrize(
+    "security",
+    [
+        _sec(ME, (OTHER, permisos.FILE_ADD_FILE, 0)),  # otro usuario puede meter ficheros
+        _sec(ME, (permisos.SID_EVERYONE, permisos.DELETE, 0)),  # renombrarla y poner otra
+        _sec(ME, (AUTH_USERS, permisos.GENERIC_WRITE, 0x1B)),  # lo que se cree dentro
+        _sec(ME, (OTHER, permisos.WRITE_DAC, 0)),  # cambiar los permisos
+        _sec(OTHER, (ME, FULL, 0)),  # el propietario es otro: puede cambiar la DACL
+        permisos.Security(ME, None),  # sin DACL: todo el mundo puede todo
+    ],
+)
+def test_anyone_else_who_can_write_makes_it_unsafe(security):
+    assert _check(security) == [Path("x")]
+
+
+def test_system_admins_and_trustedinstaller_may_write():
+    security = _sec(
+        permisos.SID_TRUSTED_INSTALLER,
+        (permisos.SID_TRUSTED_INSTALLER, FULL, 0),
+        (permisos.SID_SYSTEM, FULL, 0),
+        (permisos.SID_ADMINISTRATORS, FULL, 0),
+        ("S-1-5-32-545", READ_EXECUTE, 0),  # Usuarios: solo leer y ejecutar
+    )
+    assert _check(security) == []
+
+
+def test_a_folder_whose_permissions_cannot_be_read_is_unsafe():
+    def fail(_path):
+        raise PermissionError(5, "acceso denegado")
+
+    assert autoarranque.unsafe_folders([Path("x")], read_security=fail, user_sid=ME) == [Path("x")]
+
+
+def test_enable_refuses_with_a_translated_message_and_writes_nothing(test_key, monkeypatch):
+    from luzeira import idioma
+
+    monkeypatch.setattr(autoarranque, "app_folders", lambda: [Path("x")])
+    monkeypatch.setattr(autoarranque, "unsafe_folders", lambda folders: list(folders))
+    idioma.set_language("es")
+    with pytest.raises(autoarranque.UnsafeAppFolder) as caught:
+        autoarranque.enable('"C:\\a.exe"', test_key)
+    assert "otros usuarios" in str(caught.value)
+    # Moverla conserva los permisos heredados (medido): el consejo es descomprimir otra vez.
+    assert "descomprimir" in str(caught.value)
+    assert isinstance(caught.value, autoarranque.AutostartError)  # la bandeja ya lo captura
+    assert autoarranque.registered_command(test_key) is None
+
+
+def test_the_real_check_reads_the_real_folders():
+    # Lee (solo lee) los permisos de las carpetas de este entorno: no debe fallar.
+    result = autoarranque.unsafe_folders(autoarranque.app_folders())
+    assert isinstance(result, list)
+
+
+def test_the_message_exists_in_every_language():
+    from luzeira import idioma
+
+    try:
+        for lang in idioma.available():
+            idioma.set_language(lang)
+            text = idioma.t(autoarranque.UNSAFE_FOLDER_MESSAGE)
+            assert text != autoarranque.UNSAFE_FOLDER_MESSAGE, lang
+    finally:
+        idioma.set_language("es")

@@ -51,6 +51,10 @@ def _record(msg: str, *args: object, exc_info=None) -> logging.LogRecord:
         ("hola juanito, equipo pc-salon", "hola <usuario>, equipo <equipo>"),
         ("Juanitos y PC-SALONES no son datos", "Juanitos y PC-SALONES no son datos"),
         (r"C:\Users\Juanitos\x", r"<usuario>\x"),  # otro perfil: también se tapa
+        # R4-12: un perfil con espacio se tapa entero, hasta el siguiente separador.
+        (r"C:\Users\Otro Usuario\Desktop\t.zip", r"<usuario>\Desktop\t.zip"),
+        (r"no existe 'C:\Users\Ana de la Torre' (x)", r"no existe '<usuario>' (x)"),
+        ("C:/Users/Otro Usuario: sin permiso", "<usuario>: sin permiso"),
         ("nada que ocultar", "nada que ocultar"),
     ],
 )
@@ -62,6 +66,32 @@ def test_filter_scrubs_args(pf):
     record = _record("usuario %s en %s", USER, HOST)
     assert pf.filter(record) is True
     assert record.getMessage() == "usuario <usuario> en <equipo>"
+
+
+def test_args_that_do_not_match_never_break_the_caller(pf):
+    # R4-12: antes, el TypeError de getMessage() saltaba en quien escribía el log.
+    record = _record("dos %s %s de Juanito", "solo-uno")
+    assert pf.filter(record) is True
+    message = record.getMessage()
+    assert "no casan" in message
+    assert "Juanito" not in message
+    assert "solo-uno" not in message  # los argumentos podrían llevar datos: fuera
+
+
+def test_a_bad_log_call_through_a_real_handler_does_not_raise(pf):
+    import io
+
+    stream = io.StringIO()
+    handler = logging.StreamHandler(stream)
+    handler.addFilter(pf)
+    logger = logging.getLogger("luzeira.test.args")
+    logger.propagate = False
+    logger.addHandler(handler)
+    try:
+        logger.warning("dos %s %s", "x")
+    finally:
+        logger.removeHandler(handler)
+    assert "no casan" in stream.getvalue()
 
 
 def test_filter_scrubs_exception_text(pf):

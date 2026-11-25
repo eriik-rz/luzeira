@@ -23,6 +23,7 @@ from PIL import Image
 from luzeira.idioma import Text
 from luzeira.pantallas.comun import (
     BAUDRATE,
+    IMAGE_TIMEOUT,
     WRITE_TIMEOUT,
     ConfirmationNeeded,
     DisplayBusy,
@@ -30,6 +31,7 @@ from luzeira.pantallas.comun import (
     Orientation,
     Transport,
     open_error,
+    write_all,
 )
 from luzeira.pantallas.rgb565 import to_rgb565_le
 
@@ -123,8 +125,10 @@ def aligned_rect(
     """El rectángulo más pequeño que contiene (x, y, w, h), cabe en la pantalla y ocupa un
     número exacto de bloques de 64 bytes (2 bytes por píxel → ancho x alto múltiplo de 32).
 
-    Siempre hay solución: el ancho y el alto de las pantallas son múltiplos de 32, así que
-    en el peor caso basta con filas enteras.
+    Siempre hay solución: la pantalla entera cuadra en todos los modelos (320x480,
+    480x800 y 600x1024 son múltiplos de 32 píxeles), y el rectángulo se puede desplazar
+    para que quepa. ⚠ No es que cada lado sea múltiplo de 32: 600 no lo es (600 = 32 x
+    18,75); por eso se buscan ancho y alto juntos y no lado a lado.
     """
     pixels_per_block = BLOCK_BYTES // 2
     if (w * h) % pixels_per_block == 0:
@@ -153,6 +157,9 @@ def find_port(ports: Iterable | None = None) -> PortMatch | None:
     ⚠ El VID/PID 1A86:5722 lo comparten otros modelos, entre ellos la XuanFang 3,5",
     que habla otro protocolo (rev B). Por eso se prefiere el número de serie, y una
     coincidencia solo por VID/PID se devuelve marcada como no segura.
+
+    🔴 El serie solo cuenta junto con ese VID/PID (R5-07): cualquier aparato USB puede
+    anunciar ``USB35INCHIPS…``. Con otro USB, ese puerto no es candidato.
     """
     if ports is None:
         from serial.tools.list_ports import comports
@@ -160,12 +167,12 @@ def find_port(ports: Iterable | None = None) -> PortMatch | None:
         ports = comports()
     fallback: PortMatch | None = None
     for port in ports:
+        if not (getattr(port, "vid", None) == USB_VID and getattr(port, "pid", None) == USB_PID):
+            continue
         serial_number = getattr(port, "serial_number", None) or ""
         if serial_number.startswith(USB_SERIAL_PREFIX):
             return PortMatch(port.device, by_serial=True)
-        if fallback is None and (
-            getattr(port, "vid", None) == USB_VID and getattr(port, "pid", None) == USB_PID
-        ):
+        if fallback is None:
             fallback = PortMatch(port.device, by_serial=False)
     return fallback
 
@@ -175,8 +182,15 @@ class TuringRevA:
 
     model_key = "turing-rev-a"  # clave del catálogo (``pantallas.modelos``)
 
-    def __init__(self, transport: Transport, model: Model = TURING_3_5) -> None:
+    def __init__(
+        self,
+        transport: Transport,
+        model: Model = TURING_3_5,
+        *,
+        monotonic: Callable[[], float] = time.monotonic,
+    ) -> None:
         self._transport = transport
+        self._monotonic = monotonic  # reloj del plazo por imagen (los tests ponen uno falso)
         self.model = model
         self.device: str | None = None  # puerto, si se abrió con :meth:`open`
         self.hello_answer = b""  # respuesta cruda al último HELLO (para validar a mano)
@@ -265,12 +279,8 @@ class TuringRevA:
     # --- comandos -------------------------------------------------------------
 
     def _write(self, data: bytes) -> None:
-        """Escribe en el puerto. Un USB desenchufado o colgado da un error para el usuario,
-        no una traza de pyserial (``SerialException`` hereda de ``OSError``)."""
-        try:
-            self._transport.write(data)
-        except OSError as exc:
-            raise DisplayError(Text("pantallas.conexion_perdida")) from exc
+        """Escribe en el puerto, entero o con un error para el usuario (``write_all``)."""
+        write_all(self._transport, data)
 
     def _send(self, command: int, x: int = 0, y: int = 0, ex: int = 0, ey: int = 0) -> None:
         self._write(pack_command(command, x, y, ex, ey))
@@ -329,6 +339,10 @@ class TuringRevA:
 
         Lo que se salga de la pantalla se recorta. Se envía en trozos de
         ``ancho_pantalla * 8`` bytes, sin esperar respuesta entre trozos.
+
+        Si la imagen entera no ha salido en ``IMAGE_TIMEOUT`` (se mira entre trozos), se
+        corta con :class:`DisplayError`: los bytes que salen son los mismos de siempre,
+        solo se deja de mandar antes.
         """
         if not (0 <= x < self.width and 0 <= y < self.height):
             raise ValueError(
@@ -349,5 +363,8 @@ class TuringRevA:
         # Coordenadas inclusivas: la última columna es x + w - 1.
         self._send(Command.DISPLAY_BITMAP, x, y, x + w - 1, y + h - 1)
         chunk = self.width * 8
+        deadline = self._monotonic() + IMAGE_TIMEOUT
         for start in range(0, len(data), chunk):
+            if start and self._monotonic() > deadline:
+                raise DisplayError(Text("pantallas.conexion_perdida"))
             self._write(data[start : start + chunk])

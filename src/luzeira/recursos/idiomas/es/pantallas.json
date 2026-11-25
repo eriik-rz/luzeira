@@ -15,6 +15,8 @@
   "pantallas.no_puedo_abrir": "No puedo abrir la pantalla ({device}).",
   "pantallas.no_puedo_abrir_reintento": "No puedo abrir la pantalla ({device}). Lo sigo intentando.",
   "pantallas.conexion_perdida": "Se ha perdido la conexión con la pantalla. ¿Se ha desenchufado el USB?",
+  "pantallas.imagen_cortada": "La imagen se ha quedado a medias y la pantalla puede seguir esperando el resto. Desenchúfala y vuelve a enchufarla: lo vuelvo a probar en cuanto la reconectes o, si no, dentro de un rato.",
+  "pantallas.estado_desenchufar": "La pantalla no responde después de muchos intentos. Desenchúfala y vuelve a enchufarla; mientras, lo seguiré intentando de vez en cuando.",
   "pantallas.estado_arrancando": "Arrancando Luzeira…",
   "pantallas.estado_conectando": "Pantalla encontrada. Preparando la imagen…",
   "pantallas.estado_en_reposo": "Pantalla apagada mientras el equipo está en reposo.",

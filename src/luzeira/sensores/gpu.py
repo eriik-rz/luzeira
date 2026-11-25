@@ -11,9 +11,10 @@ Reglas:
   hasta entonces; en cuanto NVML responde, manda NVML y lo abierto de Windows se suelta
   (``WindowsGpuSource.release``). Ese cambio de fuente se ve una vez, al arrancar.
 - Con NVML, Windows solo rellena los sensores que NVML dice que esta tarjeta no da
-  (``NOT_SUPPORTED``), y solo si la tarjeta que eligió Windows es NVIDIA **y la única
-  NVIDIA**: con dos, NVML lee la 0 y Windows la de más memoria, y podrían ser distintas.
-  Un fallo pasajero de NVML no se rellena: se ve su motivo.
+  (``NOT_SUPPORTED``), y solo si la tarjeta que eligió Windows es la de NVML: misma
+  dirección PCI si las dos la dan; si no, que sea NVIDIA **y la única NVIDIA** (con dos,
+  NVML lee la 0 y Windows la de más memoria, y podrían ser distintas). Un fallo pasajero
+  de NVML no se rellena: se ve su motivo.
 - La memoria va en bloque: la usada y la total vienen siempre de la misma fuente (si no,
   el porcentaje saldría mal). El consumo en vatios solo lo da NVML.
 """
@@ -67,9 +68,9 @@ class GpuSource:
             self._windows.release()
             return readings
         extra = self._windows.read_some(wanted)
-        if self._windows.sole_vendor_id != NVIDIA_VENDOR_ID:
-            # Windows aún no arrancó, eligió otra marca o hay más de una NVIDIA: no se
-            # mezclan (podría ser el dato de otra tarjeta).
+        if not self._same_card():
+            # Windows aún no arrancó o su tarjeta no es (o no se sabe si es) la de NVML:
+            # no se mezclan (podría ser el dato de otra tarjeta).
             return readings
         for name in _SINGLE:
             reading = extra.get(self._id(name))
@@ -82,6 +83,19 @@ class GpuSource:
             for name in _MEMORY:
                 readings[self._id(name)] = extra[self._id(name)]
         return readings
+
+    def _same_card(self) -> bool:
+        """Si la tarjeta que eligió Windows es la que lee NVML.
+
+        Si las dos fuentes dan su dirección PCI (bus, dispositivo, función), manda eso:
+        iguales, es la misma aunque haya dos NVIDIA; distintas, no lo es. Si alguna no la
+        da, la regla de siempre: solo si la de Windows es la única NVIDIA.
+        """
+        nvml_pci = self._nvml.pci_address
+        windows_pci = self._windows.pci_address
+        if nvml_pci is not None and windows_pci is not None:
+            return nvml_pci == windows_pci
+        return self._windows.sole_vendor_id == NVIDIA_VENDOR_ID
 
     def close(self) -> None:
         try:

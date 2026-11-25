@@ -11,6 +11,7 @@ import contextlib
 import http.client
 import io
 import json
+import logging
 import os
 import shutil
 import socket
@@ -22,7 +23,7 @@ import pytest
 from PIL import Image
 
 from luzeira import config as luzeira_config
-from luzeira.editor import EditorServer
+from luzeira.editor import EditorServer, servidor
 from luzeira.editor.almacen import EditorError
 from luzeira.sensores.base import Reading, SensorInfo
 from luzeira.temas import cargar
@@ -336,7 +337,14 @@ def test_static_index_and_assets_without_token(env):
 
 @pytest.mark.parametrize(
     "path",
-    ["/../secreto.txt", "/%2e%2e/secreto.txt", "/assets/..%5c..%5csecreto.txt", "/nada.html"],
+    [
+        "/../secreto.txt",
+        "/%2e%2e/secreto.txt",
+        "/assets/..%5c..%5csecreto.txt",
+        "/nada.html",
+        "/NUL.html",  # nombres de dispositivo de Windows (R1-03; COM3 va en su test)
+        "/CON.css",
+    ],
 )
 def test_static_traversal_is_404(env, path):
     _, client, *_ = env
@@ -1655,3 +1663,448 @@ def test_chinese_labels_are_not_missing_letters_thanks_to_the_cjk_font():
         }
     )
     assert find_missing_glyphs(theme, {}) == []
+
+
+# --- Revisión de seguridad R1 ---------------------------------------------------------
+
+
+def _raw(server: EditorServer, data: bytes, wait: float = 5.0) -> bytes:
+    """Manda ``data`` tal cual por un socket y devuelve todo lo que responde el servidor
+    hasta que cierra (o hasta ``wait`` segundos sin nada nuevo)."""
+    sock = socket.create_connection(("127.0.0.1", server.port), timeout=wait)
+    out = b""
+    try:
+        sock.sendall(data)
+        while chunk := sock.recv(65536):
+            out += chunk
+    except (TimeoutError, ConnectionError):
+        pass
+    finally:
+        sock.close()
+    return out
+
+
+def _status_lines(data: bytes) -> list[bytes]:
+    return [line for line in data.split(b"\r\n") if line.startswith(b"HTTP/1.")]
+
+
+def _server_log_errors(caplog) -> list[str]:
+    return [
+        r.getMessage()
+        for r in caplog.records
+        if r.name == "luzeira.editor.servidor" and r.levelno >= logging.ERROR
+    ]
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/temas/completo/aplicar",
+        "/api/acceso-escritorio",
+        "/api/carpeta-temas",
+        "/api/configuracion-inicio",
+        "/api/actualizaciones/buscar",
+        "/api/actualizaciones/instalar",
+    ],
+)
+def test_unread_body_does_not_poison_the_next_request_on_keep_alive(with_settings, path):
+    """R1-01: estas rutas responden sin leer el cuerpo; el editor real manda ``{}``
+    (``editor/src/api.ts``). Con keep-alive, esos dos bytes eran el principio de la
+    siguiente petición: «{}GET /api/info» -> 501. Una sola conexión, como el navegador."""
+    client, fake, _ = with_settings
+    fake.install_update = lambda: "Instalando."  # que esta ruta también dé 200
+    server = client.server
+    conn = http.client.HTTPConnection("127.0.0.1", server.port, timeout=10)
+    try:
+        token = {"X-Luzeira-Token": server.token, "Content-Type": "application/json"}
+        conn.request("POST", path, body=b"{}", headers=token)
+        first = conn.getresponse()
+        assert first.status == 200, first.read()
+        assert first.getheader("Connection") != "close"
+        first.read()
+        sock = conn.sock
+        assert sock is not None  # la conexión sigue abierta
+        conn.request("GET", "/api/info", headers={"X-Luzeira-Token": server.token})
+        second = conn.getresponse()
+        assert second.status == 200, second.read()
+        assert json.loads(second.read())["version"]
+        assert conn.sock is sock, "http.client tuvo que abrir otra conexión"
+    finally:
+        conn.close()
+
+
+def test_body_that_cannot_be_drained_closes_the_connection(with_settings):
+    """Un cuerpo por trozos (chunked) en una ruta que no lo lee: no se puede saber dónde
+    acaba, así que la respuesta cierra la conexión en vez de dejar basura en ella."""
+    client, *_ = with_settings
+    server = client.server
+    data = _raw(
+        server,
+        (
+            f"POST /api/carpeta-temas HTTP/1.1\r\nHost: 127.0.0.1:{server.port}\r\n"
+            f"X-Luzeira-Token: {server.token}\r\nTransfer-Encoding: chunked\r\n\r\n"
+            "2\r\n{}\r\n0\r\n\r\n"
+            f"GET /api/info HTTP/1.1\r\nHost: 127.0.0.1:{server.port}\r\n\r\n"
+        ).encode(),
+    )
+    assert _status_lines(data) == [b"HTTP/1.1 200 OK"]
+    assert b"Connection: close" in data
+
+
+@pytest.mark.parametrize("length", ["¹", "²", "³", "+5", "-1", "5 ", "0x5", "1_0"])
+@pytest.mark.parametrize("with_token", [True, False])
+def test_bad_content_length_is_one_clean_400(env, caplog, length, with_token):
+    """R1-04: «²» pasaba ``isdigit()`` y ``int()`` lanzaba: 500, dos líneas de estado
+    (403 + 500) y la traza sin capturar. Sin token pasa por ``_drain`` (el 403); con él,
+    por ``_body`` (el PUT). Una cabecera llega en latin-1: «٣» ni siquiera se puede
+    mandar, pero «¹²³» sí."""
+    server, *_ = env
+    caplog.set_level(logging.DEBUG)
+    token = f"X-Luzeira-Token: {server.token}\r\n" if with_token else ""
+    data = _raw(
+        server,
+        (
+            f"PUT /api/temas/mio HTTP/1.1\r\nHost: 127.0.0.1:{server.port}\r\n{token}"
+            f"Content-Length: {length}\r\n\r\n"
+        ).encode("latin-1"),
+    )
+    expected = b"HTTP/1.1 400 Bad Request" if with_token else b"HTTP/1.1 403 Forbidden"
+    assert _status_lines(data) == [expected]
+    assert _server_log_errors(caplog) == []
+
+
+def test_leading_space_in_content_length_is_valid():
+    """« 5» no es un error: el espacio de delante no forma parte del valor (RFC 9110,
+    OWS) y ``http.client`` ya lo quita al leer la cabecera."""
+    msg = http.client.parse_headers(io.BytesIO(b"Content-Length:  5\r\n\r\n"))
+    assert msg.get_all("Content-Length") == ["5"]
+    assert servidor._CONTENT_LENGTH.fullmatch("5")
+
+
+@pytest.mark.parametrize(
+    "path", ["/COM3.js", "/NUL.html", "/CON.css", "/assets/aux.js", "/lpt1/x.css", "/Com1.Png"]
+)
+def test_static_reserved_windows_names_never_touch_the_disk(env, monkeypatch, path):
+    """R1-03: «/COM3.js» llegaba a ``resolve`` e ``is_file``, que abren el dispositivo
+    (COM3 puede ser el puerto de la pantalla). Los espías **no** llaman al original con
+    esos nombres: aunque el arreglo se rompa, el test no abre ningún puerto."""
+    _, client, *_ = env
+    touched: list[str] = []
+    reserved = ("com", "nul", "con", "aux", "lpt")
+
+    def spy(original):
+        def wrapper(target, *args, **kwargs):
+            name = os.path.basename(os.fspath(target)).lower()
+            parent = os.path.basename(os.path.dirname(os.fspath(target))).lower()
+            if name.startswith(reserved) or parent.startswith(reserved):
+                touched.append(os.fspath(target))
+                raise AssertionError("se ha tocado el disco con un nombre de dispositivo")
+            return original(target, *args, **kwargs)
+
+        return wrapper
+
+    for name in ("resolve", "is_file", "is_symlink", "read_bytes", "stat", "lstat"):
+        monkeypatch.setattr(Path, name, spy(getattr(Path, name)))
+    monkeypatch.setattr(os, "stat", spy(os.stat))
+    monkeypatch.setattr(os, "lstat", spy(os.lstat))
+    assert client.request("GET", path, token=None)[0] == 404
+    assert touched == []
+
+
+def _handler_threads() -> int:
+    return sum("process_request_thread" in t.name for t in threading.enumerate())
+
+
+def test_connection_cap_and_header_deadline(env, monkeypatch):
+    """R1-05: 64 conexiones a medio mandar las cabeceras. Antes, 64 hilos (y 500 con
+    500); ahora como mucho ``MAX_CONNECTIONS``, el resto se cierran al aceptarlas, y al
+    acabarse el plazo de las cabeceras se sueltan y el servidor vuelve a responder."""
+    server, client, *_ = env
+    monkeypatch.setattr(servidor._Handler, "header_deadline", 1.5)
+    before = _handler_threads()
+    socks = []
+    try:
+        for _ in range(64):
+            s = socket.create_connection(("127.0.0.1", server.port), timeout=5)
+            s.sendall(b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n")  # sin la línea vacía
+            socks.append(s)
+        time.sleep(0.5)
+        assert _handler_threads() - before <= servidor.MAX_CONNECTIONS
+        # Las que no caben se cierran enseguida, sin hilo: el otro lado lee el final.
+        closed = 0
+        for s in socks:
+            s.settimeout(0.05)
+            try:
+                closed += s.recv(1) == b""
+            except TimeoutError:
+                pass
+            except ConnectionError:
+                closed += 1
+        assert closed >= 64 - servidor.MAX_CONNECTIONS
+        time.sleep(1.5)  # se acaba el plazo de las que sí entraron
+        assert client.request("GET", "/api/info")[0] == 200
+    finally:
+        for s in socks:
+            s.close()
+
+
+def test_header_deadline_is_total_not_per_read(env, monkeypatch):
+    """Un byte cada 0,3 s nunca agota el ``timeout`` por lectura (30 s), pero sí el plazo
+    total de las cabeceras: la conexión se corta a los ~1 s, no se queda el hilo."""
+    server, *_ = env
+    monkeypatch.setattr(servidor._Handler, "header_deadline", 1.0)
+    sock = socket.create_connection(("127.0.0.1", server.port), timeout=5)
+    started = time.monotonic()
+    cut = False
+    try:
+        for byte in b"GET / HTTP/1.1\r\nHost: 127.0.0.1:1\r\nX-Relleno: aaaaaaaaaaaaaaaaaaaa":
+            sock.sendall(bytes([byte]))
+            time.sleep(0.3)
+            if time.monotonic() - started > 4:
+                break
+    except ConnectionError:
+        cut = True
+    if not cut:
+        sock.settimeout(1)
+        try:
+            cut = sock.recv(1) == b""
+        except ConnectionError:
+            cut = True
+        except TimeoutError:
+            cut = False
+    sock.close()
+    assert cut, "el servidor siguió esperando las cabeceras"
+    assert time.monotonic() - started < 4
+
+
+def test_security_headers_on_every_response(env):
+    """R1-08: CORP, nosniff y no-store en todo: API, estáticos, errores propios y los que
+    responde el propio ``http.server`` (método desconocido -> 501), que no pasan por
+    ``_send``."""
+    server, client, *_ = env
+    for method, path, token in [
+        ("GET", "/api/info", True),
+        ("GET", "/api/temas/nada", True),
+        ("GET", "/api/info", None),
+        ("GET", "/", None),
+        ("GET", "/nada.html", None),
+    ]:
+        _, headers, _ = client.request(method, path, token=token)
+        assert headers["cross-origin-resource-policy"] == "same-origin", path
+        assert headers["x-content-type-options"] == "nosniff", path
+        assert headers["cache-control"] == "no-store", path
+    data = _raw(
+        server, f"BREW /api/info HTTP/1.1\r\nHost: 127.0.0.1:{server.port}\r\n\r\n".encode()
+    )
+    assert _status_lines(data) == [b"HTTP/1.1 501 Not Implemented"]
+    for header in (
+        b"Cross-Origin-Resource-Policy: same-origin",
+        b"X-Content-Type-Options: nosniff",
+        b"Cache-Control: no-store",
+    ):
+        assert header in data
+
+
+@pytest.mark.parametrize("path", ["/api/info", "/", "/assets/app.js"])
+def test_cross_site_fetch_is_403(env, path):
+    """R1-09: el navegador marca con ``Sec-Fetch-Site: cross-site`` lo que lanza otra web.
+    Se corta también en los estáticos. Lo nuestro (same-origin), Vite en desarrollo
+    (same-site: mismo 127.0.0.1, otro puerto) y una navegación tecleada (none), pasan."""
+    _, client, *_ = env
+    for value, expected in [
+        ("cross-site", 403),
+        ("Cross-Site", 403),
+        ("same-origin", 200),
+        ("same-site", 200),
+        ("none", 200),
+    ]:
+        status, _, _ = client.request("GET", path, headers={"Sec-Fetch-Site": value})
+        assert status == expected, (path, value)
+
+
+def test_unknown_method_is_not_logged_nor_echoed(env, caplog):
+    """R1-08: el método lo escribe el otro lado; no va crudo al log ni a la respuesta."""
+    server, *_ = env
+    caplog.set_level(logging.DEBUG)
+    data = _raw(server, f"XYZZY / HTTP/1.1\r\nHost: 127.0.0.1:{server.port}\r\n\r\n".encode())
+    assert _status_lines(data) == [b"HTTP/1.1 501 Not Implemented"]
+    assert b"XYZZY" not in data
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("Editor:" in m for m in messages)  # sí se apunta la petición…
+    assert not any("XYZZY" in m for m in messages)  # …pero sin el método
+
+
+def test_cut_connection_is_debug_not_error(env, monkeypatch, caplog):
+    """R1-08: que el otro lado corte (cerró la ventana, canceló el fetch) no es un fallo
+    del editor: DEBUG, sin traza, y sin intentar responder."""
+    server, *_ = env
+    caplog.set_level(logging.DEBUG)
+
+    def cut() -> dict:
+        raise ConnectionAbortedError(10053, "anulada")
+
+    monkeypatch.setattr(server, "info", cut)
+    data = _raw(
+        server,
+        (
+            f"GET /api/info HTTP/1.1\r\nHost: 127.0.0.1:{server.port}\r\n"
+            f"X-Luzeira-Token: {server.token}\r\n\r\n"
+        ).encode(),
+    )
+    assert data == b""
+    assert _server_log_errors(caplog) == []
+    assert any("ConnectionAbortedError" in r.getMessage() for r in caplog.records)
+
+
+def test_preview_survives_a_font_that_blows_up_when_checking_letters(env, monkeypatch, caplog):
+    """Mirar las letras rasteriza una a una: un glifo inflado de una fuente del tema
+    lanza ``DecompressionBombError`` (no es OSError). No es un 500: se miran en la de
+    Luzeira, que es con la que pinta entonces el motor."""
+    _, client, *_ = env
+    caplog.set_level(logging.DEBUG)
+    real = servidor.missing_glyphs
+    seen_files = []
+    real_resolve = servidor.resolve_font
+
+    def resolve(style, files=None):
+        seen_files.append(files)
+        return real_resolve(style, files)
+
+    checks = []
+
+    def bomb_first(font, text):
+        checks.append(text)
+        if len(checks) == 1:  # el primer intento, con la fuente del tema
+            raise Image.DecompressionBombError("glifo de 900 Mpx")
+        return real(font, text)
+
+    monkeypatch.setattr(servidor, "resolve_font", resolve)
+    monkeypatch.setattr(servidor, "missing_glyphs", bomb_first)
+    widgets = [{"type": "text", "text": "CPU ☃", "box": _box()}]
+    status, headers, _ = _preview(client, "mio", theme_dict(widgets=widgets))
+    assert status == 200
+    assert json.loads(headers["x-luzeira-missing-glyphs"]) == [{"index": 0, "chars": "☃"}]
+    assert len(checks) == 2
+    assert seen_files[-1] is None  # el segundo intento, sin la fuente del tema
+    assert _server_log_errors(caplog) == []
+
+
+@pytest.mark.parametrize("error", [Image.DecompressionBombError("x"), OSError("roto")])
+def test_preview_without_any_usable_font_has_no_warning_but_no_500(env, monkeypatch, error):
+    _, client, *_ = env
+
+    def always(font, text):
+        raise error
+
+    monkeypatch.setattr(servidor, "missing_glyphs", always)
+    widgets = [{"type": "text", "text": "CPU ☃", "box": _box()}]
+    status, headers, _ = _preview(client, "mio", theme_dict(widgets=widgets))
+    assert status == 200
+    assert json.loads(headers["x-luzeira-missing-glyphs"]) == []
+
+
+# --- Revisión ronda 3 ---------------------------------------------------------------------
+
+
+def test_denied_requests_dripping_a_body_do_not_hold_the_slots(tmp_path, monkeypatch):
+    """Cabeceras completas **sin token** y el cuerpo gota a gota: antes el 403 lo leía
+    entero sin plazo total (30 s por lectura, hasta 32 MB) y 32 conexiones así ocupaban
+    los huecos para siempre. Ahora sigue corriendo el plazo de las cabeceras."""
+    monkeypatch.setattr(servidor._HTTPServer, "max_connections", 4)
+    monkeypatch.setattr(servidor._Handler, "header_deadline", 1.0)
+    server = _server_with(tmp_path, lambda i: Reading(None, ""))
+    server.start()
+    socks = []
+    try:
+        for _ in range(4):
+            s = socket.create_connection(("127.0.0.1", server.port), timeout=5)
+            s.sendall(
+                f"POST /api/temas/mio/aplicar HTTP/1.1\r\nHost: 127.0.0.1:{server.port}\r\n"
+                "Content-Length: 1000\r\n\r\n".encode()
+            )
+            socks.append(s)
+        started = time.monotonic()
+        while time.monotonic() - started < 2.5:  # gotea más allá del plazo
+            for s in socks:
+                with contextlib.suppress(OSError):
+                    s.sendall(b"x")
+            time.sleep(0.3)
+        status, _ = Client(server).json("GET", "/api/info")
+        assert status == 200
+    finally:
+        for s in socks:
+            s.close()
+        server.stop()
+
+
+def test_denied_request_with_a_big_body_is_answered_without_reading_it(env):
+    """Sin token, un cuerpo de más de ``DENIED_DRAIN`` no se lee: 403 en el acto y la
+    conexión se cierra (antes se esperaba a leer hasta 32 MB)."""
+    server, *_ = env
+    sock = socket.create_connection(("127.0.0.1", server.port), timeout=5)
+    started = time.monotonic()
+    try:
+        sock.sendall(
+            f"POST /api/temas/mio/aplicar HTTP/1.1\r\nHost: 127.0.0.1:{server.port}\r\n"
+            f"Content-Length: {servidor.DENIED_DRAIN + 1}\r\n\r\n".encode()
+        )
+        data = sock.recv(65536)
+    finally:
+        sock.close()
+    assert _status_lines(data) == [b"HTTP/1.1 403 Forbidden"]
+    assert b"Connection: close" in data
+    assert time.monotonic() - started < 2  # sin esperar al plazo de las cabeceras (10 s)
+
+
+def test_body_bigger_than_max_drain_closes_the_connection(env, monkeypatch):
+    """Un cuerpo que no se lee (``aplicar``) y es mayor que ``MAX_DRAIN``: no se puede
+    tirar, así que la respuesta cierra la conexión (si no, envenena el keep-alive)."""
+    server, *_ = env
+    monkeypatch.setattr(servidor, "MAX_DRAIN", 10)
+    conn = http.client.HTTPConnection("127.0.0.1", server.port, timeout=10)
+    try:
+        conn.request(
+            "POST",
+            "/api/temas/completo/aplicar",
+            body=b"{}" + b" " * 98,
+            headers={"X-Luzeira-Token": server.token},
+        )
+        resp = conn.getresponse()
+        assert resp.status == 200
+        assert resp.getheader("Connection") == "close"
+        resp.read()
+    finally:
+        conn.close()
+
+
+class _EqualsOnceBoom:
+    """``dev_origin`` que revienta la primera vez que se compara (en ``_send``, con las
+    cabeceras del 200 ya en el búfer) y luego no es igual a nada."""
+
+    def __init__(self) -> None:
+        self.blown = False
+
+    def __eq__(self, other):
+        if not self.blown:
+            self.blown = True
+            raise RuntimeError("fallo a mitad de respuesta")
+        return False
+
+    __hash__ = object.__hash__
+
+
+def test_failure_mid_response_sends_one_status_line(env, caplog):
+    """Si algo falla con la respuesta a medio montar, el 500 sale **solo**: sin la línea
+    de estado del 200 que se quedó en el búfer (antes: «200 … 500» seguidos)."""
+    server, *_ = env
+    caplog.set_level(logging.DEBUG)
+    server.dev_origin = _EqualsOnceBoom()
+    data = _raw(
+        server,
+        (
+            f"GET /api/info HTTP/1.1\r\nHost: 127.0.0.1:{server.port}\r\n"
+            f"X-Luzeira-Token: {server.token}\r\nConnection: close\r\n\r\n"
+        ).encode(),
+    )
+    assert server.dev_origin.blown
+    assert _status_lines(data) == [b"HTTP/1.1 500 Internal Server Error"]

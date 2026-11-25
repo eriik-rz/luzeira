@@ -6,6 +6,7 @@ lo que se rompe sin que se note al mirar una sola página: el ``lang``, los
 que la política de privacidad en inglés tenga las mismas piezas que la española.
 """
 
+import importlib.util
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -145,3 +146,84 @@ def test_english_version_has_the_same_structure(rel):
         return [r for r in page.refs if urlsplit(r).scheme]
 
     assert external(en) == external(es)
+
+
+# --- Revisión de seguridad R1-06: CSP de la web y de la demo ----------------------------
+
+
+class _Csp(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.csp: list[str] = []
+        self.first_script_at: int | None = None
+        self.csp_at: int | None = None
+        self._n = 0
+
+    def handle_starttag(self, tag, attrs):
+        self._n += 1
+        a = dict(attrs)
+        if tag == "meta" and (a.get("http-equiv") or "").lower() == "content-security-policy":
+            self.csp.append(a.get("content") or "")
+            self.csp_at = self.csp_at or self._n
+        if tag == "script" and self.first_script_at is None:
+            self.first_script_at = self._n
+
+
+def _directives(csp: str) -> dict[str, list[str]]:
+    out = {}
+    for part in csp.split(";"):
+        words = part.split()
+        if words:
+            out[words[0]] = words[1:]
+    return out
+
+
+@pytest.mark.parametrize("rel", PAGES)
+def test_each_page_has_a_csp_without_scripts(rel):
+    page = _Csp()
+    page.feed((WEB / rel).read_text(encoding="utf-8"))
+    assert len(page.csp) == 1
+    rules = _directives(page.csp[0])
+    assert rules["script-src"] == ["'none'"]
+    assert rules["base-uri"] == ["'none'"]
+
+
+def _web_script():
+    spec = importlib.util.spec_from_file_location("web_script", REPO / "scripts" / "web.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_web_build_puts_the_csp_in_the_demo_before_any_script(tmp_path):
+    """La demo (GitHub Pages no deja poner cabeceras) lleva la CSP en un <meta>, delante
+    de cualquier <script>. Se prueba sobre una copia de ``editor/index.html``."""
+    web = _web_script()
+    index = tmp_path / "index.html"
+    index.write_bytes((REPO / "editor" / "index.html").read_bytes())
+    web.add_demo_csp(index)
+    page = _Csp()
+    page.feed(index.read_text(encoding="utf-8"))
+    assert page.csp == [web.DEMO_CSP]
+    assert page.first_script_at is not None and page.csp_at < page.first_script_at
+    rules = _directives(web.DEMO_CSP)
+    assert rules["default-src"] == ["'self'"]  # scripts: solo los suyos
+    assert rules["object-src"] == ["'none'"] and rules["base-uri"] == ["'none'"]
+    assert "frame-ancestors" not in rules  # en un <meta> no vale (y da un aviso)
+    assert "'unsafe-eval'" not in web.DEMO_CSP and "script-src" not in rules
+
+
+def test_web_build_fails_if_the_editor_page_changes_shape(tmp_path):
+    web = _web_script()
+    index = tmp_path / "index.html"
+    index.write_text("<!doctype html><meta charset=utf-8><script src=x.js></script>")
+    with pytest.raises(SystemExit):
+        web.add_demo_csp(index)
+
+
+def test_editor_index_has_no_csp_meta():
+    """En ``editor/index.html`` no: rompería ``npm run dev`` (Vite mete scripts en
+    línea). En la app la CSP la pone el servidor local; en la web, ``scripts/web.py``."""
+    page = _Csp()
+    page.feed((REPO / "editor" / "index.html").read_text(encoding="utf-8"))
+    assert page.csp == []

@@ -36,8 +36,11 @@ USER_PLACEHOLDER = "<usuario>"
 HOST_PLACEHOLDER = "<equipo>"
 
 # Cualquier carpeta de perfil «X:\Users\algo» (también de otros usuarios o con nombre
-# corto 8.3). El segmento del nombre termina en separador, espacio o comillas.
-_ANY_PROFILE = re.compile(r"""[A-Za-z]:[\\/]+Users[\\/]+[^\\/\s'"),;]+""", re.IGNORECASE)
+# corto 8.3). El segmento del nombre llega hasta el siguiente separador, comilla, salto
+# de línea o carácter que Windows no admite en un nombre. El espacio **no** lo corta (R4-12):
+# «C:\Users\Otro Usuario\x» quedaba «<usuario> Usuario\x». Si la ruta acaba sin separador
+# («… C:\Users\Otro Usuario y luego»), se tapa también lo que sigue: mejor de más que de menos.
+_ANY_PROFILE = re.compile(r"""[A-Za-z]:[\\/]+Users[\\/]+[^\\/\r\n\t'"<>|?*:),;]+""", re.IGNORECASE)
 
 _MARK = "_luzeira_handler"  # marca para reconocer nuestro handler al reconfigurar
 
@@ -107,7 +110,15 @@ class PrivacyFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         # El mensaje se «congela» ya formateado para limpiar también los argumentos.
-        record.msg = self.scrub(record.getMessage())
+        try:
+            message = record.getMessage()
+        except Exception:
+            # Argumentos que no casan con el mensaje (``log.warning("%s %s", x)``): sin el
+            # try, el TypeError saltaba en quien escribe el log (R4-12), porque los filtros
+            # van fuera de la protección de ``Handler.handleError``. Se guarda el texto sin
+            # los argumentos (que podrían llevar datos) y se avisa en la propia línea.
+            message = f"{record.msg} [argumentos del log que no casan]"
+        record.msg = self.scrub(message)
         record.args = None
         if record.exc_info:
             # El Formatter usa exc_text si ya existe: se deja aquí la versión limpia.

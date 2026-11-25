@@ -10,12 +10,14 @@
   "temas.fichero_grande": "{what} « {rel} » fait {size} Mo ; le maximum est {max} Mo.",
   "temas.tipo_falso": "{what} « {rel} » n’est pas vraiment un fichier .{ext}.",
   "temas.gif_largo": "Le GIF « {rel} » a plus de {max} images ; utilisez-en un plus court.",
+  "temas.gif_pesado": "Le GIF « {rel} » demande trop de mémoire à décoder (plus de {mpx} millions de pixels sur l’ensemble de ses images) ; utilisez-en un plus petit ou plus court.",
   "temas.imagen_enorme": "L’image « {rel} » mesure {width}x{height} pixels ; le maximum est {max}x{max}.",
   "temas.imagen_bomba": "L’image « {rel} » est trop volumineuse (bombe possible).",
   "temas.imagen_danada": "L’image « {rel} » est endommagée ou n’est pas une image valide.",
   "temas.imagen_extension": "L’image « {rel} » a une extension non autorisée.",
   "temas.fuente_danada": "La police « {rel} » est endommagée ou illisible.",
   "temas.fuente_falla": "La police « {rel} » est endommagée : elle n’arrive pas à dessiner du texte en taille {size}.",
+  "temas.fuente_enorme": "La police « {rel} » dessine des lettres disproportionnées : en taille {size}, elles sortent plus de {max} fois plus grandes que demandé.",
   "temas.pydantic.missing": "ce champ manque",
   "temas.pydantic.extra_forbidden": "champ inconnu (n’existe pas dans ce format)",
   "temas.pydantic.string_pattern_mismatch": "la valeur n’a pas le format attendu",
@@ -66,5 +68,6 @@
   "temas.zip.no_seguro": "Le zip n’est pas sûr : « {name} » {problem}.",
   "temas.zip.repetido": "Le zip contient le fichier « {rel} » en double.",
   "temas.zip.sale": "Le zip n’est pas sûr : « {name} » sort du dossier.",
-  "temas.zip.danado": "Impossible de lire « {name} » dans le zip : il est endommagé."
+  "temas.zip.danado": "Impossible de lire « {name} » dans le zip : il est endommagé.",
+  "temas.zip.inesperado": "Impossible d’importer « {name} » à cause d’une erreur inattendue."
 }

@@ -31,10 +31,12 @@ from PIL import Image
 from luzeira.idioma import Text
 from luzeira.pantallas.comun import (
     DisplayError,
+    ImageCut,
     Orientation,
     SerialFactory,
     Transport,
     open_probed,
+    write_all,
 )
 from luzeira.pantallas.rgb565 import to_rgb565_be
 
@@ -52,6 +54,13 @@ PICTURE_PACKET = 0x50  # primer byte de cada paquete de píxeles
 PACKET_PIXEL_BYTES = 63
 BRIGHTNESS_MAX = 500
 PROBE_BRIGHTNESS = 50  # % del brillo de la primera prueba (el servicio pone luego el suyo)
+# Plazo para una imagen entera (R5-04; ver ``comun.IMAGE_TIMEOUT``). Más largo que el de
+# las otras: una imagen completa son ~4.900 escrituras de 64 bytes y nadie ha medido cuánto
+# tarda en una Kipye de verdad [SIN MEDIR]. Sin plazo, el peor caso eran ~6,8 h.
+# ⚠ No se juntan paquetes en escrituras más grandes para ir más deprisa: los bytes serían
+# los mismos, pero no se sabe si la pantalla depende de recibir cada paquete en su propia
+# transferencia USB (sin una para probarlo, no se toca).
+IMAGE_TIMEOUT = 60.0
 
 
 def brightness_command(percent: int) -> bytes:
@@ -69,8 +78,11 @@ class KipyeRevD:
     # demuestra. Quien la elige tiene que confirmar que se ve bien (bandeja).
     verified = False
 
-    def __init__(self, transport: Transport) -> None:
+    def __init__(
+        self, transport: Transport, *, monotonic: Callable[[], float] = time.monotonic
+    ) -> None:
         self._transport = transport
+        self._monotonic = monotonic  # reloj del plazo por imagen
         self.device: str | None = None
         self.orientation = Orientation.PORTRAIT
         self._brightness = PROBE_BRIGHTNESS
@@ -107,15 +119,19 @@ class KipyeRevD:
     # --- comandos -------------------------------------------------------------
 
     def _write(self, data: bytes) -> None:
-        try:
-            self._transport.write(data)
-        except OSError as exc:
-            raise DisplayError(Text("pantallas.conexion_perdida")) from exc
+        write_all(self._transport, data)
 
     def _command(self, data: bytes) -> None:
-        """Una orden y, después, tirar la confirmación que manda la pantalla."""
+        """Una orden y, después, tirar la confirmación que manda la pantalla.
+
+        Vaciar la entrada también toca el puerto: con el USB desenchufado, pyserial lanza
+        ``SerialException`` (un ``OSError``) y sin el ``try`` mataba el hilo del servicio
+        en vez de pasar a reconectar (R5-05)."""
         self._write(data)
-        self._transport.reset_input_buffer()
+        try:
+            self._transport.reset_input_buffer()
+        except OSError as exc:
+            raise DisplayError(Text("pantallas.conexion_perdida")) from exc
 
     def probe(self) -> None:
         """La primera prueba: un brillo. Sin saludo en este protocolo, solo demuestra que
@@ -156,7 +172,10 @@ class KipyeRevD:
 
     def draw_image(self, image: Image.Image, x: int = 0, y: int = 0) -> None:
         """Pinta ``image`` con su esquina superior izquierda en (x, y); lo que se salga
-        se recorta."""
+        se recorta.
+
+        Si se corta a medias (o no sale en ``IMAGE_TIMEOUT``), la pantalla puede quedarse
+        en modo imagen esperando el resto: :class:`ImageCut`."""
         if not (0 <= x < self.width and 0 <= y < self.height):
             raise ValueError(
                 f"({x}, {y}) está fuera de la pantalla {self.width}x{self.height}"  # i18n: no
@@ -176,8 +195,14 @@ class KipyeRevD:
             x0, x1 = x, x + w - 1
             y0, y1 = y, y + h - 1
         self._command(WINDOW + b"".join(v.to_bytes(2, "big") for v in (x0, x1, y0, y1)))
-        self._command(PICTURE_START)
         data = to_rgb565_be(image)
-        for start in range(0, len(data), PACKET_PIXEL_BYTES):
-            self._write(bytes([PICTURE_PACKET]) + data[start : start + PACKET_PIXEL_BYTES])
-        self._command(PICTURE_END)
+        deadline = self._monotonic() + IMAGE_TIMEOUT
+        try:
+            self._command(PICTURE_START)
+            for start in range(0, len(data), PACKET_PIXEL_BYTES):
+                if self._monotonic() > deadline:
+                    raise DisplayError(Text("pantallas.conexion_perdida"))
+                self._write(bytes([PICTURE_PACKET]) + data[start : start + PACKET_PIXEL_BYTES])
+            self._command(PICTURE_END)
+        except DisplayError as exc:
+            raise ImageCut() from exc

@@ -19,6 +19,7 @@ from __future__ import annotations
 import contextlib
 import ctypes
 import logging
+import math
 import os
 import queue
 import sys
@@ -58,6 +59,7 @@ from luzeira.pantallas.modelos import (
     PortInfo,
     compatible_models,
     identify,
+    is_rev_c,
     list_ports,
     model_by_key,
 )
@@ -131,6 +133,10 @@ _UPDATE_FIRST_DELAY = 60.0  # s tras arrancar: que la pantalla se encienda prime
 _UPDATE_TICK = 3600.0  # s entre miradas al reloj
 _UPDATE_EVERY = 24 * 3600.0  # s entre comprobaciones automáticas
 _PORTS_TTL = 1.0  # s: reconstruir el menú no enumera los puertos varias veces seguidas
+# Otra copia de Luzeira pide abrir el editor (acceso directo del escritorio): como mucho una
+# petición cada este tiempo y una pendiente a la vez (R4-09). Cualquier proceso del usuario
+# puede señalar el aviso en bucle; sin tope llenaba la cola y robaba el foco sin parar.
+_EDITOR_REQUEST_GAP = 1.0  # s
 
 
 def choice_from_setting(setting: DisplaySetting | None) -> DisplayChoice | None:
@@ -231,6 +237,8 @@ class EditorSettings:
                         "action": None,
                     }
                 )
+            if is_rev_c(port):
+                continue  # 🔴 ni en modo avanzado (R5-02): su protocolo tiene órdenes de borrar
             for model in SUPPORTED:
                 advanced.append(
                     {
@@ -285,6 +293,8 @@ class EditorSettings:
         if autostart is not None:
             result = app._set_autostart(autostart)
             if result is None:
+                if app._autostart_error:
+                    raise EditorError(409, app._autostart_error)
                 raise EditorError(500, t(MSG_AUTOSTART_FAILED))
             if autostart and result == StartupState.BLOCKED:
                 raise EditorError(409, t(MSG_AUTOSTART_BLOCKED))
@@ -390,6 +400,8 @@ class TrayApp:
         # store: versión de Microsoft Store (paquete MSIX). Sin actualizador propio, sin
         # acceso del escritorio y con el inicio con Windows en Configuración (C-52).
         self._store = paquete.is_packaged() if store is None else store
+        # Motivo del último fallo de «Iniciar con Windows» que el usuario puede arreglar.
+        self._autostart_error: str | None = None
         self._pending_calls: queue.SimpleQueue[Callable[[], None]] = queue.SimpleQueue()
         # (estado, idioma.ident(mensaje)) del último estado: sin depender del idioma.
         self._last_notified: tuple[Status, object] | None = None
@@ -431,6 +443,11 @@ class TrayApp:
         self._editor_lock = threading.Lock()
         self._editor_request: tuple[int, str] | None = None
         self._editor_seq = 0
+        # Peticiones de abrir el editor desde otra copia (R4-09): una pendiente a la vez y
+        # como mucho una por segundo.
+        self._open_request_lock = threading.Lock()
+        self._open_request_pending = False
+        self._open_request_at = -math.inf
         self.editor = EditorLink(
             apply_theme=self._apply_from_editor,
             status=lambda: (self.service.status.value, self.service.message),
@@ -768,7 +785,9 @@ class TrayApp:
         return self._autostart_state() == StartupState.ON
 
     def _set_autostart(self, on: bool) -> StartupState | None:
-        """Lo activa o desactiva y devuelve cómo queda; ``None`` si falló."""
+        """Lo activa o desactiva y devuelve cómo queda; ``None`` si falló. Si el fallo
+        tiene un motivo que el usuario puede arreglar, queda en ``_autostart_error``."""
+        self._autostart_error = None
         try:
             if self._store:
                 return tarea_inicio.set_enabled(on)
@@ -776,6 +795,12 @@ class TrayApp:
                 autoarranque.enable(autoarranque.default_command())
             else:
                 autoarranque.disable()
+        except autoarranque.UnsafeAppFolder as exc:
+            # R4-06: otro usuario del PC podría cambiar el programa que arrancaría. El
+            # mensaje es para el usuario (dice qué hacer); al log no va la ruta.
+            log.warning("Inicio con Windows rechazado: la carpeta de la app no es segura.")
+            self._autostart_error = str(exc)
+            return None
         except Exception:
             log.exception("No se pudo cambiar el inicio con Windows")
             return None
@@ -785,7 +810,7 @@ class TrayApp:
         current = self._autostart_state()
         result = self._set_autostart(current != StartupState.ON)
         if result is None:
-            self._notify(t(MSG_AUTOSTART_FAILED))
+            self._notify(self._autostart_error or t(MSG_AUTOSTART_FAILED))
         elif result == StartupState.BLOCKED:
             self._notify(t(MSG_AUTOSTART_BLOCKED))
             self._open_startup_settings()
@@ -875,6 +900,24 @@ class TrayApp:
         self._asking = None
         self._asking_in_editor = False
         self._ask_looks_right(choice)
+
+    def _editor_requested(self, now: float | None = None) -> None:
+        """Otra copia pide abrir el editor (llega desde el hilo del aviso). Se pasa al hilo
+        del icono solo si no hay ya una petición pendiente y ha pasado
+        ``_EDITOR_REQUEST_GAP`` desde la última (R4-09): una señal en bucle no llena la cola
+        ni roba el foco más de una vez por segundo."""
+        now = time.monotonic() if now is None else now
+        with self._open_request_lock:
+            if self._open_request_pending or now - self._open_request_at < _EDITOR_REQUEST_GAP:
+                return
+            self._open_request_pending = True
+            self._open_request_at = now
+        self._post(self._safe(self._open_requested_editor))
+
+    def _open_requested_editor(self) -> None:
+        with self._open_request_lock:
+            self._open_request_pending = False
+        self._open_editor()
 
     def _open_editor(self) -> None:
         if not EditorLink.is_built():
@@ -1126,7 +1169,10 @@ class TrayApp:
             return Menu(*[Item(m.menu_label, pick(m, port, True)) for m in SUPPORTED])
 
         def advanced_items():
-            ports = self._ports()
+            # 🔴 Una rev C no sale ni aquí (R5-02): es el único protocolo de la familia con
+            # órdenes que borran, y un tema podría formarlas con sus píxeles si se le
+            # mandara el protocolo de otro modelo. Ya sale, deshabilitada, en la lista.
+            ports = [p for p in self._ports() if not is_rev_c(p)]
             if not ports:
                 yield Item(t("bandeja.menu_sin_puertos"), None, enabled=False)
             for port in ports:
@@ -1265,7 +1311,7 @@ class TrayApp:
         # El acceso directo del escritorio pide abrir el editor aunque Luzeira ya esté
         # abierta: otra copia señala el aviso y aquí se abre (en el hilo del icono).
         requests = EditorRequests()
-        requests.listen(lambda: self._post(self._safe(self._open_editor)))
+        requests.listen(self._editor_requested)
         if not power.start():
             log.warning("Sin avisos de suspensión: la pantalla no se apagará al suspender.")
         if not session.start():

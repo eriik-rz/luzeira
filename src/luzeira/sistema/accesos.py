@@ -11,6 +11,7 @@ el de la opción de la bandeja (también para la versión portable, que no tiene
 
 from __future__ import annotations
 
+import ctypes
 import os
 import subprocess
 import sys
@@ -60,11 +61,33 @@ def launch_command() -> LaunchCommand:
     return LaunchCommand(str(windowless if windowless.exists() else exe), "-m luzeira")
 
 
+def windows_dir() -> str:
+    """La carpeta de Windows, preguntada a Windows (``GetSystemWindowsDirectoryW``).
+
+    No se toma de ``%SYSTEMROOT%`` (R4-13): una variable de entorno la puede cambiar quien
+    lance Luzeira, y con ella qué PowerShell se ejecuta.
+    Fuente: «GetSystemWindowsDirectoryW», Microsoft Learn (consultada 2026-11-24),
+    https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getsystemwindowsdirectoryw
+    """
+    if sys.platform == "win32":
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.GetSystemWindowsDirectoryW.restype = ctypes.c_uint32
+        kernel32.GetSystemWindowsDirectoryW.argtypes = [ctypes.c_wchar_p, ctypes.c_uint32]
+        buffer = ctypes.create_unicode_buffer(_MAX_PATH)
+        length = kernel32.GetSystemWindowsDirectoryW(buffer, _MAX_PATH)
+        # 0 es error; >= tamaño, que no cabía (no pasa con MAX_PATH, pero se comprueba).
+        if 0 < length < _MAX_PATH:
+            return buffer.value
+    return r"C:\Windows"
+
+
+_MAX_PATH = 260
+
+
 def _powershell() -> str:
     """PowerShell de Windows por su ruta completa: por nombre, Windows lo buscaría antes en
     la carpeta actual y en la de la app."""
-    system_root = os.environ.get("SYSTEMROOT", r"C:\Windows")
-    return str(Path(system_root) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe")
+    return str(Path(windows_dir()) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe")
 
 
 def create_shortcut(

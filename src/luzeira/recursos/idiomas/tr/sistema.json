@@ -10,10 +10,13 @@
   "sistema.actualizar_descarga_grande": "İndirilen dosya beklenenden büyük.",
   "sistema.actualizar_no_puede": "Luzeira'nın bu kopyası güncellemeleri denetleyemez.",
   "sistema.actualizar_instalador_distinto": "İndirilen yükleyici imzalı olanla eşleşmiyor. Açmıyorum.",
+  "sistema.actualizar_elevada": "Luzeira yönetici olarak çalışıyor ve bu şekilde güncellenmez. Kapatın, normal şekilde açın ve tekrar deneyin.",
+  "sistema.actualizar_lenta": "GitHub'dan indirme çok yavaş. Daha sonra tekrar deneyin.",
   "sistema.ventana_titulo": "Luzeira — Tema düzenleyici",
   "sistema.ventana_sin_guardar": "Kaydedilmemiş değişiklikler var ({reason}). Yine de kapatılsın mı?",
   "sistema.ventana_pendiente_errores": "kırmızıyla işaretli hatalar var",
   "sistema.ventana_pendiente_incluido": "bunlar yerleşik bir temadaki değişiklikler; saklamak için “Farklı kaydet” kullan",
   "sistema.ventana_pendiente_fallo": "kaydedilemedi",
-  "sistema.ventana_pendiente_desconocido": "kaydedilecek bir şey kalıp kalmadığı kontrol edilemedi"
+  "sistema.ventana_pendiente_desconocido": "kaydedilecek bir şey kalıp kalmadığı kontrol edilemedi",
+  "sistema.autoarranque_carpeta_insegura": "Windows ile başlatmayı açmıyorum: bu bilgisayarın diğer kullanıcıları Luzeira'nın klasörünü değiştirebilir. Taşınabilir sürümü kendi klasörlerinden birine (örneğin Belgeler) yeniden aç; taşımak yetmez, çünkü izinlerini korur. Ya da yükleyiciyi kullan."
 }

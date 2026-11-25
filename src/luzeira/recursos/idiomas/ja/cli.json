@@ -29,5 +29,6 @@
   "cli.editor_modo": "エディター モード: 現在ディスプレイは使用していません。",
   "cli.editor_desarrollo": "開発中のエディター: {url} を開いてください",
   "cli.editor_api": "(API: {url})。Ctrl+C で停止します。",
+  "cli.editor_puerto_ocupado": "{url} ではエディターの Vite ではない別のプログラムが動いています。トークンは表示しません。そのプログラムを閉じて、editor/ で「npm run dev」を実行してください。",
   "cli.editor_sin_compilar": "エディターがビルドされていません。editor/ で「npm run build」を実行してください。"
 }

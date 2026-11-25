@@ -10,10 +10,13 @@
   "sistema.actualizar_descarga_grande": "下载的文件比预期的大。",
   "sistema.actualizar_no_puede": "此 Luzeira 副本无法检查更新。",
   "sistema.actualizar_instalador_distinto": "下载的安装程序与签名的不一致。不会打开它。",
+  "sistema.actualizar_elevada": "Luzeira 正以管理员身份运行，这种情况下不会更新。请关闭它，以普通方式重新打开后再试。",
+  "sistema.actualizar_lenta": "从 GitHub 下载太慢了。请稍后再试。",
   "sistema.ventana_titulo": "Luzeira — 主题编辑器",
   "sistema.ventana_sin_guardar": "有未保存的更改（{reason}）。仍要关闭吗？",
   "sistema.ventana_pendiente_errores": "有标红的错误",
   "sistema.ventana_pendiente_incluido": "这些是对内置主题的更改；要保留它们，请用“另存为”",
   "sistema.ventana_pendiente_fallo": "保存失败",
-  "sistema.ventana_pendiente_desconocido": "无法确认是否还有未保存的内容"
+  "sistema.ventana_pendiente_desconocido": "无法确认是否还有未保存的内容",
+  "sistema.autoarranque_carpeta_insegura": "未开启开机启动：这台电脑的其他用户可以修改 Luzeira 所在的文件夹。请把便携版重新解压到你自己的文件夹（例如“文档”）中；只移动是不够的，因为它会保留原来的权限。也可以使用安装程序。"
 }

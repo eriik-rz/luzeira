@@ -22,7 +22,7 @@ import logging
 import math
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
@@ -39,11 +39,12 @@ from luzeira.pantallas import (
     DisplayError,
     ModelToConfirm,
     Orientation,
-    TuringRevA,
     UnsupportedModel,
     WrongModel,
 )
-from luzeira.pantallas.apertura import open_auto, open_chosen
+from luzeira.pantallas.apertura import open_auto, open_chosen, open_confirmed_rev_a
+from luzeira.pantallas.comun import ImageCut
+from luzeira.pantallas.modelos import list_ports as list_system_ports
 from luzeira.render import Renderer
 from luzeira.sensores import default_hub
 from luzeira.sensores.base import Reading
@@ -96,12 +97,24 @@ class Timings:
     vuelve a estar disponible, y el peor caso es tope + abrir (~0,2 s) + ``warmup`` (1 s)
     + imagen completa (1,34 s medidos). Con 5 s quedaban ~7,5 s; con 3 s, ~5,5 s, y un
     intento cada 3 s (una enumeración de puertos) no se nota en la CPU.
+
+    ``failures_before_long`` / ``backoff_long`` (R5-09): tras tantos fallos seguidos con
+    una pantalla que está ahí (el puerto se abre o se pierde a medias; «no la encuentro» no
+    cuenta: no se le manda nada), no se sigue abriéndola cada 3 s (cada apertura reinicia
+    la rev A y le manda el saludo): se espera ``backoff_long`` y se pide desenchufarla. Si
+    mientras tanto cambia la lista de puertos (se desenchufa o se enchufa algo; se mira cada
+    ``backoff_start``, sin abrir nada), se vuelve a intentar al momento.
+
+    ``render_retry_max``: tope de la espera entre intentos cuando falla el render (R2-02).
     """
 
     tick: float = 1.0
     warmup: float = 1.0  # espera antes de la primera imagen: velocidades con intervalo real
     backoff_start: float = 1.0
     backoff_max: float = 3.0
+    failures_before_long: int = 10
+    backoff_long: float = 30.0
+    render_retry_max: float = 30.0
 
 
 class Display(Protocol):
@@ -147,13 +160,14 @@ def open_once(port: str | None) -> Display:
     poder atender a ``stop()`` ni a ``suspend()``. Aquí los reintentos los hace el
     servicio con esperas interrumpibles.
 
-    ``port`` = el usuario ha confirmado que ahí hay una rev A. Sin él, detección
-    (``pantallas.apertura.open_auto``): se decide con lo que Windows ya sabe del USB, sin
-    enviar bytes, y solo se abre (y se le manda algo) a una pantalla que su número de serie
-    identifica sin duda: la rev A, igual que siempre, o la rev B.
+    ``port`` = el usuario ha confirmado que ahí hay una rev A: se abre y se comprueba su
+    saludo (un eco o una respuesta que no es de rev A → ``WrongModel``, R5-06). Sin él,
+    detección (``pantallas.apertura.open_auto``): se decide con lo que Windows ya sabe del
+    USB, sin enviar bytes, y solo se abre (y se le manda algo) a una pantalla que su número
+    de serie identifica sin duda: la rev A, igual que siempre, o la rev B.
     """
     if port is not None:
-        return TuringRevA.open(port, retries=1)
+        return open_confirmed_rev_a(port)
     return open_auto()
 
 
@@ -169,6 +183,7 @@ MSG_SUSPENDED = "pantallas.estado_en_reposo"
 MSG_STOPPED = "pantallas.estado_parada"
 MSG_RETRYING = "pantallas.estado_reintentando"
 MSG_ERROR = "pantallas.estado_error"
+MSG_REPLUG = "pantallas.estado_desenchufar"
 
 
 def _with_retrying(text: str) -> Text:
@@ -212,8 +227,10 @@ class DisplayService:
         monotonic: Callable[[], float] = time.monotonic,
         on_status: StatusCallback = lambda status, message: None,
         timings: Timings = Timings(),
+        list_ports: Callable[[], Iterable] = list_system_ports,
     ) -> None:
         self._open_display = open_display
+        self._list_ports = list_ports  # solo enumera (no abre nada): ver ``_parked``
         self._open_choice = open_choice
         self._make_hub = make_hub
         self._monotonic = monotonic
@@ -256,6 +273,12 @@ class DisplayService:
         self._next_tick = 0.0
         self._retry_at = 0.0
         self._backoff = timings.backoff_start
+        self._failures = 0  # fallos seguidos con la pantalla ahí (R5-09)
+        # Esperando a que la desenchufen (R5-03/R5-09): la lista de puertos de cuando se
+        # pidió y hasta cuándo se espera como mucho. None: no se espera nada.
+        self._parked: frozenset | None = None
+        self._parked_until = 0.0
+        self._render_failures = 0  # fallos seguidos del render (R2-02)
 
     # --- API thread-safe -------------------------------------------------------------
 
@@ -293,8 +316,9 @@ class DisplayService:
 
     def stop(self) -> None:
         """Pide parar. ``run()`` apaga la pantalla, suelta puerto y sensores y termina
-        (< 2 s salvo que el USB esté colgado en mitad de una escritura: entonces hasta
-        el ``WRITE_TIMEOUT`` del driver, 5 s)."""
+        (< 2 s salvo que esté en mitad de una imagen: la orden se ve al acabarla, y una
+        imagen la corta el driver como mucho a su ``IMAGE_TIMEOUT`` más un ``WRITE_TIMEOUT``
+        de 5 s si el USB se cuelga en la última escritura)."""
         with self._cond:
             self._stop_requested = True
             self._bump()
@@ -438,8 +462,11 @@ class DisplayService:
                 self._wait(None)
                 continue
             if kick:
+                # Una orden del usuario (o volver del reposo): se intenta ya, y de cero.
                 self._retry_at = 0.0
                 self._backoff = self._t.backoff_start
+                self._failures = 0
+                self._parked = None
             if self._renderer is None:
                 error = self._theme_error or Text("pantallas.estado_tema_no_vale")
                 self._set(Status.THEME_ERROR, error)
@@ -465,6 +492,11 @@ class DisplayService:
         now = self._monotonic()
         if now < self._retry_at:
             self._wait(self._retry_at - now)
+            return
+        if self._parked is not None and not self._unpark(now):
+            # Sigue esperando a que la desenchufen: se vuelve a mirar la lista de puertos
+            # (sin abrir nada) dentro de un rato.
+            self._retry_at = now + self._t.backoff_start
             return
         try:
             display, opened_with = self._open()
@@ -497,6 +529,10 @@ class DisplayService:
             return
         except DisplayError as exc:
             self._schedule_retry()
+            # Solo cuentan los fallos con la pantalla ahí (el puerto existe y se ha intentado
+            # abrir o saludar). «No la encuentro» u «ocupada» no le mandan nada.
+            if exc.says_retrying and self._count_failure():
+                return
             self._set(Status.NO_DISPLAY, _no_display_message(exc))
             return
         self._display = display
@@ -514,7 +550,10 @@ class DisplayService:
         except DisplayError as exc:
             self._lost(exc)
             return
-        self._hub_poll()
+        try:
+            self._hub_poll()
+        except Exception as exc:  # lo mismo que en _step (R2-02): ya se reintenta allí
+            log.warning("Fallo al leer los sensores (%s).", type(exc).__name__)
         self._needs_full = True
         self._full_at = self._monotonic() + self._t.warmup
         self._set(Status.STARTING, Text(MSG_CONNECTING))
@@ -542,6 +581,46 @@ class DisplayService:
         self._retry_at = self._monotonic() + self._backoff
         self._backoff = min(self._backoff * 2, self._t.backoff_max)
 
+    def _count_failure(self) -> bool:
+        """Apunta un fallo con la pantalla ahí. Al llegar a ``failures_before_long`` (y en
+        cada fallo después, hasta que algo vaya bien), se deja de abrirla cada pocos
+        segundos: se pide desenchufarla y se espera (R5-09). True si ha pasado eso (el
+        estado ya está puesto)."""
+        self._failures += 1
+        if self._failures < self._t.failures_before_long:
+            return False
+        self._park(Text(MSG_REPLUG))
+        return True
+
+    def _park(self, message: Text | str) -> None:
+        """No abrir la pantalla hasta que cambie la lista de puertos (desenchufar, enchufar)
+        o pase ``backoff_long``. Una orden del usuario también lo deshace (``kick``)."""
+        self._parked = self._port_snapshot() or frozenset()
+        now = self._monotonic()
+        self._parked_until = now + self._t.backoff_long
+        self._retry_at = now + self._t.backoff_start
+        self._set(Status.NO_DISPLAY, message)
+
+    def _unpark(self, now: float) -> bool:
+        """¿Se puede volver a intentar? Sí si ha pasado la espera larga o si la lista de
+        puertos ha cambiado (y entonces, además, se empieza de cero)."""
+        if now < self._parked_until:
+            snapshot = self._port_snapshot()
+            if snapshot is None or snapshot == self._parked:
+                return False
+            self._failures = 0  # la han desenchufado o han enchufado algo: de cero
+            self._backoff = self._t.backoff_start
+        self._parked = None
+        return True
+
+    def _port_snapshot(self) -> frozenset | None:
+        """Qué puertos hay ahora (sin abrir ninguno). None si no se ha podido leer."""
+        try:
+            return frozenset((p.device, p.usb_id, p.serial) for p in self._list_ports())
+        except Exception as exc:
+            log.warning("No se pudo leer la lista de puertos (%s).", type(exc).__name__)
+            return None
+
     def _step(self) -> None:
         """Con la pantalla abierta: imagen completa pendiente o un tick normal."""
         display, renderer = self._display, self._renderer
@@ -552,14 +631,26 @@ class DisplayService:
         if now < target:
             self._wait(target - now)
             return
+        full = self._needs_full
         try:
+            # 🔴 Sensores y render, aparte de la pantalla (R2-02): un fallo aquí (un bug, o
+            # un tema que hace explotar Pillow con una imagen o una fuente trampa) no puede
+            # tumbar el servicio y dejar la pantalla colgada.
             self._hub_poll()
-            if self._needs_full:
-                display.draw_image(renderer.full_frame())
+            frame = renderer.full_frame() if full else None
+            patches = [] if full else renderer.changed()
+        except Exception as exc:
+            self._render_failed(exc)
+            return
+        self._render_failures = 0
+        try:
+            if full:
+                display.draw_image(frame)
                 self._needs_full = False
                 # Solo una conexión que llega a mostrar imagen reinicia la espera: si el
                 # puerto abre pero la pantalla falla siempre, la espera sigue creciendo.
                 self._backoff = self._t.backoff_start
+                self._failures = 0
                 self._next_tick = self._monotonic() + self._t.tick
                 self._set(Status.RUNNING, self._running_message())
                 return
@@ -568,10 +659,23 @@ class DisplayService:
                 # Nos hemos quedado atrás (PC suspendido o envío lento): no hacer una
                 # ráfaga de ticks para «ponerse al día», seguir desde ahora.
                 self._next_tick = now + self._t.tick
-            for patch in renderer.changed():
+            for patch in patches:
                 display.draw_image(patch.image, patch.x, patch.y)
         except DisplayError as exc:
             self._lost(exc)
+
+    def _render_failed(self, exc: Exception) -> None:
+        """El render (o los sensores) ha fallado: se deja la última imagen en pantalla, se
+        avisa y se reintenta con una imagen entera, con espera creciente (``tick``, el
+        doble… hasta ``render_retry_max``), nunca en bucle. En el log solo va el tipo de
+        error: su texto puede llevar rutas con el nombre de usuario."""
+        self._render_failures += 1
+        if self._render_failures == 1:
+            log.warning("Fallo al preparar la imagen del tema (%s).", type(exc).__name__)
+        delay = min(self._t.tick * 2 ** (self._render_failures - 1), self._t.render_retry_max)
+        self._needs_full = True
+        self._full_at = self._monotonic() + delay
+        self._set(Status.THEME_ERROR, _theme_message(self._loaded_dir or Path("?"), exc))
 
     def _hub_poll(self) -> None:
         if self._hub is not None:
@@ -579,9 +683,17 @@ class DisplayService:
 
     def _lost(self, exc: DisplayError) -> None:
         """Se ha perdido la pantalla: cerrar sin intentar SCREEN_OFF (con el USB colgado,
-        cada escritura esperaría el WRITE_TIMEOUT) y reintentar con espera creciente."""
+        cada escritura esperaría el WRITE_TIMEOUT) y reintentar con espera creciente.
+
+        Con una imagen cortada en una pantalla beta (:class:`ImageCut`) no se reabre a
+        ciegas: el saludo se tomaría por píxeles. Se pide desenchufarla y se espera."""
         self._disconnect(screen_off=False)
         self._schedule_retry()
+        if isinstance(exc, ImageCut):
+            self._park(message_of(exc))
+            return
+        if self._count_failure():
+            return
         self._set(Status.NO_DISPLAY, _with_retrying(message_of(exc)))
 
     def _disconnect(self, *, screen_off: bool) -> None:

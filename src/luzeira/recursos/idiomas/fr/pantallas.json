@@ -15,6 +15,8 @@
   "pantallas.no_puedo_abrir": "Je ne peux pas ouvrir l’écran ({device}).",
   "pantallas.no_puedo_abrir_reintento": "Je ne peux pas ouvrir l’écran ({device}). Je continue d’essayer.",
   "pantallas.conexion_perdida": "La connexion avec l’écran a été perdue. Le câble USB a-t-il été débranché ?",
+  "pantallas.imagen_cortada": "L’image s’est arrêtée à mi-chemin et l’écran attend peut-être encore la suite. Débranchez-le puis rebranchez-le : je réessaierai dès que vous le rebrancherez, ou sinon d’ici un moment.",
+  "pantallas.estado_desenchufar": "L’écran ne répond pas après de nombreux essais. Débranchez-le puis rebranchez-le ; en attendant, je réessaierai de temps en temps.",
   "pantallas.estado_arrancando": "Démarrage de Luzeira…",
   "pantallas.estado_conectando": "Écran trouvé. Préparation de l’image…",
   "pantallas.estado_en_reposo": "Écran éteint pendant la mise en veille de l’ordinateur.",

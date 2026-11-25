@@ -5,11 +5,16 @@ habla con tres bibliotecas que vienen con Windows usando ``ctypes`` (el módulo 
 para llamar a funciones de una DLL escrita en C):
 
 - **PDH** (``pdh.dll``), los contadores de rendimiento: el uso de cada motor de la GPU y
-  la memoria dedicada usada. Son los mismos datos que enseña el Administrador de tareas.
-- **DXGI** (``dxgi.dll``): la lista de tarjetas con su nombre y su memoria total.
-- **D3DKMT** (``gdi32.dll``): temperatura, ventilador y frecuencia, **si el controlador
-  los da**. Esta vía no está documentada para programas normales (ver ``_KMT_*``): puede
-  fallar o cambiar con Windows, y entonces esos sensores salen sin valor y con su motivo.
+  la memoria usada (dedicada y compartida). Son los mismos datos que enseña el
+  Administrador de tareas.
+- **DXGI** (``dxgi.dll``): la lista de tarjetas con su nombre y su memoria total; y
+  **DXCore** (``dxcore.dll``), solo para saber si cada una es integrada.
+- **D3DKMT** (``gdi32.dll``): temperatura, ventilador, frecuencia y dirección PCI, **si
+  el controlador los da**. Esta vía no está documentada para programas normales (ver
+  ``_KMT_*``): puede fallar o cambiar con Windows, y entonces esos sensores salen sin
+  valor y con su motivo.
+
+En una gráfica integrada la memoria cuenta dedicada + compartida (``is_integrated``).
 
 Abrir PDH tarda ~1 s (expande cientos de instancias), así que se hace en un hilo aparte la
 primera vez que se necesita. Mientras, los sensores dicen «La GPU aún no está lista.».
@@ -24,7 +29,7 @@ import re
 import threading
 import time
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
 from luzeira.idioma import t
@@ -91,6 +96,11 @@ class Adapter:
     vendor_id: int
     dedicated_bytes: int
     software: bool  # «Microsoft Basic Render Driver» y similares: no es una GPU real
+    # Memoria del sistema que la tarjeta puede usar (``SharedSystemMemory`` de DXGI).
+    shared_bytes: int = 0
+    # Si Windows dice que es una gráfica integrada (DXCore ``IsIntegrated``); ``None`` si
+    # no lo pudo decir (Windows anterior a 2004, o la entrada repetida de DXGI).
+    integrated: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -99,6 +109,10 @@ class PdhSample:
 
     engines: dict[str, float]  # «GPU Engine(*)\\Utilization Percentage»
     dedicated: dict[str, float]  # «GPU Adapter Memory(*)\\Dedicated Usage», en bytes
+    # «GPU Adapter Memory(*)\\Shared Usage», en bytes. Solo cuenta en las integradas.
+    # ``field(default_factory=dict)``: un valor por defecto mutable se crea nuevo en cada
+    # objeto (con ``= {}`` todos compartirían el mismo diccionario).
+    shared: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -131,6 +145,11 @@ class KmtAdapter(Protocol):
     def perf_caps(self) -> PerfCaps: ...
 
     def clock_hz(self) -> int: ...
+
+    def pci_address(self) -> tuple[int, int, int]:
+        """Bus, dispositivo y función PCI de la tarjeta, tal como los da Windows (sin
+        comprobar: eso lo hace ``valid_pci_address``)."""
+        ...
 
     def close(self) -> None: ...
 
@@ -175,7 +194,8 @@ def engine_usage(engines: dict[str, float]) -> dict[int, float]:
 
 
 def dedicated_usage(dedicated: dict[str, float]) -> dict[int, float]:
-    """Memoria dedicada usada por tarjeta (bytes), sumando sus adaptadores físicos."""
+    """Memoria usada por tarjeta (bytes), sumando sus adaptadores físicos. Sirve igual
+    para la dedicada y para la compartida: las instancias se llaman igual."""
     out: dict[int, float] = {}
     for name, value in dedicated.items():
         m = _ADAPTER.search(name)
@@ -192,13 +212,19 @@ def choose_adapter(adapters: Iterable[Adapter], pdh_luids: set[int]) -> Adapter 
     - Solo valen los que PDH conoce: DXGI puede listar una tarjeta repetida con otro LUID
       sin datos en PDH (medido con una RTX 4070 SUPER). Si PDH no conoce ninguno (PDH no
       va), se usan todos los de hardware: al menos habrá nombre, total y temperatura.
-    - Entre las que quedan, la de más memoria dedicada (en un portátil con gráfica
-      integrada y dedicada, la dedicada). A igualdad, la primera de DXGI.
+    - Una dedicada gana siempre a una integrada (``is_integrated``), aunque la integrada
+      declare más memoria: una APU con mucha memoria reservada en la BIOS no debe tapar
+      a la tarjeta dedicada del mismo equipo.
+    - Entre las del mismo tipo, la de más memoria dedicada. A igualdad, la primera de DXGI.
     """
     best: Adapter | None = None
+    best_key: tuple[bool, int] | None = None
     for a in _candidates(adapters, pdh_luids):
-        if best is None or a.dedicated_bytes > best.dedicated_bytes:
-            best = a
+        # Las tuplas se comparan elemento a elemento: primero «es dedicada» (True > False),
+        # y solo si empatan, la memoria.
+        key = (not is_integrated(a), a.dedicated_bytes)
+        if best_key is None or key > best_key:
+            best, best_key = a, key
     return best
 
 
@@ -212,13 +238,57 @@ def _candidates(adapters: Iterable[Adapter], pdh_luids: set[int]) -> list[Adapte
 def same_vendor_count(adapters: Iterable[Adapter], pdh_luids: set[int], chosen: Adapter) -> int:
     """Cuántas tarjetas candidatas son del mismo fabricante que la elegida (ella incluida).
 
-    Sirve para no mezclar fuentes con dos NVIDIA: NVML lee la suya (la 0 de NVML) y
-    Windows la de más memoria, y no hay forma barata de saber si son la misma. Con una
-    sola NVIDIA, sí lo son seguro. La entrada repetida que lista DXGI sin datos en PDH no
-    cuenta (no es candidata); si PDH no va, sí cuenta, y entonces no se mezcla: mejor
-    «sin dato» que el dato de otra tarjeta.
+    Sirve para no mezclar fuentes con dos NVIDIA cuando no se sabe la dirección PCI de
+    alguna de las dos (con ella, ``gpu.GpuSource`` compara direcciones): NVML lee la suya
+    (la 0 de NVML) y Windows la de más memoria. Con una sola NVIDIA, son la misma seguro.
+    La entrada repetida que lista DXGI sin datos en PDH no cuenta (no es candidata); si
+    PDH no va, sí cuenta, y entonces no se mezcla: mejor «sin dato» que el dato de otra
+    tarjeta.
     """
     return sum(1 for a in _candidates(adapters, pdh_luids) if a.vendor_id == chosen.vendor_id)
+
+
+# Por debajo de esto, una tarjeta de la que Windows no dice si es integrada se toma como
+# integrada (solo cuando DXCore no responde: ver ``is_integrated``).
+INTEGRATED_GUESS_BYTES = _GIB
+
+
+def is_integrated(adapter: Adapter) -> bool:
+    """Si la tarjeta es una gráfica integrada (Intel UHD/Iris, AMD APU).
+
+    Manda lo que dice Windows (DXCore ``IsIntegrated``, documentado en Microsoft Learn
+    desde Windows 10 2004). Si Windows no lo dice, una regla prudente: menos de 1 GiB de
+    memoria dedicada **y** memoria compartida declarada. El umbral de 1 GiB es una
+    estimación **sin medir**: no hay ninguna integrada a mano para comprobar cuánta
+    memoria dedicada declara. Equivocarse con una dedicada antigua de menos de 1 GiB solo
+    haría que su total contara también la compartida, como el «Memoria de GPU» del
+    Administrador de tareas.
+    """
+    if adapter.integrated is not None:
+        return adapter.integrated
+    return 0 < adapter.dedicated_bytes < INTEGRATED_GUESS_BYTES and adapter.shared_bytes > 0
+
+
+def memory_total_bytes(adapter: Adapter, integrated: bool) -> int:
+    """Memoria total que se enseña: en una integrada, dedicada + compartida (la dedicada
+    sola es una reserva diminuta y el % saldría absurdo); en una dedicada, la dedicada."""
+    if integrated:
+        return adapter.dedicated_bytes + adapter.shared_bytes
+    return adapter.dedicated_bytes
+
+
+def valid_pci_address(raw: tuple[int, int, int]) -> tuple[int, int, int] | None:
+    """La dirección PCI si es posible, ``None`` si no.
+
+    Windows responde «bien» también para las tarjetas sin dirección (la entrada repetida
+    de DXGI y el Basic Render Driver), pero con todo a unos: bus 0xFFFFFFFF y dispositivo
+    y función 0xFFFF (medido en Windows 10 19045). PCI admite como mucho bus 255,
+    dispositivo 31 y función 7.
+    """
+    bus, device, function = raw
+    if 0 <= bus <= 255 and 0 <= device <= 31 and 0 <= function <= 7:
+        return (bus, device, function)
+    return None
 
 
 def clean_name(raw: str) -> str:
@@ -240,6 +310,8 @@ class _Started:
     kmt: KmtAdapter | None
     caps: PerfCaps | None
     same_vendor: int = 1  # ver ``same_vendor_count``
+    pci: tuple[int, int, int] | None = None  # bus, dispositivo, función (si se sabe)
+    integrated: bool = False  # ver ``is_integrated``
 
 
 class WindowsGpuSource:
@@ -296,6 +368,13 @@ class WindowsGpuSource:
         if started is None or started.same_vendor != 1:
             return None
         return started.adapter.vendor_id
+
+    @property
+    def pci_address(self) -> tuple[int, int, int] | None:
+        """Bus, dispositivo y función PCI de la tarjeta elegida; ``None`` si aún no hay
+        tarjeta o Windows no la da. Sirve para saber si es la misma que lee NVML."""
+        started = self._started
+        return started.pci if started is not None else None
 
     # --- arranque ---
 
@@ -394,9 +473,26 @@ class WindowsGpuSource:
             if counters is not None:
                 _quiet_close(counters)
             raise LookupError("sin tarjeta de hardware")
-        kmt, caps = self._open_kmt(api, adapter)
+        return self._make_started(api, counters, adapters, pdh_luids, adapter)
+
+    def _make_started(
+        self,
+        api: WindowsGpuApi,
+        counters: PdhCounters | None,
+        adapters: list[Adapter],
+        pdh_luids: set[int],
+        adapter: Adapter,
+    ) -> _Started:
+        """Abre D3DKMT para la tarjeta elegida y junta todo lo que se sabe de ella."""
+        kmt, caps, pci = self._open_kmt(api, adapter)
         return _Started(
-            counters, adapter, kmt, caps, same_vendor_count(adapters, pdh_luids, adapter)
+            counters,
+            adapter,
+            kmt,
+            caps,
+            same_vendor_count(adapters, pdh_luids, adapter),
+            pci,
+            is_integrated(adapter),
         )
 
     def _open_kmt(self, api: WindowsGpuApi, adapter: Adapter):
@@ -404,13 +500,19 @@ class WindowsGpuSource:
             kmt = api.open_adapter(adapter.luid)
         except Exception as exc:
             self._log_kmt(exc)
-            return None, None
+            return None, None, None
         try:
             caps = kmt.perf_caps()
         except Exception as exc:
             self._log_kmt(exc)
             caps = None
-        return kmt, caps
+        try:
+            # Se pregunta una vez: la dirección de una tarjeta no cambia mientras existe.
+            pci = valid_pci_address(kmt.pci_address())
+        except Exception as exc:
+            log.debug("Windows no da la dirección PCI de la GPU (%s).", type(exc).__name__)
+            pci = None
+        return kmt, caps, pci
 
     def _log_kmt(self, exc: Exception) -> None:
         if not self._logged_kmt:
@@ -497,11 +599,23 @@ class WindowsGpuSource:
             if luid in usage
             else Reading(None, "%", reason=t(NOT_SUPPORTED))
         )
-        if luid in memory:
-            out[used_id] = Reading(round(memory[luid] / _GIB, 2), "GB")
-            total = started.adapter.dedicated_bytes
+        used = memory.get(luid)
+        if used is not None and started.integrated:
+            # Integrada: como el «Memoria de GPU» del Administrador de tareas, dedicada +
+            # compartida. Sin la compartida no se enseña nada: la usada y la total tienen
+            # que contar lo mismo.
+            shared = dedicated_usage(sample.shared).get(luid)
+            used = used + shared if shared is not None else None
+        if used is not None:
+            total = memory_total_bytes(started.adapter, started.integrated)
+            # La usada nunca pasa de la total. En una integrada podría: según Learn,
+            # ``SharedSystemMemory`` no cuenta la memoria «incidental» del controlador, y
+            # PDH sí. En una dedicada no se ha visto nunca (el % ya tenía este tope).
+            if total > 0:
+                used = min(used, float(total))
+            out[used_id] = Reading(round(used / _GIB, 2), "GB")
             out[mem_pct_id] = (
-                Reading(round(min(memory[luid] / total * 100, 100.0), 1), "%")
+                Reading(round(used / total * 100, 1), "%")
                 if total > 0
                 else Reading(None, "%", reason=t(NOT_SUPPORTED))
             )
@@ -510,7 +624,7 @@ class WindowsGpuSource:
             out[mem_pct_id] = Reading(None, "%", reason=t(NOT_SUPPORTED))
 
     def _put_total(self, started: _Started, out: dict[str, Reading]) -> None:
-        total = started.adapter.dedicated_bytes
+        total = memory_total_bytes(started.adapter, started.integrated)
         out[self._id("memory_total")] = (
             Reading(round(total / _GIB, 2), "GB")
             if total > 0
@@ -535,10 +649,8 @@ class WindowsGpuSource:
         old = self._started
         if adapter is None or old is None or adapter.luid == old.adapter.luid:
             return
-        kmt, caps = self._open_kmt(api, adapter)
-        new = _Started(
-            old.counters, adapter, kmt, caps, same_vendor_count(adapters, pdh_luids, adapter)
-        )
+        new = self._make_started(api, old.counters, adapters, pdh_luids, adapter)
+        kmt = new.kmt
         # El cambio se hace con el candado y solo si nadie cerró ni soltó la fuente
         # entretanto; si no, el handle nuevo no lo cerraría nadie. El viejo se cierra después
         # del cambio, para que ``close()`` no lo cierre dos veces.

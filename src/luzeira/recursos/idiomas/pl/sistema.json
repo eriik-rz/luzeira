@@ -10,10 +10,13 @@
   "sistema.actualizar_descarga_grande": "Pobierany plik jest większy, niż się spodziewano.",
   "sistema.actualizar_no_puede": "Ta kopia Luzeiry nie może sprawdzać aktualizacji.",
   "sistema.actualizar_instalador_distinto": "Pobrany instalator nie zgadza się z podpisanym. Nie otworzę go.",
+  "sistema.actualizar_elevada": "Luzeira działa jako administrator i w takim trybie się nie aktualizuje. Zamknij ją, uruchom normalnie i spróbuj ponownie.",
+  "sistema.actualizar_lenta": "Pobieranie z GitHuba jest zbyt wolne. Spróbuj później.",
   "sistema.ventana_titulo": "Luzeira — Edytor motywów",
   "sistema.ventana_sin_guardar": "Są niezapisane zmiany ({reason}). Zamknąć mimo to?",
   "sistema.ventana_pendiente_errores": "są błędy zaznaczone na czerwono",
   "sistema.ventana_pendiente_incluido": "to zmiany we wbudowanym motywie; użyj „Zapisz jako”, żeby je zachować",
   "sistema.ventana_pendiente_fallo": "nie udało się zapisać",
-  "sistema.ventana_pendiente_desconocido": "nie udało się sprawdzić, czy coś zostało do zapisania"
+  "sistema.ventana_pendiente_desconocido": "nie udało się sprawdzić, czy coś zostało do zapisania",
+  "sistema.autoarranque_carpeta_insegura": "Nie włączam uruchamiania z systemem Windows: inni użytkownicy tego komputera mogą zmieniać folder Luzeiry. Rozpakuj wersję przenośną jeszcze raz do własnego folderu (na przykład Dokumenty); samo przeniesienie nie wystarczy, bo zachowuje uprawnienia. Albo użyj instalatora."
 }

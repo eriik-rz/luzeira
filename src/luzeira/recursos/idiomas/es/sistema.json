@@ -10,10 +10,13 @@
   "sistema.actualizar_descarga_grande": "La descarga es más grande de lo esperado.",
   "sistema.actualizar_no_puede": "Esta copia de Luzeira no puede comprobar actualizaciones.",
   "sistema.actualizar_instalador_distinto": "El instalador descargado no coincide con el firmado. No lo abro.",
+  "sistema.actualizar_elevada": "Luzeira se está ejecutando como administrador y así no se actualiza. Ciérrala, ábrela de la forma normal y vuelve a intentarlo.",
+  "sistema.actualizar_lenta": "La descarga desde GitHub va demasiado lenta. Inténtalo más tarde.",
   "sistema.ventana_titulo": "Luzeira — Editor de temas",
   "sistema.ventana_sin_guardar": "Hay cambios que no se han guardado ({reason}). ¿Cerrar igualmente?",
   "sistema.ventana_pendiente_errores": "hay errores marcados en rojo",
   "sistema.ventana_pendiente_incluido": "son cambios sobre un tema incluido; usa «Guardar como» para quedártelos",
   "sistema.ventana_pendiente_fallo": "no se ha podido guardar",
-  "sistema.ventana_pendiente_desconocido": "no he podido comprobar si queda algo por guardar"
+  "sistema.ventana_pendiente_desconocido": "no he podido comprobar si queda algo por guardar",
+  "sistema.autoarranque_carpeta_insegura": "No activo el inicio con Windows: otros usuarios de este PC pueden cambiar la carpeta de Luzeira. Vuelve a descomprimir la versión portable en una carpeta tuya (por ejemplo, Documentos); moverla no basta, porque conserva los permisos. O usa el instalador."
 }

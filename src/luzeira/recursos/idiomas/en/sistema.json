@@ -10,10 +10,13 @@
   "sistema.actualizar_descarga_grande": "The download is bigger than expected.",
   "sistema.actualizar_no_puede": "This copy of Luzeira can't check for updates.",
   "sistema.actualizar_instalador_distinto": "The downloaded installer doesn't match the signed one. I won't open it.",
+  "sistema.actualizar_elevada": "Luzeira is running as administrator, and it won't update itself like that. Close it, open it the normal way and try again.",
+  "sistema.actualizar_lenta": "The download from GitHub is too slow. Try again later.",
   "sistema.ventana_titulo": "Luzeira — Theme editor",
   "sistema.ventana_sin_guardar": "There are unsaved changes ({reason}). Close anyway?",
   "sistema.ventana_pendiente_errores": "there are errors marked in red",
   "sistema.ventana_pendiente_incluido": "they're changes to a built-in theme; use “Save as” to keep them",
   "sistema.ventana_pendiente_fallo": "they couldn't be saved",
-  "sistema.ventana_pendiente_desconocido": "I couldn't check whether anything is left to save"
+  "sistema.ventana_pendiente_desconocido": "I couldn't check whether anything is left to save",
+  "sistema.autoarranque_carpeta_insegura": "I won't turn on starting with Windows: other users of this PC can change Luzeira's folder. Unzip the portable version again into a folder of your own (for example, Documents); moving it isn't enough, because it keeps its permissions. Or use the installer."
 }

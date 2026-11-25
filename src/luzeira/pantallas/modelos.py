@@ -8,7 +8,8 @@ GPL-3.0 de turing-smart-screen-python y de los issues de sus usuarios).
 
 Reglas (C-44):
 
-- Rev A por su serie ``USB35INCHIPS…``: se conecta sola, como siempre.
+- Rev A por su serie ``USB35INCHIPS…`` **y** su USB ``1a86:5722``: se conecta sola, como
+  siempre. El serie solo no basta: cualquier aparato puede anunciar ese texto (R5-07).
 - Rev B por su serie ``2017-2-25`` **en el campo serie** (es también el texto del
   *fabricante* de muchas rev A: ese campo no cuenta) y con el USB ``1a86:5722``.
 - Kipye (``454d:4e41``): no tiene serie conocido, así que solo se propone; el usuario
@@ -176,14 +177,19 @@ class Identification:
 def identify(port: PortInfo) -> Identification | None:
     """¿Qué pantalla hay en ``port``? Solo con su USB y su serie. None: ninguna conocida.
 
+    🔴 El serie de la rev A solo cuenta con su USB ``1a86:5722`` (R5-07): un aparato
+    cualquiera (un Arduino) puede anunciar ``USB35INCHIPS…`` en su descriptor. Con otro USB
+    no se reconoce como nada: ni se abre solo ni sale en la lista cerrada, solo en el modo
+    avanzado (donde elegirlo es decisión explícita del usuario, con aviso).
+
     ⚠ El serie va en ``PortInfo.serial`` (``serial_number`` de pyserial, la última parte
     de ``USB\\VID_1A86&PID_5722\\<serie>``). El fabricante USB no se mira nunca: en muchas
     rev A es justo ``2017-2-25``, el serie de la rev B.
     """
-    if port.serial.startswith(REV_A_SERIAL_PREFIX):
-        return Identification(REV_A, sure=True)  # igual que ``find_port`` de la rev A
     usb_id = port.usb_id
     if usb_id == VID_PID_CH552:
+        if port.serial.startswith(REV_A_SERIAL_PREFIX):
+            return Identification(REV_A, sure=True)  # igual que ``find_port`` de la rev A
         if port.serial == REV_B_SERIAL:
             return Identification(REV_B, sure=True)
         return Identification(None, sure=False)
@@ -194,6 +200,14 @@ def identify(port: PortInfo) -> Identification | None:
     if usb_id in REV_C_AWAKE_IDS and port.serial == REV_C_AWAKE_SERIAL:
         return Identification(REV_C, sure=True)
     return None
+
+
+def is_rev_c(port: PortInfo) -> bool:
+    """¿Es una rev C (o lo parece por su USB)? Es el único protocolo de la familia con
+    órdenes que borran o reinician (R5-02): a un puerto así no se le manda nada, ni en el
+    modo avanzado."""
+    found = identify(port)
+    return found is not None and found.model is REV_C
 
 
 def compatible_models(port: PortInfo) -> list[DisplayModel]:
@@ -214,16 +228,23 @@ def compatible_models(port: PortInfo) -> list[DisplayModel]:
 
 
 def match_choice(choice: DisplayChoice, ports: Iterable[PortInfo]) -> PortInfo | None:
-    """El puerto donde sigue estando la pantalla elegida, o None si ya no coincide.
+    """El puerto donde sigue estando la pantalla elegida, o None si ya no coincide (y
+    entonces se vuelve a preguntar).
 
-    Con USB: mismo VID:PID y mismo serie (el COM puede haber cambiado; si hay varios
-    iguales, se prefiere el mismo COM). Sin USB (solo en modo avanzado): el mismo COM y
-    que siga sin USB.
+    - Con USB y número de serie, en la lista cerrada: mismo VID:PID y mismo serie. El COM
+      puede haber cambiado (si hay varios iguales, se prefiere el mismo COM).
+    - 🔴 En modo avanzado o sin número de serie (R5-01): mismo COM **y** mismo VID:PID. Sin
+      serie, el VID:PID no distingue un aparato de otro igual: el chip ``1a86:7523`` de una
+      pantalla es también el de muchas impresoras 3D y grabadoras láser. Seguirlo a otro
+      COM sería mandarle píxeles a una máquina sin preguntar.
+    - Sin USB (solo en modo avanzado): el mismo COM y que siga sin USB. No hay nada más con
+      lo que reconocerlo.
+    - 🔴 Nunca un puerto que se identifica como rev C (R5-02).
     """
     model = model_by_key(choice.model)
     if model is None or not model.supported:
         return None
-    ports = list(ports)
+    ports = [p for p in ports if not is_rev_c(p)]
     if choice.vid is None or choice.pid is None:
         return next((p for p in ports if p.device == choice.device and p.usb_id is None), None)
     usb_id = (choice.vid, choice.pid)
@@ -232,4 +253,7 @@ def match_choice(choice: DisplayChoice, ports: Iterable[PortInfo]) -> PortInfo |
     same = [p for p in ports if p.usb_id == usb_id and p.serial == choice.serial]
     if not choice.advanced:  # …y del puerto concreto (p. ej. no una rev B sobre una rev A)
         same = [p for p in same if model in compatible_models(p)]
-    return next((p for p in same if p.device == choice.device), same[0] if same else None)
+    here = next((p for p in same if p.device == choice.device), None)
+    if choice.advanced or not choice.serial:
+        return here  # el mismo aparato solo se reconoce por su COM
+    return here or (same[0] if same else None)

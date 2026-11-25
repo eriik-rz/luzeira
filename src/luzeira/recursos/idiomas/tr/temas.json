@@ -10,12 +10,14 @@
   "temas.fichero_grande": "{what} “{rel}”: boyutu {size} MB; en fazla {max} MB olabilir.",
   "temas.tipo_falso": "{what} “{rel}”: gerçekte bir .{ext} dosyası değil.",
   "temas.gif_largo": "“{rel}” GIF dosyasında {max} kareden fazlası var; daha kısa bir tane kullan.",
+  "temas.gif_pesado": "“{rel}” GIF dosyası açılırken çok fazla bellek istiyor (tüm karelerde toplam {mpx} milyon pikselden fazla); daha küçük ya da daha kısa bir tane kullan.",
   "temas.imagen_enorme": "“{rel}” resmi {width}x{height} piksel; en fazla {max}x{max} olabilir.",
   "temas.imagen_bomba": "“{rel}” resmi çok büyük (olası bomba).",
   "temas.imagen_danada": "“{rel}” resmi bozuk ya da geçerli bir resim değil.",
   "temas.imagen_extension": "“{rel}” resminin uzantısına izin verilmiyor.",
   "temas.fuente_danada": "“{rel}” yazı tipi bozuk ya da okunamıyor.",
   "temas.fuente_falla": "“{rel}” yazı tipi bozuk: {size} boyutunda metin çizerken hata veriyor.",
+  "temas.fuente_enorme": "“{rel}” yazı tipi harfleri orantısız çiziyor: {size} boyutunda istenenden {max} kattan daha büyük çıkıyorlar.",
   "temas.pydantic.missing": "bu alan eksik",
   "temas.pydantic.extra_forbidden": "bilinmeyen alan (bu biçimde yok)",
   "temas.pydantic.string_pattern_mismatch": "değer beklenen biçimde değil",
@@ -66,5 +68,6 @@
   "temas.zip.no_seguro": "Zip güvenli değil: “{name}” {problem}.",
   "temas.zip.repetido": "Zip'te “{rel}” dosyası iki kez var.",
   "temas.zip.sale": "Zip güvenli değil: “{name}” klasörün dışına çıkıyor.",
-  "temas.zip.danado": "“{name}” zip'ten okunamıyor: bozuk."
+  "temas.zip.danado": "“{name}” zip'ten okunamıyor: bozuk.",
+  "temas.zip.inesperado": "Beklenmeyen bir hata nedeniyle “{name}” içe aktarılamadı."
 }

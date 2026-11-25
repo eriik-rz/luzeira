@@ -29,5 +29,6 @@
   "cli.editor_modo": "Editor mode: the display isn't being used right now.",
   "cli.editor_desarrollo": "Editor in development: open {url}",
   "cli.editor_api": "(API at {url}). Ctrl+C to stop.",
+  "cli.editor_puerto_ocupado": "Another program that isn't the editor's Vite is running at {url}: the token isn't shown. Close it and run “npm run dev” in editor/.",
   "cli.editor_sin_compilar": "The editor isn't built: run “npm run build” in editor/."
 }

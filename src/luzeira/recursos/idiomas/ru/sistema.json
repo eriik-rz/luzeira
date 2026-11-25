@@ -10,10 +10,13 @@
   "sistema.actualizar_descarga_grande": "Загружаемый файл больше ожидаемого.",
   "sistema.actualizar_no_puede": "Эта копия Luzeira не может проверять обновления.",
   "sistema.actualizar_instalador_distinto": "Скачанный установщик не совпадает с подписанным. Открывать его не буду.",
+  "sistema.actualizar_elevada": "Luzeira запущена от имени администратора и в таком режиме не обновляется. Закройте её, откройте обычным способом и попробуйте снова.",
+  "sistema.actualizar_lenta": "Загрузка с GitHub идёт слишком медленно. Попробуйте позже.",
   "sistema.ventana_titulo": "Luzeira — Редактор тем",
   "sistema.ventana_sin_guardar": "Есть несохранённые изменения ({reason}). Всё равно закрыть?",
   "sistema.ventana_pendiente_errores": "есть ошибки, отмеченные красным",
   "sistema.ventana_pendiente_incluido": "это изменения встроенной темы; чтобы их сохранить, используйте «Сохранить как»",
   "sistema.ventana_pendiente_fallo": "сохранить не удалось",
-  "sistema.ventana_pendiente_desconocido": "не удалось проверить, осталось ли что-то несохранённым"
+  "sistema.ventana_pendiente_desconocido": "не удалось проверить, осталось ли что-то несохранённым",
+  "sistema.autoarranque_carpeta_insegura": "Не включаю запуск вместе с Windows: другие пользователи этого компьютера могут изменять папку Luzeira. Заново распакуйте портативную версию в свою папку (например, «Документы»); перемещения недостаточно — папка сохраняет свои разрешения. Или воспользуйтесь установщиком."
 }

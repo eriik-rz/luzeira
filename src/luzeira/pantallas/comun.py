@@ -24,6 +24,13 @@ BAUDRATE = 115200
 # puerto nunca se cierra (revisor de la fase 3). 5 s sobra: un trozo de 2560 bytes tarda
 # ~11 ms a los ~230 KB/s medidos.
 WRITE_TIMEOUT = 5.0
+# 🔴 Plazo para una imagen entera (R5-04). ``WRITE_TIMEOUT`` vale por escritura, y una
+# imagen completa son 121 escrituras (rev A y B) o ~4.900 (Kipye): un aparato que frena
+# con CTS sin llegar nunca a 5 s por escritura podía tener el hilo ocupado ~10 min (o
+# ~6,8 h) y ``stop()`` sin cumplir. Se comprueba entre trozos, así que lo más que tarda en
+# saltar es este plazo + un ``WRITE_TIMEOUT``. 15 s: la imagen completa de la rev A tarda
+# 1,34 s medidos (320x480); la de 7" (600x1024, 4 veces más bytes) se estima en ~5,3 s.
+IMAGE_TIMEOUT = 15.0
 
 
 class Orientation(IntEnum):
@@ -126,6 +133,19 @@ class ChosenDisplayMissing(DisplayError):
         super().__init__(Text("pantallas.elegida_no_esta"))
 
 
+class ImageCut(DisplayError):
+    """Una imagen se ha quedado a medias (escritura cortada, puerto perdido o plazo
+    agotado) en una pantalla que puede seguir esperando el resto de los píxeles: lo
+    próximo que se le mande (el saludo al reabrir) lo tomaría por imagen.
+
+    Lo lanzan los drivers beta (rev B y Kipye). La rev A no: se reinicia al abrir el puerto
+    (medido), así que reabrir ya la deja limpia. El servicio no la vuelve a abrir a ciegas:
+    pide desenchufarla y espera a ver cambiar la lista de puertos (o un rato largo)."""
+
+    def __init__(self) -> None:
+        super().__init__(Text("pantallas.imagen_cortada"))
+
+
 class Transport(Protocol):
     """Lo mínimo que el driver necesita de un puerto serie (pyserial lo cumple)."""
 
@@ -136,6 +156,25 @@ class Transport(Protocol):
 
 
 SerialFactory = Callable[[str], Transport]
+
+
+def write_all(transport: Transport, data: bytes) -> None:
+    """Escribe ``data`` entero o lanza :class:`DisplayError`.
+
+    - Un USB desenchufado o colgado da un error para el usuario, no una traza de pyserial
+      (``SerialException`` hereda de ``OSError``).
+    - 🔴 Una escritura que devuelve menos bytes de los pedidos también es un error (R5-03):
+      pyserial en Windows la devuelve así, sin excepción, cuando Windows cancela la
+      operación a medias (``ERROR_OPERATION_ABORTED``). Seguir mandando sería desalinear
+      el protocolo: los bytes siguientes se leerían como lo que no son. ``None`` (algunas
+      clases de pyserial no cuentan) se da por bueno, como antes.
+    """
+    try:
+        written = transport.write(data)
+    except OSError as exc:
+        raise DisplayError(Text("pantallas.conexion_perdida")) from exc
+    if written is not None and written != len(data):
+        raise DisplayError(Text("pantallas.conexion_perdida"))
 
 
 def default_serial_factory(device: str) -> Transport:

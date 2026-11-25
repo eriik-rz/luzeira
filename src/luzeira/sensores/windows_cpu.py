@@ -1,17 +1,21 @@
-"""Llamadas reales a Windows para la CPU: contadores PDH de frecuencia y la sección de
-memoria compartida del módulo opcional de sensores (ADR-007).
+"""Llamadas reales a Windows para la CPU: contadores PDH de frecuencia y el fichero
+mapeado del módulo opcional de sensores (ADR-007, ADR-008).
 
-Como ``windows_api``, solo se prueba en Windows de verdad; los tests usan lectores falsos
-(``FrequencyCounters`` en ``cpu_frecuencia`` y ``SectionReader`` en ``modulo``).
+Como ``windows_api``, solo se prueba en Windows de verdad; los tests de la fuente usan
+lectores falsos (``FrequencyCounters`` en ``cpu_frecuencia`` y ``SectionReader`` en
+``modulo``), y los del lector, ficheros de verdad en una carpeta temporal.
 """
 
 from __future__ import annotations
 
 import ctypes
+from collections.abc import Callable
 from ctypes import wintypes
+from pathlib import Path
 
 from luzeira.sensores.modulo import HEADER, SectionUntrusted
 from luzeira.sensores.windows_api import PDH_FMT_COUNTERVALUE, PDH_FMT_DOUBLE, _check
+from luzeira.sistema import permisos
 
 # --- Frecuencia (PDH) ------------------------------------------------------------------
 # https://learn.microsoft.com/en-us/windows/win32/api/pdh/nf-pdh-pdhgetformattedcountervalue
@@ -74,82 +78,187 @@ class RealFrequencyCounters:
             self._query = ctypes.c_void_p()
 
 
-# --- Sección del módulo ----------------------------------------------------------------
-# https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-openfilemappingw
-# https://learn.microsoft.com/en-us/windows/win32/api/aclapi/nf-aclapi-getsecurityinfo
-# https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-iswellknownsid
+# --- Fichero del módulo (ADR-008) ------------------------------------------------------
+# https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew
+# https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-createfilemappingw
+# https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/nf-shlobj_core-shgetknownfolderpath
+# https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfileinformationbyhandle
 
-FILE_MAP_READ = 0x0004
-#: Solo deja leer los permisos del objeto (para saber quién lo creó), nada más.
+GENERIC_READ = 0x80000000
 READ_CONTROL = 0x00020000
+FILE_READ_ATTRIBUTES = 0x0080
+FILE_SHARE_READ = 0x1
+FILE_SHARE_WRITE = 0x2
+OPEN_EXISTING = 3
+FILE_FLAG_BACKUP_SEMANTICS = 0x02000000  # para poder abrir una carpeta
+FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000  # abrir el enlace, no lo que apunta
+FILE_ATTRIBUTE_DIRECTORY = 0x10
+FILE_ATTRIBUTE_REPARSE_POINT = 0x400
+PAGE_READONLY = 0x02
+FILE_MAP_READ = 0x0004
 ERROR_FILE_NOT_FOUND = 2
-SE_KERNEL_OBJECT = 6
-OWNER_SECURITY_INFORMATION = 0x1
-WIN_LOCAL_SYSTEM_SID = 22
-WIN_BUILTIN_ADMINISTRATORS_SID = 26
+ERROR_PATH_NOT_FOUND = 3
+_INVALID_HANDLE = ctypes.c_void_p(-1).value
 #: Offset de la secuencia en la cabecera (ver ``modulo``).
 _SEQUENCE_OFFSET = 24
 
 
-class MEMORY_BASIC_INFORMATION(ctypes.Structure):  # los nombres, los de Microsoft
-    # https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-memory_basic_information
+class _GUID(ctypes.Structure):
     _fields_ = [
-        ("BaseAddress", ctypes.c_void_p),
-        ("AllocationBase", ctypes.c_void_p),
-        ("AllocationProtect", wintypes.DWORD),
-        ("PartitionId", wintypes.WORD),
-        ("RegionSize", ctypes.c_size_t),
-        ("State", wintypes.DWORD),
-        ("Protect", wintypes.DWORD),
-        ("Type", wintypes.DWORD),
+        ("Data1", wintypes.DWORD),
+        ("Data2", wintypes.WORD),
+        ("Data3", wintypes.WORD),
+        ("Data4", ctypes.c_ubyte * 8),
     ]
 
 
-class RealSectionReader:
-    """Abre la sección del módulo (si existe), comprueba quién la creó y copia su
-    contenido. Nunca escribe en ella: se abre solo con ``FILE_MAP_READ`` y
-    ``READ_CONTROL``."""
+#: FOLDERID_ProgramData, {62AB5D82-FDC1-4DC3-A9DD-070D1D495D97} (KnownFolders.h).
+FOLDERID_PROGRAM_DATA = _GUID(
+    0x62AB5D82, 0xFDC1, 0x4DC3, (ctypes.c_ubyte * 8)(0xA9, 0xDD, 0x07, 0x0D, 0x1D, 0x49, 0x5D, 0x97)
+)
 
-    def __init__(self, name: str, size: int) -> None:
-        self._name = name
+
+def programdata_dir() -> Path:
+    """``C:\\ProgramData`` (o donde esté), preguntado a Windows y **no** a la variable de
+    entorno ``%ProgramData%``: quien lance Luzeira puede cambiar la variable y llevar al
+    lector a una carpeta suya."""
+    shell32 = ctypes.WinDLL("shell32")
+    ole32 = ctypes.WinDLL("ole32")
+    shell32.SHGetKnownFolderPath.restype = ctypes.c_long
+    shell32.SHGetKnownFolderPath.argtypes = [
+        ctypes.POINTER(_GUID),
+        wintypes.DWORD,
+        wintypes.HANDLE,
+        ctypes.POINTER(ctypes.c_wchar_p),
+    ]
+    ole32.CoTaskMemFree.argtypes = [ctypes.c_void_p]
+    path = ctypes.c_wchar_p()
+    status = shell32.SHGetKnownFolderPath(
+        ctypes.byref(FOLDERID_PROGRAM_DATA), 0, None, ctypes.byref(path)
+    )
+    try:
+        if status != 0 or not path.value:
+            raise OSError(f"SHGetKnownFolderPath devolvió {status:#x}")  # i18n: no
+        return Path(path.value)
+    finally:
+        ole32.CoTaskMemFree(ctypes.cast(path, ctypes.c_void_p))
+
+
+class BY_HANDLE_FILE_INFORMATION(ctypes.Structure):
+    _fields_ = [
+        ("dwFileAttributes", wintypes.DWORD),
+        ("ftCreationTime", wintypes.FILETIME),
+        ("ftLastAccessTime", wintypes.FILETIME),
+        ("ftLastWriteTime", wintypes.FILETIME),
+        ("dwVolumeSerialNumber", wintypes.DWORD),
+        ("nFileSizeHigh", wintypes.DWORD),
+        ("nFileSizeLow", wintypes.DWORD),
+        ("nNumberOfLinks", wintypes.DWORD),
+        ("nFileIndexHigh", wintypes.DWORD),
+        ("nFileIndexLow", wintypes.DWORD),
+    ]
+
+
+#: Los que pueden escribir en la carpeta y en el fichero (ver el docstring de ``modulo``).
+TRUSTED_WRITERS = frozenset(
+    {
+        permisos.SID_SYSTEM,
+        permisos.SID_ADMINISTRATORS,
+        permisos.SID_TRUSTED_INSTALLER,
+        permisos.SID_CREATOR_OWNER,
+    }
+)
+
+
+def check_security(security: permisos.Security, *, folder: bool, owners: frozenset[str]) -> None:
+    """Lanza ``SectionUntrusted`` si el propietario no está en ``owners`` o si alguien de
+    fuera de ``TRUSTED_WRITERS`` puede escribir (la máscara depende de si es carpeta)."""
+    if security.owner not in owners:
+        raise SectionUntrusted("propietario")  # i18n: no
+    rights = permisos.FOLDER_WRITE_RIGHTS if folder else permisos.FILE_WRITE_RIGHTS
+    if permisos.foreign_writers(security, TRUSTED_WRITERS, rights):
+        raise SectionUntrusted("permisos")  # i18n: no
+
+
+class RealModuleFileReader:
+    """Abre el fichero del módulo (si existe), comprueba carpeta y fichero y copia su
+    contenido. Nunca escribe: se abre con ``GENERIC_READ`` y se mapea ``PAGE_READONLY``.
+
+    Orden, para que nadie cambie nada entre la comprobación y el uso:
+
+    1. Se abre **la carpeta** sin seguir enlaces y sin compartir el borrado (mientras la
+       tenemos abierta, nadie la puede renombrar ni cambiar por otra), y se comprueban
+       por su handle el tipo, el propietario y la DACL.
+    2. Se abre **el fichero** igual, sin seguir enlaces, y se comprueba por su handle.
+    3. Se mapea como mucho ``min(tamaño real, size)``: nunca se lee más allá. Un fichero
+       mapeado no se puede acortar mientras lo está.
+    4. Se suelta la carpeta; el fichero y su vista se quedan hasta ``close()``.
+
+    ``owners`` (propietarios aceptados) y ``security`` (cómo se leen los permisos de un
+    handle) se inyectan en los tests: un fichero de ``tmp_path`` es del usuario, no de
+    SYSTEM.
+    """
+
+    def __init__(
+        self,
+        folder: Path,
+        name: str,
+        size: int,
+        *,
+        owners: frozenset[str] = permisos.ADMIN_OWNERS,
+        security: Callable[[int], permisos.Security] | None = None,
+    ) -> None:
+        self._folder = folder
+        self._path = folder / name
         self._size = size
-        self._k32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        self._adv = ctypes.WinDLL("advapi32")
-        self._k32.OpenFileMappingW.restype = wintypes.HANDLE
-        self._k32.OpenFileMappingW.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.LPCWSTR]
-        self._k32.MapViewOfFile.restype = ctypes.c_void_p
-        self._k32.MapViewOfFile.argtypes = [
-            wintypes.HANDLE,
+        self._owners = owners
+        self._security = security or permisos.handle_security
+        k = ctypes.WinDLL("kernel32", use_last_error=True)
+        k.CreateFileW.restype = wintypes.HANDLE
+        k.CreateFileW.argtypes = [
+            wintypes.LPCWSTR,
             wintypes.DWORD,
             wintypes.DWORD,
-            wintypes.DWORD,
-            ctypes.c_size_t,
-        ]
-        self._k32.UnmapViewOfFile.argtypes = [ctypes.c_void_p]
-        self._k32.CloseHandle.argtypes = [wintypes.HANDLE]
-        self._k32.VirtualQuery.restype = ctypes.c_size_t
-        self._k32.VirtualQuery.argtypes = [
             ctypes.c_void_p,
-            ctypes.POINTER(MEMORY_BASIC_INFORMATION),
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.HANDLE,
+        ]
+        k.GetFileInformationByHandle.restype = wintypes.BOOL
+        k.GetFileInformationByHandle.argtypes = [
+            wintypes.HANDLE,
+            ctypes.POINTER(BY_HANDLE_FILE_INFORMATION),
+        ]
+        k.GetFileSizeEx.restype = wintypes.BOOL
+        k.GetFileSizeEx.argtypes = [wintypes.HANDLE, ctypes.POINTER(ctypes.c_longlong)]
+        k.CreateFileMappingW.restype = wintypes.HANDLE
+        k.CreateFileMappingW.argtypes = [
+            wintypes.HANDLE,
+            ctypes.c_void_p,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.LPCWSTR,
+        ]
+        k.MapViewOfFile.restype = ctypes.c_void_p
+        k.MapViewOfFile.argtypes = [
+            wintypes.HANDLE,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.DWORD,
             ctypes.c_size_t,
         ]
-        self._k32.LocalFree.argtypes = [ctypes.c_void_p]
-        self._adv.GetSecurityInfo.restype = wintypes.DWORD
-        self._adv.GetSecurityInfo.argtypes = [
-            wintypes.HANDLE,
-            ctypes.c_int,
-            wintypes.DWORD,
-            ctypes.POINTER(ctypes.c_void_p),
-            ctypes.POINTER(ctypes.c_void_p),
-            ctypes.POINTER(ctypes.c_void_p),
-            ctypes.POINTER(ctypes.c_void_p),
-            ctypes.POINTER(ctypes.c_void_p),
-        ]
-        self._adv.IsWellKnownSid.restype = wintypes.BOOL
-        self._adv.IsWellKnownSid.argtypes = [ctypes.c_void_p, ctypes.c_int]
-        self._handle: int | None = None
+        k.UnmapViewOfFile.argtypes = [ctypes.c_void_p]
+        k.CloseHandle.argtypes = [wintypes.HANDLE]
+        self._k32 = k
+        self._file: int | None = None
+        self._mapping: int | None = None
         self._view: int | None = None
         self._view_size = 0
+
+    @property
+    def closed(self) -> bool:
+        return self._view is None and self._file is None and self._mapping is None
 
     def read(self) -> bytes | None:
         if self._view is None and not self._open():
@@ -166,66 +275,85 @@ class RealSectionReader:
                 return data
         return data  # sigue cambiando: ``parse_section`` lo rechazará si está a medias
 
-    def _open(self) -> bool:
-        handle = self._k32.OpenFileMappingW(FILE_MAP_READ | READ_CONTROL, False, self._name)
-        if not handle:
-            error = ctypes.get_last_error()
-            if error == ERROR_FILE_NOT_FOUND:
-                return False  # el módulo no está instalado o no está en marcha
-            raise OSError(f"OpenFileMappingW devolvió {error}")  # i18n: no
-        try:
-            self._check_owner(handle)
-            view = self._k32.MapViewOfFile(handle, FILE_MAP_READ, 0, 0, 0)
-            if not view:
-                raise OSError(f"MapViewOfFile devolvió {ctypes.get_last_error()}")  # i18n: no
-            info = MEMORY_BASIC_INFORMATION()
-            if not self._k32.VirtualQuery(view, ctypes.byref(info), ctypes.sizeof(info)):
-                self._k32.UnmapViewOfFile(view)
-                raise OSError("VirtualQuery falló")  # i18n: no
-        except BaseException:
-            self._k32.CloseHandle(handle)
-            raise
-        if info.RegionSize < HEADER.size:
-            self._k32.UnmapViewOfFile(view)
-            self._k32.CloseHandle(handle)
-            raise OSError("sección demasiado pequeña")  # i18n: no
-        self._handle, self._view = handle, view
-        # Nunca se lee más allá de lo que de verdad está mapeado.
-        self._view_size = min(self._size, info.RegionSize)
-        return True
-
-    def _check_owner(self, handle: int) -> None:
-        """Solo vale una sección creada por SYSTEM (el servicio) o un administrador: un
-        usuario normal no puede crear objetos en ``Global\\`` con ese propietario, así
-        que nadie sin privilegios puede hacerse pasar por el módulo."""
-        owner = ctypes.c_void_p()
-        descriptor = ctypes.c_void_p()
-        status = self._adv.GetSecurityInfo(
-            handle,
-            SE_KERNEL_OBJECT,
-            OWNER_SECURITY_INFORMATION,
-            ctypes.byref(owner),
+    def _create(self, path: Path, access: int, flags: int) -> int | None:
+        """Abre sin seguir enlaces; ``None`` si no existe."""
+        handle = self._k32.CreateFileW(
+            str(path),
+            access,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,  # sin FILE_SHARE_DELETE, a propósito
             None,
+            OPEN_EXISTING,
+            flags | FILE_FLAG_OPEN_REPARSE_POINT,
             None,
-            None,
-            ctypes.byref(descriptor),
         )
-        if status != 0:
-            raise OSError(f"GetSecurityInfo devolvió {status}")  # i18n: no
-        try:
-            trusted = owner.value and (
-                self._adv.IsWellKnownSid(owner, WIN_LOCAL_SYSTEM_SID)
-                or self._adv.IsWellKnownSid(owner, WIN_BUILTIN_ADMINISTRATORS_SID)
+        if handle is None or handle == _INVALID_HANDLE:
+            error = ctypes.get_last_error()
+            if error in (ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND):
+                return None  # el módulo no está instalado
+            raise OSError(f"CreateFileW devolvió {error}")  # i18n: no
+        return handle
+
+    def _attributes(self, handle: int) -> int:
+        info = BY_HANDLE_FILE_INFORMATION()
+        if not self._k32.GetFileInformationByHandle(handle, ctypes.byref(info)):
+            raise OSError(
+                f"GetFileInformationByHandle devolvió {ctypes.get_last_error()}"  # i18n: no
             )
+        return info.dwFileAttributes
+
+    def _check(self, handle: int, *, folder: bool) -> None:
+        attributes = self._attributes(handle)
+        if attributes & FILE_ATTRIBUTE_REPARSE_POINT:
+            raise SectionUntrusted("enlace")  # i18n: no
+        if bool(attributes & FILE_ATTRIBUTE_DIRECTORY) != folder:
+            raise SectionUntrusted("tipo")  # i18n: no
+        check_security(self._security(handle), folder=folder, owners=self._owners)
+
+    def _open(self) -> bool:
+        k = self._k32
+        folder = self._create(
+            self._folder, READ_CONTROL | FILE_READ_ATTRIBUTES, FILE_FLAG_BACKUP_SEMANTICS
+        )
+        if folder is None:
+            return False
+        try:
+            self._check(folder, folder=True)
+            file = self._create(self._path, GENERIC_READ, 0)
+            if file is None:
+                return False
+            try:
+                self._check(file, folder=False)
+                size = ctypes.c_longlong()
+                if not k.GetFileSizeEx(file, ctypes.byref(size)):
+                    raise OSError(f"GetFileSizeEx devolvió {ctypes.get_last_error()}")  # i18n: no
+                if size.value < HEADER.size:
+                    raise OSError("fichero demasiado pequeño")  # i18n: no
+                view_size = min(self._size, size.value)
+                mapping = k.CreateFileMappingW(file, None, PAGE_READONLY, 0, 0, None)
+                if not mapping:
+                    raise OSError(
+                        f"CreateFileMappingW devolvió {ctypes.get_last_error()}"  # i18n: no
+                    )
+                view = k.MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, view_size)
+                if not view:
+                    error = ctypes.get_last_error()
+                    k.CloseHandle(mapping)
+                    raise OSError(f"MapViewOfFile devolvió {error}")  # i18n: no
+            except BaseException:
+                k.CloseHandle(file)
+                raise
         finally:
-            self._k32.LocalFree(descriptor)
-        if not trusted:
-            raise SectionUntrusted()
+            k.CloseHandle(folder)
+        self._file, self._mapping, self._view = file, mapping, view
+        self._view_size = view_size
+        return True
 
     def close(self) -> None:
         if self._view is not None:
             self._k32.UnmapViewOfFile(self._view)
             self._view = None
-        if self._handle is not None:
-            self._k32.CloseHandle(self._handle)
-            self._handle = None
+        for name in ("_mapping", "_file"):
+            handle = getattr(self, name)
+            if handle is not None:
+                self._k32.CloseHandle(handle)
+                setattr(self, name, None)

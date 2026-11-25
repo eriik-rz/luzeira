@@ -10,12 +10,14 @@
   "temas.fichero_grande": "{what} “{rel}” takes up {size} MB; the maximum is {max} MB.",
   "temas.tipo_falso": "{what} “{rel}” is not really a .{ext} file.",
   "temas.gif_largo": "The GIF “{rel}” has more than {max} frames; use a shorter one.",
+  "temas.gif_pesado": "The GIF “{rel}” needs too much memory to decode (more than {mpx} million pixels across all its frames); use a smaller or shorter one.",
   "temas.imagen_enorme": "The image “{rel}” is {width}x{height} pixels; the maximum is {max}x{max}.",
   "temas.imagen_bomba": "The image “{rel}” is too big (possible bomb).",
   "temas.imagen_danada": "The image “{rel}” is damaged or not a valid image.",
   "temas.imagen_extension": "The image “{rel}” has an extension that isn't allowed.",
   "temas.fuente_danada": "The font “{rel}” is damaged or can't be read.",
   "temas.fuente_falla": "The font “{rel}” is damaged: it fails to draw text at size {size}.",
+  "temas.fuente_enorme": "The font “{rel}” draws letters out of proportion: at size {size} they come out more than {max} times larger than requested.",
   "temas.pydantic.missing": "this field is missing",
   "temas.pydantic.extra_forbidden": "unknown field (it doesn't exist in this format)",
   "temas.pydantic.string_pattern_mismatch": "the value doesn't have the expected format",
@@ -66,5 +68,6 @@
   "temas.zip.no_seguro": "The zip is not safe: “{name}” {problem}.",
   "temas.zip.repetido": "The zip has the file “{rel}” twice.",
   "temas.zip.sale": "The zip is not safe: “{name}” goes outside the folder.",
-  "temas.zip.danado": "Can't read “{name}” from the zip: it's damaged."
+  "temas.zip.danado": "Can't read “{name}” from the zip: it's damaged.",
+  "temas.zip.inesperado": "Couldn't import “{name}” because of an unexpected error."
 }

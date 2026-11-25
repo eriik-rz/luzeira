@@ -1,15 +1,17 @@
-"""Sensores del módulo opcional «Luzeira Sensores» (ADR-007): temperatura de la CPU y más.
+"""Sensores del módulo opcional «Luzeira Sensores» (ADR-007, ADR-008): temperatura de la CPU.
 
 El módulo es un servicio de Windows aparte, instalado con permiso de administrador por
-quien lo quiera. Publica sus lecturas en una sección de memoria compartida de **solo
-lectura** para los usuarios: el servicio no lee nada de nadie, y Luzeira solo lee. Sin
-módulo, Luzeira funciona igual que siempre y estos sensores salen «—» con un aviso.
+quien lo quiera. Publica sus lecturas en un **fichero mapeado en memoria**,
+``%ProgramData%\\Luzeira Sensores\\sensores.bin`` (ADR-008; antes era una sección
+``Global\\``): el servicio no lee nada de nadie, y Luzeira solo lee. Sin módulo, Luzeira
+funciona igual que siempre y estos sensores salen «—» con un aviso.
 
-Como esa memoria la escribe otro programa, aquí se trata como **datos no fiables**:
-tamaño fijo, comprobación de cada campo y de los rangos físicos, y lista cerrada de
+Como ese fichero lo escribe otro programa, aquí se trata como **datos no fiables**:
+tamaño acotado, comprobación de cada campo y de los rangos físicos, y lista cerrada de
 identificadores. Nada de lo que traiga puede hacer otra cosa que dar un número.
 
-Formato de la sección (versión 1, little-endian; el servicio en C# usa el mismo):
+Formato del fichero (versión 1, little-endian; el servicio en C# usa el mismo; lo
+llamamos «sección» por costumbre):
 
 Cabecera, 64 bytes:
 
@@ -31,12 +33,39 @@ Offs.  Tipo   Campo
 Cada entrada, 48 bytes: identificador ASCII de 32 bytes relleno con ceros, valor
 ``float64`` y ``u32`` de banderas (bit 0: el valor es válido), más 4 bytes reservados.
 
-Permisos que pone el servicio a la sección: SYSTEM, control total; los usuarios, solo
-``FILE_MAP_READ`` y ``READ_CONTROL`` (este último, para que el lector pueda comprobar
-que el propietario es SYSTEM o un administrador; no deja cambiar nada).
+El fichero mide como mucho ``SECTION_SIZE`` (64 + 64 · 48 = 3136 bytes; el servicio lo
+puede dejar en 4 KB). El lector **nunca lee más allá de su tamaño real** ni de
+``SECTION_SIZE``.
+
+Lo que tiene que poner **el instalador** (ADR-008), y lo que comprueba el lector
+(``windows_cpu.RealModuleFileReader``) antes de leer nada:
+
+- La carpeta ``%ProgramData%\\Luzeira Sensores`` la crea el instalador con admin, con
+  propietario **Administradores** (o SYSTEM) y una DACL **explícita y protegida** (sin
+  herencia de ``ProgramData``, que da a Usuarios permiso de crear ficheros):
+  SYSTEM y Administradores, control total; Usuarios, solo leer (``D:P(A;OICI;FA;;;SY)
+  (A;OICI;FA;;;BA)(A;OICI;FR;;;BU)``). El fichero, igual (lo hereda de la carpeta).
+- El lector rechaza (``SectionUntrusted``) la carpeta o el fichero si:
+  - su propietario no es SYSTEM ni Administradores;
+  - alguna ACE de permitir da a otro SID (que no sea SYSTEM, Administradores,
+    TrustedInstaller ni CREATOR OWNER) permiso de escribir: en el fichero,
+    ``FILE_WRITE_DATA``, ``FILE_APPEND_DATA``, ``DELETE``, ``WRITE_DAC``,
+    ``WRITE_OWNER``, ``GENERIC_WRITE`` o ``GENERIC_ALL``; en la carpeta, además,
+    ``FILE_ADD_FILE``, ``FILE_ADD_SUBDIRECTORY`` y ``FILE_DELETE_CHILD``. Cuentan
+    también las ACE que solo se heredan, y la falta de DACL;
+  - es un enlace o *reparse point* (symlink, junction).
+- CREATOR OWNER se acepta aunque con la DACL protegida no debería aparecer: es un
+  comodín que nunca casa con nadie en el propio objeto y, al heredarse, pasa a ser quien
+  crea el hijo; y crear dentro de la carpeta ya exige ``FILE_ADD_FILE``, que solo pueden
+  tener SYSTEM y Administradores. Rechazarlo no protegería de nada y rompería una
+  carpeta bien hecha a la que Windows se lo añadiera.
+- El lector abre con ``GENERIC_READ`` y comparte lectura y escritura (el servicio lo
+  tiene abierto para escribir); mapea con ``PAGE_READONLY``/``FILE_MAP_READ``.
 
 Cuándo se considera «sin respuesta»: si la secuencia no cambia en ``STALE_SECONDS``
 según el reloj de Luzeira (no la hora que escribe el módulo, que podría estar mal).
+Entonces el lector **suelta el fichero** (ADR-008, R4-10: así el servicio puede volver a
+crearlo al reiniciarse) y no lo vuelve a abrir hasta pasados ``REOPEN_SECONDS``.
 """
 
 from __future__ import annotations
@@ -54,14 +83,16 @@ from luzeira.sensores.base import Reading, SensorInfo
 
 log = logging.getLogger(__name__)
 
-SECTION_NAME = "Global\\Luzeira-Sensores-v1"
+#: Carpeta (dentro de ``%ProgramData%``, que se pregunta a Windows) y fichero del módulo.
+FOLDER_NAME = "Luzeira Sensores"
+FILE_NAME = "sensores.bin"
 
 MAGIC = b"LUZSENS\0"
 LAYOUT_VERSION = 1
 HEADER = struct.Struct("<8sIIIIQq16sII")
 ENTRY = struct.Struct("<32sdII")
 MAX_ENTRIES = 64
-#: Lo que se copia de la sección: cabecera y el máximo de entradas.
+#: Lo más que se copia del fichero: cabecera y el máximo de entradas.
 SECTION_SIZE = HEADER.size + MAX_ENTRIES * ENTRY.size
 
 STATUS_OK = 0
@@ -72,7 +103,8 @@ STATUS_STARTING = 3
 FLAG_VALID = 1
 
 STALE_SECONDS = 5.0
-#: Si la sección no existe, se vuelve a mirar como mucho cada tanto (no en cada ciclo).
+#: Si el fichero no existe, o se soltó porque el módulo no respondía, se vuelve a mirar
+#: como mucho cada tanto (no en cada ciclo).
 REOPEN_SECONDS = 10.0
 
 # Claves del catálogo (zona ``sensores``).
@@ -175,27 +207,27 @@ def _ascii(raw: bytes) -> str:
 
 
 class SectionUntrusted(Exception):
-    """La sección existe pero no la creó SYSTEM ni un administrador: se ignora."""
+    """El fichero existe pero no es de fiar (propietario, permisos o enlace): se ignora."""
 
 
 class SectionReader(Protocol):
     def read(self) -> bytes | None:
-        """Una copia de la sección, o ``None`` si no existe (el módulo no está).
+        """Una copia del fichero, o ``None`` si no existe (el módulo no está).
 
-        Lanza ``SectionUntrusted`` si su propietario no es de fiar."""
+        Lanza ``SectionUntrusted`` si no es de fiar."""
         ...
 
     def close(self) -> None: ...
 
 
 def real_reader() -> SectionReader:
-    from luzeira.sensores.windows_cpu import RealSectionReader
+    from luzeira.sensores.windows_cpu import RealModuleFileReader, programdata_dir
 
-    return RealSectionReader(SECTION_NAME, SECTION_SIZE)
+    return RealModuleFileReader(programdata_dir() / FOLDER_NAME, FILE_NAME, SECTION_SIZE)
 
 
 class ModuleSource:
-    """Fuente de sensores que lee la sección del módulo opcional."""
+    """Fuente de sensores que lee el fichero del módulo opcional."""
 
     def __init__(
         self,
@@ -216,6 +248,8 @@ class ModuleSource:
         self._last_sequence: int | None = None
         self._sequence_since: float | None = None
         self._warned: set[str] = set()
+        #: Lo que se dice mientras se espera para volver a abrir.
+        self._idle_reason = self._missing
 
     def sensors(self) -> list[SensorInfo]:
         return [
@@ -227,23 +261,26 @@ class ModuleSource:
             return self._read()
         except SectionUntrusted:
             if self._first_time("no_fiable"):
-                log.warning("Se ignora una sección de sensores que no es de fiar.")
+                log.warning("Se ignora un fichero de sensores que no es de fiar.")
             self._drop()
+            self._idle_reason = UNTRUSTED
             return self._all_missing(UNTRUSTED)
         except Exception as exc:
             # Solo el tipo de error: el mensaje podría llevar datos del equipo.
             if self._first_time(type(exc).__name__):
                 log.warning("No se pudo leer el módulo de sensores (%s).", type(exc).__name__)
             self._drop()
+            self._idle_reason = NOT_RESPONDING
             return self._all_missing(NOT_RESPONDING)
 
     def _read(self) -> dict[str, Reading]:
         reader = self._open_if_due()
         if reader is None:
-            return self._all_missing(self._missing)
+            return self._all_missing(self._idle_reason)
         data = reader.read()
         if data is None:  # el servicio se paró o se desinstaló
             self._drop()
+            self._idle_reason = self._missing
             return self._all_missing(self._missing)
         try:
             section = parse_section(data)
@@ -253,6 +290,13 @@ class ModuleSource:
                 return self._all_missing(NEWER_MODULE)
             return self._all_missing(NOT_RESPONDING)
         if self._is_stale(section.sequence):
+            # R4-10 (ADR-008): se suelta el fichero para que el servicio pueda volver a
+            # crearlo si se reinicia, y no se reabre hasta pasado REOPEN_SECONDS. La
+            # secuencia vista se recuerda: si al reabrir sigue igual, sigue «sin respuesta»
+            # en vez de parecer fresca otros STALE_SECONDS.
+            self._drop(keep_sequence=True)
+            self._last_open = self._clock()
+            self._idle_reason = NOT_RESPONDING
             return self._all_missing(NOT_RESPONDING)
         status_reason = {
             STATUS_NO_PAWNIO: NO_PAWNIO,
@@ -293,15 +337,16 @@ class ModuleSource:
         reason = t(key)
         return {s.id: Reading(None, s.unit, reason=reason) for s in SENSORS}
 
-    def _drop(self) -> None:
+    def _drop(self, *, keep_sequence: bool = False) -> None:
         reader, self._reader = self._reader, None
-        self._last_sequence = None
-        self._sequence_since = None
+        if not keep_sequence:
+            self._last_sequence = None
+            self._sequence_since = None
         if reader is not None:
             try:
                 reader.close()
             except Exception as exc:
-                log.debug("Al soltar la sección del módulo: %s.", type(exc).__name__)
+                log.debug("Al soltar el fichero del módulo: %s.", type(exc).__name__)
 
     def _first_time(self, key: str) -> bool:
         """Cada aviso va una vez al registro, no en cada ciclo."""

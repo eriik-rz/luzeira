@@ -15,6 +15,8 @@ el idioma activo (catálogo ``temas``): qué fichero y qué le pasa, sin trazas 
 
 from __future__ import annotations
 
+import io
+import logging
 import os
 import re
 import shutil
@@ -43,6 +45,20 @@ MAX_IMAGE_SIDE = 4096
 # fotogramas diminutos cabe en 10 MB y cada uno se descomprime al contarlos. Se acota
 # ya, para que el día que se animen no haya temas compartidos que lo pasen.
 MAX_GIF_FRAMES = 300
+# R2-01: cada fotograma de un GIF se descomprime sobre el lienzo entero, y Pillow agranda
+# el lienzo si un fotograma cae fuera. Así que lo que cuesta no es el fichero (unos KB)
+# sino «fotogramas x área del lienzo». Tope: 16 imágenes de 4096x4096 (~268 Mpx). Caben
+# GIF animados normales de cualquier pantalla (la de 7" es 600x1024: 300 fotogramas son
+# 184 Mpx; 480x480 x 300 = 69 Mpx; 1920x1920 x 40 = 147 Mpx). El ataque del revisor R2
+# (7 KB) pedía ~5 Gpx: 1,5 GB y 75 s de CPU. Con este tope, el peor GIF admitido (16
+# fotogramas de 4096x4096) cuesta 1,8 s y ~145 MB de pico; rechazar uno que se pasa por
+# poco, ~1,3 s (medido en el Ryzen 7 5700X3D, 2026-11-25).
+MAX_GIF_PIXELS = 16 * MAX_IMAGE_SIDE * MAX_IMAGE_SIDE
+
+# Límite global de Pillow (avisa por encima, da error por encima del doble). Por defecto
+# es ~89 Mpx: se baja al de una imagen del tema. Vale para todo el proceso: también para
+# el texto, que Pillow rasteriza entero antes de recortarlo (R2-02).
+Image.MAX_IMAGE_PIXELS = MAX_IMAGE_SIDE * MAX_IMAGE_SIDE
 
 MB = 1024 * 1024
 MAX_ZIP_BYTES = 20 * 1024 * 1024
@@ -72,6 +88,8 @@ PILLOW_FORMATS = {"png": "PNG", "jpg": "JPEG", "jpeg": "JPEG", "gif": "GIF"}
 ZIP_EXTRA_EXTENSIONS = frozenset({"txt"})
 
 _relpath_adapter: TypeAdapter[str] = TypeAdapter(RelPath)
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -179,19 +197,43 @@ def _inside(path: Path, root: Path) -> bool:
 # --- Comprobación de ficheros ------------------------------------------------------
 
 
-def _read_head(path: Path, n: int = 16) -> bytes:
+def _read_bounded(path: Path) -> bytes | None:
+    """Lee el fichero entero, o None si pasa de ``MAX_FILE_BYTES`` o está cambiando
+    (crece mientras se lee). R2-05: se lee **una vez** y se valida eso mismo; en las
+    imágenes, además, es lo que se pinta. Las fuentes no: el render las vuelve a abrir
+    por ruta (abrirlas desde memoria copia el fichero entero por cada tamaño)."""
     with path.open("rb") as fh:
-        return fh.read(n)
+        # Se pide lo que mide (+1 para ver si ha crecido), no MAX_FILE_BYTES: read(n)
+        # reserva n bytes de golpe, y 10 MB por fichero hacían la carga 1,6 veces más lenta.
+        size = os.fstat(fh.fileno()).st_size
+        if size > MAX_FILE_BYTES:
+            return None
+        data = fh.read(size + 1)
+    # Más de lo que medía: está creciendo y lo leído sería solo un trozo.
+    return data if len(data) <= size else None
 
 
 def _check_gif_frames(im: Image.Image, rel: str) -> None:
     """Cuenta los fotogramas de un GIF sin pasar de ``MAX_GIF_FRAMES`` (no usa
-    ``n_frames``, que los recorrería todos aunque fueran millones)."""
+    ``n_frames``, que los recorrería todos aunque fueran millones).
+
+    R2-01: un fotograma puede caer fuera del lienzo y Pillow lo agranda. ``seek(k)``
+    solo lee la cabecera del fotograma k (ya con el lienzo nuevo en ``im.size``); lo
+    caro, descomprimirlo, pasa al pedir el siguiente. Por eso, tras cada ``seek`` y
+    **antes** del siguiente, se miran el lado y los píxeles acumulados.
+    """
     frames = 1
+    pixels = im.size[0] * im.size[1]
     try:
         while True:
             im.seek(frames)
             frames += 1
+            width, height = im.size
+            if width > MAX_IMAGE_SIDE or height > MAX_IMAGE_SIDE:
+                raise ThemeError(_too_big_image(rel, width, height))
+            pixels += width * height
+            if pixels > MAX_GIF_PIXELS:
+                raise ThemeError(Text("temas.gif_pesado", rel=rel, mpx=MAX_GIF_PIXELS // 1_000_000))
             if frames > MAX_GIF_FRAMES:
                 raise ThemeError(Text("temas.gif_largo", rel=rel, max=MAX_GIF_FRAMES))
     except EOFError:
@@ -199,12 +241,13 @@ def _check_gif_frames(im: Image.Image, rel: str) -> None:
     im.seek(0)
 
 
-def _check_image(path: Path, rel: str, ext: str) -> None:
-    """Abre la imagen con Pillow: tipo real, tamaño en píxeles y datos completos."""
+def _check_image(data: bytes, rel: str, ext: str) -> None:
+    """Abre la imagen (sus bytes, ya leídos) con Pillow: tipo real, tamaño en píxeles y
+    datos completos."""
     fmt = PILLOW_FORMATS[ext]
     try:
         # formats=[...] impide que Pillow pruebe otros decodificadores con este fichero.
-        with Image.open(path, formats=[fmt]) as im:
+        with Image.open(io.BytesIO(data), formats=[fmt]) as im:
             width, height = im.size
             # El límite propio se mira con la cabecera, antes de descomprimir nada.
             # (Image.MAX_IMAGE_PIXELS solo da error al doble del límite; entre 1x y 2x
@@ -216,7 +259,7 @@ def _check_image(path: Path, rel: str, ext: str) -> None:
             im.verify()  # sumas de control y estructura (sobre todo en PNG)
         # verify() deja la imagen inservible y no detecta un JPEG cortado: se vuelve
         # a abrir y se decodifica entera (como mucho 4096x4096, acotado).
-        with Image.open(path, formats=[fmt]) as im:
+        with Image.open(io.BytesIO(data), formats=[fmt]) as im:
             im.load()
     except ThemeError:
         raise
@@ -239,8 +282,11 @@ def open_validated_image(path: Path, ext: str) -> Image.Image:
 
     - solo el decodificador que toca por la extensión (``formats=[...]``): un fichero
       cambiado por otro formato no se abre;
+    - el tamaño del fichero (``MAX_FILE_BYTES``): se lee una vez, acotado, y se
+      decodifica eso;
     - el límite de lado (``MAX_IMAGE_SIDE``) con la cabecera, antes de descomprimir;
-    - solo el primer fotograma (un GIF animado se pinta quieto).
+    - solo el primer fotograma (un GIF animado se pinta quieto: nunca se hace ``seek``
+      a otro, así que el lienzo no puede crecer, R2-01).
 
     Devuelve una copia RGBA ya en memoria, sin el fichero abierto. Si algo falla,
     lanza ``ThemeError``.
@@ -250,7 +296,10 @@ def open_validated_image(path: Path, ext: str) -> Image.Image:
     if fmt is None:
         raise ThemeError(Text("temas.imagen_extension", rel=path.name))
     try:
-        with Image.open(path, formats=[fmt]) as im:
+        data = _read_bounded(path)
+        if data is None:
+            raise ThemeError(Text("temas.imagen_bomba", rel=path.name))
+        with Image.open(io.BytesIO(data), formats=[fmt]) as im:
             width, height = im.size
             if width > MAX_IMAGE_SIDE or height > MAX_IMAGE_SIDE:
                 raise ThemeError(_too_big_image(path.name, width, height))
@@ -272,13 +321,25 @@ def open_validated_image(path: Path, ext: str) -> Image.Image:
 # No es un texto para el usuario: no se traduce.
 FONT_SAMPLE = "0123456789 %°¡¿ñÑáéíóú—↑↓:,.ABCabc"  # i18n: no
 FONT_CHECK_SIZE = 20  # tamaño fijo que se prueba siempre, además de los del tema
+# R2-02: una fuente puede declarar métricas infladas (p. ej. ``head.unitsPerEm`` de 2048
+# a 200) y dibujar cada letra 10 veces más grande de lo pedido. Una letra real cabe en
+# ~1,5 veces el tamaño; más de 4 veces de alto (o de ancho medio) no es una fuente sino
+# una bomba: al pintar un texto largo Pillow pediría cientos de megapíxeles.
+FONT_MAX_SCALE = 4
 
 
-def _check_font(path: Path, rel: str, sizes: frozenset[int] = frozenset()) -> None:
-    """Abre la fuente y pinta ``FONT_SAMPLE`` a cada tamaño que el tema usa con ella.
+def _check_font(data: bytes, rel: str, sizes: frozenset[int] = frozenset()) -> None:
+    """Abre la fuente (sus bytes, ya leídos) y pinta ``FONT_SAMPLE`` a cada tamaño que el
+    tema usa con ella.
 
-    No cubre todos los glifos ni todos los tamaños posibles: el render, además,
-    captura ``OSError`` al pintar y cae a la fuente incluida.
+    Se abre **desde memoria** (R2-03): FreeType mantiene abierto el fichero mientras vive
+    el objeto de la fuente, y una fuente rechazada sigue viva en la traza del error; en
+    Windows eso impedía borrar la carpeta temporal de una importación fallida.
+
+    Antes de pintar se miden las letras (``getbbox`` no rasteriza): si salen
+    desproporcionadas, se rechaza sin pedirle a Pillow el lienzo. No cubre todos los
+    glifos ni todos los tamaños posibles: el render, además, mide cada texto y captura
+    los fallos al pintar y cae a la fuente incluida.
     """
     from PIL import ImageDraw, ImageFont
 
@@ -286,12 +347,22 @@ def _check_font(path: Path, rel: str, sizes: frozenset[int] = frozenset()) -> No
     draw = ImageDraw.Draw(Image.new("L", (8, 8)))
     for size in sorted({FONT_CHECK_SIZE, *sizes}):
         try:
-            font = ImageFont.truetype(str(path), size)
+            font = ImageFont.truetype(io.BytesIO(data), size)
         except (OSError, ValueError):
             raise ThemeError(Text("temas.fuente_danada", rel=rel)) from None
         try:
+            left, top, right, bottom = font.getbbox(FONT_SAMPLE)
+            too_tall = bottom - top > FONT_MAX_SCALE * size
+            too_wide = right - left > FONT_MAX_SCALE * size * len(FONT_SAMPLE)
+            if too_tall or too_wide:
+                raise ThemeError(
+                    Text("temas.fuente_enorme", rel=rel, size=size, max=FONT_MAX_SCALE)
+                )
             draw.text((0, 0), FONT_SAMPLE, font=font, fill=255)
-        except (OSError, ValueError):
+        except ThemeError:
+            raise
+        except (OSError, ValueError, Image.DecompressionBombError):
+            # DecompressionBombError hereda de Exception, no de OSError: hay que nombrarla.
             raise ThemeError(Text("temas.fuente_falla", rel=rel, size=size)) from None
 
 
@@ -324,12 +395,17 @@ def _check_file(
             size=size // (1024 * 1024),
             max=MAX_FILE_BYTES // (1024 * 1024),
         )
-    if not _read_head(path).startswith(signatures[ext]):
+    # Desde aquí todo se comprueba sobre los mismos bytes, leídos una sola vez (R2-05).
+    data = _read_bounded(path)
+    if data is None:
+        max_mb = MAX_FILE_BYTES // MB
+        raise _file_error("temas.fichero_grande", what, rel=rel, size=max_mb, max=max_mb)
+    if not data.startswith(signatures[ext]):
         raise _file_error("temas.tipo_falso", what, rel=rel, ext=ext)
     if kind == "image":
-        _check_image(path, rel, ext)
+        _check_image(data, rel, ext)
     else:
-        _check_font(path, rel, sizes)
+        _check_font(data, rel, sizes)
     return path.resolve()
 
 
@@ -417,6 +493,9 @@ def load_theme(path: str | os.PathLike[str]) -> LoadedTheme:
         raise ThemeError(
             Text("temas.json_grande", file=THEME_JSON, kb=MAX_JSON_BYTES // 1024), damaged=True
         )
+    # R2-09: el Bloc de notas de Windows guardaba en UTF-8 «con BOM». El menú lee el
+    # título con utf-8-sig y lo enseñaba, pero aquí fallaba: se quita, como hace config.
+    raw = raw.removeprefix(b"\xef\xbb\xbf")
 
     try:
         theme = Theme.model_validate_json(raw)
@@ -455,6 +534,10 @@ def _zip_entry_problem(info: zipfile.ZipInfo) -> str | None:
     barra invertida se busca en ``orig_filename`` (el nombre tal cual viene en el zip).
     """
     name = info.filename
+    # R2-07: zipfile corta el nombre en el primer carácter nulo («b.png\x00/../x» se
+    # extraería como «b.png»): lo que se comprueba no sería lo que dice el zip.
+    if "\x00" in info.orig_filename:
+        return Text("temas.zip.nombre")
     if "\\" in info.orig_filename or "\\" in name:
         return Text("temas.zip.barra")
     if name.startswith("/") or PurePosixPath(name).is_absolute():
@@ -539,8 +622,9 @@ def _extract_entry(zf: zipfile.ZipFile, info: zipfile.ZipInfo, dest: Path, budge
 def import_theme_zip(zip_path: str | os.PathLike[str], themes_dir: str | os.PathLike[str]) -> Path:
     """Importa un tema compartido en ``.zip`` dentro de ``themes_dir``.
 
-    Devuelve la carpeta final del tema. Si algo falla, lanza ``ThemeError`` y no deja
-    nada a medias en ``themes_dir``.
+    Devuelve la carpeta final del tema. Si algo falla, lanza ``ThemeError`` (siempre ese
+    tipo: la bandeja y el editor solo saben contar ese) y no deja nada a medias en
+    ``themes_dir``.
     """
     zip_path = Path(zip_path)
     themes_root = Path(themes_dir)
@@ -563,7 +647,17 @@ def import_theme_zip(zip_path: str | os.PathLike[str], themes_dir: str | os.Path
         final = _free_name(themes_root, slugify(loaded.theme.name))
         tmp.rename(final)
         return final
-    except BaseException:
+    except ThemeError:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise
+    except Exception as exc:
+        # R2-04: lo que no esperábamos (MemoryError, un OSError al renombrar, un fallo
+        # raro de Pillow…) también sale como ThemeError, con un mensaje genérico. En el
+        # registro, solo el tipo: el mensaje puede llevar rutas personales.
+        shutil.rmtree(tmp, ignore_errors=True)
+        log.warning("Fallo inesperado al importar un tema: %s", type(exc).__name__)
+        raise ThemeError(Text("temas.zip.inesperado", name=zip_path.name)) from None
+    except BaseException:  # Ctrl+C, salida del programa: se limpia y se deja pasar
         shutil.rmtree(tmp, ignore_errors=True)
         raise
 

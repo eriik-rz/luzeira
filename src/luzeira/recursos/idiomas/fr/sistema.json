@@ -10,10 +10,13 @@
   "sistema.actualizar_descarga_grande": "Le téléchargement est plus volumineux que prévu.",
   "sistema.actualizar_no_puede": "Cette copie de Luzeira ne peut pas vérifier les mises à jour.",
   "sistema.actualizar_instalador_distinto": "Le programme d’installation téléchargé ne correspond pas à celui qui est signé. Je ne l’ouvre pas.",
+  "sistema.actualizar_elevada": "Luzeira s’exécute en tant qu’administrateur et ne se met pas à jour dans ce cas. Fermez-la, rouvrez-la normalement et réessayez.",
+  "sistema.actualizar_lenta": "Le téléchargement depuis GitHub est trop lent. Réessayez plus tard.",
   "sistema.ventana_titulo": "Luzeira — Éditeur de thèmes",
   "sistema.ventana_sin_guardar": "Des modifications n’ont pas été enregistrées ({reason}). Fermer quand même ?",
   "sistema.ventana_pendiente_errores": "des erreurs sont signalées en rouge",
   "sistema.ventana_pendiente_incluido": "ce sont des modifications d’un thème intégré ; utilisez « Enregistrer sous » pour les garder",
   "sistema.ventana_pendiente_fallo": "l’enregistrement a échoué",
-  "sistema.ventana_pendiente_desconocido": "je n’ai pas pu vérifier s’il reste quelque chose à enregistrer"
+  "sistema.ventana_pendiente_desconocido": "je n’ai pas pu vérifier s’il reste quelque chose à enregistrer",
+  "sistema.autoarranque_carpeta_insegura": "Je n’active pas le démarrage avec Windows : d’autres utilisateurs de ce PC peuvent modifier le dossier de Luzeira. Décompressez à nouveau la version portable dans un dossier à vous (par exemple Documents) ; la déplacer ne suffit pas, car elle garde ses autorisations. Ou utilisez le programme d’installation."
 }

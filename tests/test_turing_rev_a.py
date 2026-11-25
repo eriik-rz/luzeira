@@ -139,6 +139,13 @@ def test_find_port_by_vid_pid_only_is_not_safe():
     assert find_port([OTHER]) is None
 
 
+def test_find_port_ignores_the_rev_a_serial_on_another_usb():
+    # R5-07: cualquier aparato puede anunciar el serie de la rev A.
+    arduino = SimpleNamespace(device="COM4", vid=0x2341, pid=0x0043, serial_number="USB35INCHIPSV2")
+    assert find_port([arduino]) is None
+    assert find_port([arduino, BY_IDS]) == PortMatch("COM9", by_serial=False)
+
+
 def test_find_port_prefers_serial_over_earlier_vid_pid():
     # Un posible rev B (solo VID/PID) listado antes no debe ganar al rev A seguro.
     assert find_port([BY_IDS, BY_SERIAL]) == PortMatch("COM7", by_serial=True)

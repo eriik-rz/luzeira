@@ -1,21 +1,44 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = ["cryptography==50.0.2"]  # la misma que uv.lock
+# ///
 """Firma una versión de Luzeira para que la app la acepte como actualización (ADR-006).
 
 Lo usa SOLO quien mantiene el proyecto, en su PC. La clave privada nunca entra en el
 repositorio ni en GitHub: vive en un fichero cifrado con contraseña, con una copia en el
 gestor de contraseñas.
 
+Se lanza **aislado** (``uv run --script``): con la cabecera de arriba (PEP 723), uv le
+monta un entorno propio con solo ``cryptography`` (y lo que ella necesita). Así, la clave
+se descifra sin cargar las demás dependencias de la app ni sus ficheros ``.pth``.
+
+⚠ Fijado del todo solo cuando exista ``scripts/firmar.py.lock`` (C-77). Hasta entonces,
+``cryptography`` va por versión exacta, pero ``cffi`` y ``pycparser`` se resuelven sin fijar
+en cada entorno nuevo. Se crea una vez con ``uv lock --script scripts/firmar.py`` (y se
+commitea); a partir de ahí, uv lo usa solo. El script avisa al arrancar si no lo encuentra.
+
+Por lo mismo (no cargar la app), este script **no importa** ``luzeira``: lee
+``PUBLIC_KEYS`` y ``REPO`` del código de ``src/luzeira/actualizar.py`` como texto (sin
+ejecutarlo) y duplica lo poco que necesita (``manifest_bytes``); los tests vigilan que dé
+lo mismo que la app.
+
 Una vez (y otra para la clave de reserva)::
 
-    uv run python scripts/firmar.py generar-clave --salida C:/ruta/fuera/del/repo/luzeira-firma.pem
+    uv run --script scripts/firmar.py generar-clave --salida C:/fuera/del/repo/firma.pem
 
 Imprime la clave pública: va en ``PUBLIC_KEYS`` de ``src/luzeira/actualizar.py``.
 
-En cada versión, con la release ya en borrador (la deja así el workflow ``release``)::
+En cada versión, con la release ya en borrador (la deja así el workflow ``release``) y
+la etiqueta ``vX.Y.Z`` en tu repo local (la que subiste)::
 
-    uv run python scripts/firmar.py firmar v0.2.0 --clave C:/ruta/luzeira-firma.pem
+    uv run --script scripts/firmar.py firmar v0.2.0 --clave C:/ruta/luzeira-firma.pem
 
-Baja el instalador del borrador, comprueba su attestation de GitHub y su línea de
-``SHA256SUMS``, escribe ``manifest.json`` y ``manifest.json.sig`` y los sube al borrador.
+Antes de pedir la contraseña: baja el instalador y ``SHA256SUMS`` del borrador y exige
+que los dos vengan atestiguados por ``release.yml``, en esa etiqueta y en **el commit al
+que apunta tu etiqueta local** (``--source-digest``): si alguien con la cuenta de GitHub
+moviera la etiqueta a otro commit, no firmas su build. Después comprueba el instalador
+contra ``SHA256SUMS``, pide la contraseña, firma ``manifest.json`` y ``SHA256SUMS`` y sube
+``manifest.json``, ``manifest.json.sig`` y ``SHA256SUMS.sig`` al borrador.
 Publicar lo haces tú después: ``gh release edit v0.2.0 --draft=false -R eriik-rz/luzeira``.
 
 Las contraseñas se piden en una ventanita de Windows: así las escribes tú y no pasan por
@@ -25,14 +48,23 @@ ningún registro (ni por la conversación con Claude Code, si lo lanza él).
 from __future__ import annotations
 
 import argparse
+import ast
 import base64
 import hashlib
+import json
+import re
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+    Ed25519PrivateKey,
+    Ed25519PublicKey,
+)
 from cryptography.hazmat.primitives.serialization import (
     BestAvailableEncryption,
     Encoding,
@@ -42,12 +74,68 @@ from cryptography.hazmat.primitives.serialization import (
 )
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "src"))
-
-from luzeira import actualizar  # noqa: E402
-from luzeira.actualizar import Manifest, parse_version  # noqa: E402
-
+ACTUALIZAR = ROOT / "src" / "luzeira" / "actualizar.py"
+LOCK = Path(__file__).resolve().with_name("firmar.py.lock")
 MIN_PASSWORD = 12
+
+# Los mismos patrones que luzeira.actualizar (test_firmar compara los resultados).
+_VERSION = re.compile(r"(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})")
+_SHA256 = re.compile(r"[0-9a-f]{64}")
+MAX_INSTALLER_BYTES = 200 * 1024 * 1024
+#: Una línea de SHA256SUMS: «<sha256>  <fichero>». Se exige el formato antes de firmarlo,
+#: así la firma de SHA256SUMS nunca puede valer como la de un manifest.json (no es JSON).
+_SUMS_LINE = re.compile(r"[0-9a-f]{64}  [A-Za-z0-9][A-Za-z0-9._-]{0,99}")
+
+
+def _constants(path: Path = ACTUALIZAR) -> dict[str, object]:
+    """``REPO`` y ``PUBLIC_KEYS`` de actualizar.py, leídos como texto: ``ast`` analiza el
+    código sin ejecutarlo, y ``literal_eval`` solo acepta valores literales."""
+    found: dict[str, object] = {}
+    for node in ast.parse(path.read_text(encoding="utf-8")).body:
+        target = None
+        if isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target = node.targets[0]
+        elif isinstance(node, ast.AnnAssign):
+            target = node.target
+        if isinstance(target, ast.Name) and target.id in {"REPO", "PUBLIC_KEYS"}:
+            found[target.id] = ast.literal_eval(node.value)
+    return found
+
+
+_FOUND = _constants()
+REPO: str = _FOUND["REPO"]  # type: ignore[assignment]
+PUBLIC_KEYS: tuple[str, ...] = _FOUND["PUBLIC_KEYS"]  # type: ignore[assignment]
+
+
+def parse_version(text: str) -> tuple[int, int, int]:
+    match = _VERSION.fullmatch(text)
+    if match is None:
+        sys.exit(f"Versión no válida: {text!r}")
+    return int(match[1]), int(match[2]), int(match[3])
+
+
+@dataclass(frozen=True)
+class Manifest:
+    """Lo mismo que ``luzeira.actualizar.Manifest``, en el mismo orden de campos."""
+
+    app: str
+    version: str
+    file: str
+    size: int
+    sha256: str
+
+
+def manifest_bytes(manifest: Manifest) -> bytes:
+    """Los bytes que se firman: JSON compacto, campos en el orden de la clase. Tiene que
+    dar exactamente lo mismo que ``luzeira.actualizar.manifest_bytes`` (test_firmar)."""
+    fields = {
+        "app": manifest.app,
+        "version": manifest.version,
+        "file": manifest.file,
+        "size": manifest.size,
+        "sha256": manifest.sha256,
+    }
+    return json.dumps(fields, separators=(",", ":"), ensure_ascii=True).encode("ascii")
 
 
 def ask_password(prompt: str) -> str:
@@ -116,6 +204,13 @@ def read_key(path: Path, password: bytes) -> Ed25519PrivateKey:
     return key
 
 
+def check_sums(sums: str) -> None:
+    """``SHA256SUMS`` tal como lo escribe empaquetar.py, y nada más."""
+    lines = sums.splitlines()
+    if not lines or not sums.endswith("\n") or not all(_SUMS_LINE.fullmatch(x) for x in lines):
+        sys.exit("SHA256SUMS no tiene el formato esperado. No firmo.")
+
+
 def make_manifest(version: str, installer: Path, sums: str) -> Manifest:
     """El manifiesto del instalador, comprobando que casa con ``SHA256SUMS``."""
     parse_version(version)
@@ -124,45 +219,80 @@ def make_manifest(version: str, installer: Path, sums: str) -> Manifest:
     expected = f"{digest}  {installer.name}"
     if expected not in (line.strip() for line in sums.splitlines()):
         sys.exit(f"{installer.name} no casa con SHA256SUMS de la release. No firmo.")
-    return Manifest(
+    manifest = Manifest(
         app="luzeira", version=version, file=installer.name, size=len(data), sha256=digest
     )
+    # Lo que la app exige (luzeira.actualizar.Manifest y verify_manifest).
+    if (
+        manifest.file != f"Luzeira-{version}-instalador.exe"
+        or not 0 < manifest.size <= MAX_INSTALLER_BYTES
+        or not _SHA256.fullmatch(manifest.sha256)
+    ):
+        sys.exit("El manifiesto no lo aceptaría la app. No firmo.")
+    return manifest
 
 
-def sign(manifest: Manifest, private: Ed25519PrivateKey) -> tuple[bytes, bytes]:
-    """``(manifest.json, manifest.json.sig)``. Antes comprueba que la app lo aceptaría.
-
-    ⚠ Compara con el ``PUBLIC_KEYS`` de este árbol, no con el de las versiones que tiene
+def _check_key(private: Ed25519PrivateKey) -> Ed25519PublicKey:
+    """⚠ Compara con el ``PUBLIC_KEYS`` de este árbol, no con el de las versiones que tiene
     la gente instaladas. Si algún día se cambia de clave, la versión que la estrena se
     firma todavía con una que conozcan las anteriores (la de reserva está para eso)."""
-    public = public_key_of(private)
-    if public not in actualizar.PUBLIC_KEYS:
+    if public_key_of(private) not in PUBLIC_KEYS:
         sys.exit(
             "Esa clave no está en PUBLIC_KEYS de src/luzeira/actualizar.py: la app no "
             "aceptaría esta firma. ¿Es la clave buena?"
         )
-    data = actualizar.manifest_bytes(manifest)
+    return private.public_key()
+
+
+def sign_bytes(data: bytes, private: Ed25519PrivateKey) -> bytes:
+    """Firma Ed25519 en base64, comprobada antes de devolverla."""
+    public = _check_key(private)
     sig = base64.b64encode(private.sign(data))
-    actualizar.verify_manifest(data, sig, actualizar.PUBLIC_KEYS)  # la misma comprobación
-    return data, sig
+    try:
+        public.verify(base64.b64decode(sig), data)
+    except InvalidSignature:  # pragma: no cover - no debería pasar nunca
+        sys.exit("La firma recién hecha no se verifica. No subo nada.")
+    return sig
 
 
-def attestation_args(path: Path, tag: str) -> list[str]:
+def sign(manifest: Manifest, private: Ed25519PrivateKey) -> tuple[bytes, bytes]:
+    """``(manifest.json, manifest.json.sig)``."""
+    data = manifest_bytes(manifest)
+    return data, sign_bytes(data, private)
+
+
+def attestation_args(path: Path, tag: str, commit: str) -> list[str]:
     """``gh attestation verify`` estricto: solo vale lo que atestiguó NUESTRO workflow de
-    release para ESA etiqueta. Sin esto, cualquier workflow del repo (o alguien con
-    control del repo, justo la amenaza de ADR-006) podría colar un exe atestiguado."""
+    release para ESA etiqueta y ESE commit. Sin el workflow, cualquier workflow del repo
+    podría colar un exe atestiguado; sin el commit, quien controle el repo (la amenaza de
+    ADR-006) movería la etiqueta a otro commit y lo atestiguaría ``release.yml``.
+
+    ``--source-digest`` compara con el commit exacto que firmó GitHub en el certificado
+    (``SourceRepositoryDigest``: 40 caracteres, sin prefijo; medido con la v0.1.7)."""
     return [
-        "attestation", "verify", str(path), "-R", actualizar.REPO,
-        "--signer-workflow", f"{actualizar.REPO}/.github/workflows/release.yml",
+        "attestation", "verify", str(path), "-R", REPO,
+        "--signer-workflow", f"{REPO}/.github/workflows/release.yml",
         "--source-ref", f"refs/tags/{tag}",
+        "--source-digest", commit,
         "--deny-self-hosted-runners",
     ]  # fmt: skip
 
 
-def gh(*args: str) -> None:
+def gh(args: Sequence[str]) -> None:
     print("[firmar] $ gh " + " ".join(args))
     if subprocess.run(["gh", *args]).returncode != 0:  # noqa: S603, S607
         sys.exit("gh ha fallado: no sigo.")
+
+
+def tag_commit(tag: str) -> str:
+    """El commit al que apunta la etiqueta en TU repo local (no en GitHub)."""
+    ref = f"refs/tags/{tag}^{{commit}}"  # refs/tags/: que no valga una rama llamada igual
+    cmd = ["git", "-C", str(ROOT), "rev-parse", "--verify", "--quiet", ref]
+    done = subprocess.run(cmd, capture_output=True, text=True)  # noqa: S603
+    commit = done.stdout.strip()
+    if done.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40}", commit):
+        sys.exit(f"No tengo la etiqueta {tag} en el repo local. ¿La creaste aquí?")
+    return commit
 
 
 def cmd_generate(args: argparse.Namespace) -> None:
@@ -182,36 +312,60 @@ def cmd_generate(args: argparse.Namespace) -> None:
     )
 
 
-def cmd_sign(args: argparse.Namespace) -> None:
+def cmd_sign(
+    args: argparse.Namespace,
+    *,
+    run: Callable[[Sequence[str]], None] = gh,
+    commit_of: Callable[[str], str] = tag_commit,
+    password: Callable[[str], str] = ask_password,
+) -> None:
+    """``run``, ``commit_of`` y ``password``: gh, git y la ventanita (los tests los cambian)."""
     tag = args.etiqueta
     if not tag.startswith("v"):
         sys.exit("La etiqueta es vX.Y.Z.")
     version = tag[1:]
     parse_version(version)
-    repo = actualizar.REPO
-    password = ask_password(f"Contraseña de {args.clave.name}:")
-    private = read_key(args.clave, password.encode("utf-8"))
+    commit = commit_of(tag)
     with tempfile.TemporaryDirectory(prefix="luzeira-firmar-") as tmp:
         folder = Path(tmp)
         name = f"Luzeira-{version}-instalador.exe"
-        gh("release", "download", tag, "-R", repo, "-p", name, "-p", "SHA256SUMS", "-D", tmp)
-        installer = folder / name
-        # Los dos atestiguados por el workflow de release de esta etiqueta: si no,
-        # comprobar el exe contra SHA256SUMS del mismo borrador sería circular.
-        gh(*attestation_args(installer, tag))
-        gh(*attestation_args(folder / "SHA256SUMS", tag))
-        sums = (folder / "SHA256SUMS").read_text(encoding="utf-8")
+        installer, sums_path = folder / name, folder / "SHA256SUMS"
+        run(["release", "download", tag, "-R", REPO, "-p", name, "-p", "SHA256SUMS", "-D", tmp])
+        # Los dos atestiguados por el workflow de release de esta etiqueta y este commit:
+        # si no, comprobar el exe contra SHA256SUMS del mismo borrador sería circular.
+        run(attestation_args(installer, tag, commit))
+        run(attestation_args(sums_path, tag, commit))
+        sums_data = sums_path.read_bytes()
+        sums = sums_data.decode("ascii", errors="replace")
+        check_sums(sums)
         manifest = make_manifest(version, installer, sums)
+        # La clave se descifra solo ahora, con todo comprobado.
+        private = read_key(args.clave, password(f"Contraseña de {args.clave.name}:").encode())
         data, sig = sign(manifest, private)
+        sums_sig = sign_bytes(sums_data, private)
         (folder / "manifest.json").write_bytes(data)
         (folder / "manifest.json.sig").write_bytes(sig)
-        gh(
-            "release", "upload", tag, "-R", repo,
-            str(folder / "manifest.json"), str(folder / "manifest.json.sig"),
+        (folder / "SHA256SUMS.sig").write_bytes(sums_sig)
+        run(
+            [
+                "release", "upload", tag, "-R", REPO,
+                str(folder / "manifest.json"), str(folder / "manifest.json.sig"),
+                str(folder / "SHA256SUMS.sig"),
+            ]
         )  # fmt: skip
     print(
-        f"\nFirmada {tag}. Revisa el borrador en GitHub y, si todo está bien, publícala:\n"
-        f"    gh release edit {tag} --draft=false -R {repo}"
+        f"\nFirmada {tag} (commit {commit}). Revisa el borrador en GitHub y, si todo está "
+        f"bien, publícala:\n    gh release edit {tag} --draft=false -R {REPO}"
+    )
+
+
+def lock_notice(lock: Path = LOCK) -> str:
+    """Qué tan fijado está el entorno en el que corre (se imprime al arrancar; no bloquea)."""
+    if lock.is_file():
+        return f"[firmar] Entorno fijado por {lock.name}."
+    return (
+        f"[firmar] ⚠ No hay {lock.name}: cffi y pycparser no están fijados (C-77). "
+        "Para fijarlos: uv lock --script scripts/firmar.py"
     )
 
 
@@ -226,6 +380,7 @@ def main() -> None:
     s.add_argument("--clave", type=Path, required=True, help="el .pem de generar-clave")
     s.set_defaults(func=cmd_sign)
     args = p.parse_args()
+    print(lock_notice())
     args.func(args)
 
 

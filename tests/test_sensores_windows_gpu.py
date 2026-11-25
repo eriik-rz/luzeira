@@ -85,12 +85,19 @@ class FakeCounters:
 
 class FakeKmt:
     # Por defecto, lo medido en la RTX 4070 SUPER: 56,0 °C, 1346 de 3200 RPM.
-    def __init__(self, perf=None, caps=None, hz=2_610_000_000):
+    # Dirección PCI medida en la 4070: bus 7, dispositivo 0, función 0.
+    def __init__(self, perf=None, caps=None, hz=2_610_000_000, pci=(7, 0, 0)):
         self.perf = perf or PerfData(560, 1346, 513)
         self.caps = caps or PerfCaps(3200, 900)
         self.hz = hz
+        self.pci = pci  # None: Windows no la da (la consulta falla)
         self.closed = False
         self.fail_perf = False
+
+    def pci_address(self) -> tuple[int, int, int]:
+        if self.pci is None:
+            raise OSError("ADAPTERADDRESS devolvió 0xC000000D")
+        return self.pci
 
     def perf_data(self) -> PerfData:
         if self.fail_perf:
@@ -297,6 +304,96 @@ def test_pdh_unavailable_keeps_name_total_and_temperature():
     assert api.opened_luids == [LUID]  # sin PDH, la primera de hardware
 
 
+MIB = 1024**2
+# Una Intel integrada: 128 MB «dedicados» (una reserva) y 7,875 GB compartidos → 8 GB.
+IGPU = Adapter(
+    0x4242, "Intel(R) UHD Graphics 770", 0x8086, 128 * MIB, False, 8 * GIB - 128 * MIB, True
+)
+
+
+def igpu_sample(shared: float | None = 1.875 * GIB) -> PdhSample:
+    return PdhSample(
+        engines={eng(10, IGPU.luid, 0): 12.0},
+        dedicated={mem(IGPU.luid): 128 * MIB},
+        shared={} if shared is None else {mem(IGPU.luid): shared},
+    )
+
+
+def test_integrated_memory_is_dedicated_plus_shared():
+    # Antes: 0,13 de 0,13 GB, al 100 %. Ahora, como el Administrador de tareas.
+    api = FakeApi(adapters=[IGPU, BASIC], samples=[None, igpu_sample()])
+    r = make(api).read_all()
+    assert r["gpu.memory_used"] == Reading(2.0, "GB")  # 0,125 + 1,875
+    assert r["gpu.memory_total"] == Reading(8.0, "GB")
+    assert r["gpu.memory_usage"] == Reading(25.0, "%")
+    assert r["gpu.usage"] == Reading(12.0, "%")
+
+
+def test_integrated_without_shared_counter_has_no_used_memory():
+    # Sin «Shared Usage» la usada no contaría lo mismo que la total: sin valor.
+    api = FakeApi(adapters=[IGPU, BASIC], samples=[None, igpu_sample(shared=None)])
+    r = make(api).read_all()
+    assert r["gpu.memory_used"].reason == t(windows_gpu.NOT_SUPPORTED)
+    assert r["gpu.memory_usage"].reason == t(windows_gpu.NOT_SUPPORTED)
+    assert r["gpu.memory_total"] == Reading(8.0, "GB")
+
+
+def test_dedicated_card_ignores_shared_memory():
+    # La del equipo de pruebas: DXGI declara 16 GB compartidos y PDH da su uso, pero no cuentan.
+    rtx = Adapter(LUID, RTX.name, 0x10DE, 12 * GIB, False, 16 * GIB, False)
+    s = sample()
+    s = PdhSample(s.engines, s.dedicated, shared={mem(LUID): 2 * GIB})
+    r = make(FakeApi(adapters=[rtx, BASIC], samples=[None, s])).read_all()
+    assert r["gpu.memory_used"] == Reading(3.0, "GB")
+    assert r["gpu.memory_total"] == Reading(12.0, "GB")
+    assert r["gpu.memory_usage"] == Reading(25.0, "%")
+
+
+def test_integrated_without_dxcore_uses_the_guess_end_to_end():
+    # Windows sin DXCore: ``integrated`` es None y manda la regla prudente.
+    igpu = Adapter(
+        0x4242, "Intel(R) UHD Graphics 770", 0x8086, 128 * MIB, False, 8 * GIB - 128 * MIB
+    )
+    api = FakeApi(adapters=[igpu, BASIC], samples=[None, igpu_sample()])
+    r = make(api).read_all()
+    assert r["gpu.memory_total"] == Reading(8.0, "GB")
+    assert r["gpu.memory_used"] == Reading(2.0, "GB")
+
+
+def test_integrated_used_memory_never_exceeds_total():
+    # PDH cuenta memoria «incidental» del controlador que DXGI no declara.
+    api = FakeApi(adapters=[IGPU, BASIC], samples=[None, igpu_sample(shared=9 * GIB)])
+    r = make(api).read_all()
+    assert r["gpu.memory_used"] == Reading(8.0, "GB")
+    assert r["gpu.memory_usage"] == Reading(100.0, "%")
+
+
+def test_choose_prefers_dedicated_over_integrated_with_more_memory():
+    # Una APU con 16 GB reservados en la BIOS frente a una dedicada de 8 GB sin NVML.
+    apu = Adapter(0x1, "AMD Radeon(TM) Graphics", 0x1002, 16 * GIB, False, 8 * GIB, True)
+    rx = Adapter(0x2, "AMD Radeon RX 6600", 0x1002, 8 * GIB, False, 8 * GIB, False)
+    assert choose_adapter([apu, rx], {0x1, 0x2}) == rx
+    assert choose_adapter([rx, apu], {0x1, 0x2}) == rx
+    # Solo integradas: la de más memoria, como siempre.
+    small = Adapter(0x3, "Intel(R) UHD Graphics", 0x8086, 128 * MIB, False, 8 * GIB, True)
+    assert choose_adapter([small, apu], {0x1, 0x3}) == apu
+
+
+def test_is_integrated_trusts_windows_then_guesses():
+    def card(dedicated, shared, integrated):
+        return Adapter(1, "x", 0x8086, dedicated, False, shared, integrated)
+
+    # Lo que dice Windows (DXCore) manda, diga lo que diga la memoria.
+    assert not windows_gpu.is_integrated(card(128 * MIB, 8 * GIB, False))
+    assert windows_gpu.is_integrated(card(4 * GIB, 8 * GIB, True))
+    # Si no lo dice: integrada solo con menos de 1 GiB dedicado y memoria compartida.
+    assert windows_gpu.is_integrated(card(512 * MIB, 8 * GIB, None))
+    assert not windows_gpu.is_integrated(card(GIB, 8 * GIB, None))
+    assert not windows_gpu.is_integrated(card(12 * GIB, 16 * GIB, None))
+    assert not windows_gpu.is_integrated(card(128 * MIB, 0, None))
+    assert not windows_gpu.is_integrated(card(0, 8 * GIB, None))
+
+
 def test_first_pdh_sample_says_measuring():
     api = FakeApi(samples=[None])
     r = make(api).read_all()
@@ -471,9 +568,15 @@ def test_background_start_does_not_block_and_close_releases():
 class FakeNvml:
     """Lo mínimo de NvidiaSource que usa GpuSource."""
 
-    def __init__(self, has_gpu: bool, unsupported: tuple[str, ...] = ()) -> None:
+    def __init__(
+        self,
+        has_gpu: bool,
+        unsupported: tuple[str, ...] = (),
+        pci: tuple[int, int, int] | None = None,  # None: NVML no da la dirección
+    ) -> None:
         self.has_gpu = has_gpu
         self.unsupported = unsupported
+        self.pci_address = pci
         self.closed = False
 
     def sensors(self):
@@ -574,6 +677,64 @@ def test_fill_refused_with_two_nvidia_cards():
     api = FakeApi(adapters=[RTX, other, BASIC], samples=[None, both])
     src = GpuSource(FakeNvml(has_gpu=True, unsupported=("fan",)), make(api))
     assert src.read_all()["gpu.fan"].reason == t(nvidia.NOT_SUPPORTED)
+
+
+def _two_nvidia_api(kmt: FakeKmt | None = None) -> FakeApi:
+    """Dos NVIDIA con datos en PDH; Windows elige la RTX (la primera a igual memoria)."""
+    other = Adapter(0x888, "NVIDIA GeForce RTX 3060", 0x10DE, 12 * GIB, False)
+    both = PdhSample(
+        engines={**sample().engines, eng(20, 0x888, 0): 5.0},
+        dedicated={**sample().dedicated, mem(0x888): GIB},
+    )
+    return FakeApi(adapters=[RTX, other, BASIC], samples=[None, both], kmt=kmt)
+
+
+def test_fill_with_two_nvidia_when_pci_address_matches():
+    # C-49: la dirección PCI de NVML y la de Windows coinciden → es la misma tarjeta.
+    nv = FakeNvml(has_gpu=True, unsupported=("fan",), pci=(7, 0, 0))
+    src = GpuSource(nv, make(_two_nvidia_api()))
+    assert src.read_all()["gpu.fan"] == Reading(42.0, "%")
+
+
+def test_fill_refused_when_pci_address_differs_even_with_one_nvidia():
+    # Una sola NVIDIA según Windows, pero NVML lee otra dirección: manda la dirección.
+    nv = FakeNvml(has_gpu=True, unsupported=("fan",), pci=(8, 0, 0))
+    src = GpuSource(nv, make(FakeApi()))
+    assert src.read_all()["gpu.fan"].reason == t(nvidia.NOT_SUPPORTED)
+
+
+def test_without_pci_address_the_old_rule_stays():
+    # NVML no da la dirección: con dos NVIDIA no se rellena...
+    src = GpuSource(FakeNvml(has_gpu=True, unsupported=("fan",)), make(_two_nvidia_api()))
+    assert src.read_all()["gpu.fan"].reason == t(nvidia.NOT_SUPPORTED)
+    # ...Windows no la da: con dos NVIDIA tampoco, con una sí.
+    nv = FakeNvml(has_gpu=True, unsupported=("fan",), pci=(7, 0, 0))
+    src = GpuSource(nv, make(_two_nvidia_api(FakeKmt(pci=None))))
+    assert src.read_all()["gpu.fan"].reason == t(nvidia.NOT_SUPPORTED)
+    src = GpuSource(nv, make(FakeApi(kmt=FakeKmt(pci=None))))
+    assert src.read_all()["gpu.fan"] == Reading(42.0, "%")
+
+
+def test_windows_pci_address():
+    src = make(FakeApi())
+    assert src.pci_address is None  # aún no ha arrancado
+    src.read_all()
+    assert src.pci_address == (7, 0, 0)
+    # Sin dirección (todo a unos, medido en la entrada repetida de DXGI) o con la consulta
+    # fallando: no se sabe.
+    for kmt in (FakeKmt(pci=(0xFFFFFFFF, 0xFFFF, 0xFFFF)), FakeKmt(pci=None)):
+        src = make(FakeApi(kmt=kmt))
+        src.read_all()
+        assert src.pci_address is None
+        assert src.read_all()["gpu.temperature"].value == 56.0  # lo demás, igual
+
+
+def test_valid_pci_address_limits():
+    assert windows_gpu.valid_pci_address((7, 0, 0)) == (7, 0, 0)
+    assert windows_gpu.valid_pci_address((255, 31, 7)) == (255, 31, 7)
+    assert windows_gpu.valid_pci_address((256, 0, 0)) is None
+    assert windows_gpu.valid_pci_address((7, 32, 0)) is None
+    assert windows_gpu.valid_pci_address((7, 0, 8)) is None
 
 
 def test_windows_released_when_nvml_arrives_late():
@@ -699,6 +860,71 @@ def _assert_clock_query_is_the_engine_one():
         kmt.close()
     assert abs(max_hz / 1_000_000 - nv_max_mhz) <= nv_max_mhz * 0.03
     assert 0 < hz <= max_hz
+
+
+def _real_chosen_luid() -> int | None:
+    src = WindowsGpuSource(background=False, sleep=lambda s: __import__("time").sleep(0.3))
+    try:
+        src.read_all()
+        return src._started.adapter.luid if src._started is not None else None
+    finally:
+        src.close()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Solo en Windows")
+def test_real_dxcore_says_whether_chosen_card_is_integrated():
+    # Si DXCore deja de responder (o su vtable no cuadra), ``integrated`` sería None y la
+    # regla de la memoria iría a ciegas: este test cae.
+    from luzeira.sensores import windows_api
+
+    luid = _real_chosen_luid()
+    if luid is None:
+        pytest.skip("Windows no da datos de GPU en este equipo")
+    chosen = next(a for a in windows_api.list_adapters() if a.luid == luid)
+    assert chosen.integrated is not None
+    nv = nvidia.NvidiaSource()
+    has_nvidia = nv.has_gpu
+    nv.close()
+    if has_nvidia:  # una NVIDIA no es integrada
+        assert chosen.integrated is False
+        assert chosen.shared_bytes > 0
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Solo en Windows")
+def test_real_pdh_has_shared_usage_of_chosen_card():
+    import time
+
+    from luzeira.sensores import windows_api
+
+    luid = _real_chosen_luid()
+    if luid is None:
+        pytest.skip("Windows no da datos de GPU en este equipo")
+    counters = windows_api.RealPdhCounters()
+    try:
+        counters.collect()
+        time.sleep(0.3)
+        s = counters.collect()
+    finally:
+        counters.close()
+    assert s is not None
+    assert luid in dedicated_usage(s.shared)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Solo en Windows")
+def test_real_pci_address_matches_nvml():
+    nv = nvidia.NvidiaSource()
+    try:
+        nv_pci = nv.pci_address
+    finally:
+        nv.close()
+    if nv_pci is None:
+        pytest.skip("No hay GPU NVIDIA con NVML en este equipo")
+    src = WindowsGpuSource(background=False, sleep=lambda s: __import__("time").sleep(0.3))
+    try:
+        src.read_all()
+        assert src.pci_address == nv_pci
+    finally:
+        src.close()
 
 
 def test_default_hub_with_nvidia_does_not_open_windows():

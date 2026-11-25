@@ -1,6 +1,9 @@
 """EditorLink: el servidor y su token viven lo que vive la ventana (sin red ni ventanas)."""
 
+import contextlib
 import itertools
+import socket
+import threading
 import time
 from typing import ClassVar
 
@@ -129,9 +132,130 @@ def test_dev_mode_uses_127_0_0_1_for_vite_and_prints_it(monkeypatch, capsys):
 
     monkeypatch.setattr(conexion, "EditorLink", FakeLink)
     monkeypatch.setattr(cli.time, "sleep", stop)
+    # Sin mirar el 5173 de verdad (suele tenerlo otro proyecto): «libre».
+    monkeypatch.setattr(cli, "_vite_port_state", lambda origin: "free")
     assert cli._editor(dev=True) == 0
     assert created["dev_origin"] == "http://127.0.0.1:5173"
     out = capsys.readouterr().out
     assert "http://127.0.0.1:5173/#token=token-" in out
     assert "localhost" not in out
     assert created["link"].closed
+
+
+# --- Revisión de seguridad R1-07: el token de --desarrollo ------------------------------
+
+
+class _TinyHttp:
+    """Un servidor HTTP de prueba en un puerto libre: responde siempre ``page``."""
+
+    def __init__(self, page: bytes) -> None:
+        self.sock = socket.create_server(("127.0.0.1", 0))
+        self.port = self.sock.getsockname()[1]
+        self.page = page
+        threading.Thread(target=self._serve, daemon=True).start()
+
+    def _serve(self) -> None:
+        while True:
+            try:
+                conn, _ = self.sock.accept()
+            except OSError:
+                return
+            with conn:
+                conn.settimeout(2)
+                with contextlib.suppress(OSError):
+                    conn.recv(65536)
+                    conn.sendall(
+                        b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n"
+                        + f"Content-Length: {len(self.page)}\r\n\r\n".encode()
+                        + self.page
+                    )
+
+    def close(self) -> None:
+        self.sock.close()
+
+
+def test_vite_port_state_tells_free_ours_and_other():
+    import luzeira.__main__ as cli
+
+    other = _TinyHttp(b"<!doctype html><title>Forja de heroes</title>")
+    ours = _TinyHttp(b"<!doctype html><title>Luzeira \xc2\xb7 Editor de temas</title>")
+    try:
+        assert cli._vite_port_state(f"http://127.0.0.1:{other.port}") == "other"
+        assert cli._vite_port_state(f"http://127.0.0.1:{ours.port}") == "ours"
+    finally:
+        other.close()
+        ours.close()
+    # Ya cerrado: libre.
+    assert cli._vite_port_state(f"http://127.0.0.1:{other.port}") == "free"
+
+
+def test_dev_mode_does_not_print_the_token_if_another_program_has_the_port(monkeypatch, capsys):
+    """R1-07: en el 5173 suele estar el Vite de otro proyecto. La dirección con el token
+    se abriría en su página, que lo leería del fragmento: ni se arranca el servidor ni se
+    imprime el token."""
+    import luzeira.__main__ as cli
+
+    busy = _TinyHttp(b"<!doctype html><title>Otro proyecto</title>")
+    started = []
+
+    class FakeLink:
+        def __init__(self, **kwargs):
+            started.append(kwargs)
+
+        def server(self):
+            return FakeServer()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(conexion, "EditorLink", FakeLink)
+    monkeypatch.setattr(cli, "DEV_ORIGIN", f"http://127.0.0.1:{busy.port}")
+    monkeypatch.setattr(cli.time, "sleep", lambda _s: (_ for _ in ()).throw(KeyboardInterrupt))
+    try:
+        assert cli._editor(dev=True) == 1
+    finally:
+        busy.close()
+    out = capsys.readouterr().out
+    assert "token-" not in out
+    assert "#token=" not in out
+    assert f"127.0.0.1:{busy.port}" in out  # dice dónde está el problema
+    assert started == []
+
+
+def test_without_dev_mode_there_is_no_dev_origin(monkeypatch):
+    """Sin --desarrollo no hay origen de Vite: ni en «luzeira editor» ni en la bandeja."""
+    import ast
+    from pathlib import Path
+
+    import luzeira.__main__ as cli
+    from luzeira import bandeja
+
+    created = {}
+
+    class FakeLink:
+        def __init__(self, **kwargs):
+            created.update(kwargs)
+            self.window = type("W", (), {"is_open": False})()
+
+        def server(self):
+            return FakeServer()
+
+        @staticmethod
+        def is_built():
+            return False  # sale enseguida, sin ventana
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(conexion, "EditorLink", FakeLink)
+    assert cli._editor(dev=False) == 1
+    assert created["dev_origin"] is None
+    # La bandeja crea su EditorLink sin dev_origin (por defecto None).
+    tree = ast.parse(Path(bandeja.__file__).read_text(encoding="utf-8"))
+    calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "EditorLink"
+    ]
+    assert calls, "la bandeja ya no crea un EditorLink: revisa este test"
+    assert all(kw.arg != "dev_origin" for call in calls for kw in call.keywords)

@@ -166,9 +166,14 @@ def save_config(config: AppConfig, path: Path | None = None) -> None:
     path = path or config_dir() / "config.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(
-        json.dumps(config.model_dump(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
+    text = json.dumps(config.model_dump(), ensure_ascii=False, indent=2) + "\n"
+    with tmp.open("w", encoding="utf-8") as fh:
+        fh.write(text)
+        # R4-14: sin esto, tras un corte de luz el renombrado puede llegar al disco antes
+        # que los datos y dejar un config.json vacío. flush pasa el búfer de Python al
+        # sistema; fsync obliga al sistema a escribirlo en el disco.
+        fh.flush()
+        os.fsync(fh.fileno())
     os.replace(tmp, path)
 
 
@@ -180,20 +185,49 @@ class ThemeEntry:
     title: str = ""  # el «name» del tema, para enseñarlo («Neón Synthwave»)
 
 
+#: Lo más que se lee de un theme.json para sacar su título. El mismo tope que
+#: ``temas.cargar.MAX_JSON_BYTES`` (un test lo vigila); no se importa de allí para no
+#: cargar Pillow al leer la configuración.
+MAX_THEME_JSON_BYTES = 256 * 1024
+
+
 def _read_title(theme_json: Path, fallback: str) -> str:
-    """El nombre legible del tema, leído con cuidado: un tema roto no rompe el menú."""
+    """El nombre legible del tema, leído con cuidado: un tema roto no rompe el menú.
+
+    Se lee como mucho ``MAX_THEME_JSON_BYTES + 1`` (R2-06): antes se leía el fichero
+    entero y luego se recortaba, y un theme.json de gigas se cargaba en memoria. Uno
+    más grande que el tope no tiene título (el cargador lo rechaza igual). UTF-8 con o
+    sin BOM, como el cargador (R2-09)."""
     try:
-        raw = json.loads(theme_json.read_bytes()[:262_144])
+        with theme_json.open("rb") as fh:
+            data = fh.read(MAX_THEME_JSON_BYTES + 1)
+        if len(data) > MAX_THEME_JSON_BYTES:
+            return fallback
+        raw = json.loads(data.decode("utf-8-sig"))
         title = raw.get("name") if isinstance(raw, dict) else None
-    except (OSError, ValueError):
+    except (OSError, ValueError):  # UnicodeDecodeError es un ValueError
         return fallback
     return title.strip()[:60] if isinstance(title, str) and title.strip() else fallback
+
+
+def _is_link(path: Path) -> bool:
+    """¿Enlace simbólico o *junction*? Sin seguirlo (``lstat``); si no se puede mirar,
+    se trata como enlace (no se usa)."""
+    try:
+        return path.is_symlink() or path.is_junction()
+    except OSError:
+        return True
 
 
 def list_themes(user_dir: Path | None = None) -> list[ThemeEntry]:
     """Temas disponibles: primero los incluidos, luego los del usuario. Si un tema del
     usuario se llama igual que uno incluido, gana el incluido (no se puede suplantar).
-    Las carpetas temporales de importación (``.importando-*``) no son temas."""
+    Las carpetas temporales de importación (``.importando-*``) no son temas.
+
+    Tampoco los enlaces simbólicos ni las *junctions* (R2-08): una carpeta de tema que en
+    realidad apunta a otro sitio del disco no es un tema que se haya importado, y seguirla
+    deja leer fuera de la carpeta de temas. Concepto: una
+    *junction* es un enlace de carpeta de Windows que cualquiera puede crear sin admin."""
     user_dir = user_dir if user_dir is not None else user_themes_dir()
     entries: dict[str, ThemeEntry] = {}
     for base, builtin in ((BUILTIN_THEMES, True), (user_dir, False)):
@@ -201,7 +235,9 @@ def list_themes(user_dir: Path | None = None) -> list[ThemeEntry]:
             continue
         for child in sorted(base.iterdir()):
             if (
-                child.is_dir()
+                not _is_link(child)
+                and not _is_link(child / "theme.json")
+                and child.is_dir()
                 and _THEME_NAME.match(child.name)
                 and (child / "theme.json").is_file()
                 and child.name not in entries

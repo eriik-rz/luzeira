@@ -10,10 +10,13 @@
   "sistema.actualizar_descarga_grande": "ダウンロードが想定より大きすぎます。",
   "sistema.actualizar_no_puede": "この Luzeira では更新を確認できません。",
   "sistema.actualizar_instalador_distinto": "ダウンロードしたインストーラーが署名済みのものと一致しません。開かずに中止します。",
+  "sistema.actualizar_elevada": "Luzeira が管理者として実行されているため、更新しません。いったん閉じて通常どおり開き直してから、もう一度お試しください。",
+  "sistema.actualizar_lenta": "GitHub からのダウンロードが遅すぎます。しばらくしてからもう一度お試しください。",
   "sistema.ventana_titulo": "Luzeira — テーマ エディター",
   "sistema.ventana_sin_guardar": "保存されていない変更があります ({reason})。閉じてもよろしいですか？",
   "sistema.ventana_pendiente_errores": "赤で示されたエラーがあります",
   "sistema.ventana_pendiente_incluido": "標準テーマへの変更です。残すには「名前を付けて保存」を使ってください",
   "sistema.ventana_pendiente_fallo": "保存できませんでした",
-  "sistema.ventana_pendiente_desconocido": "未保存の内容が残っているかどうかを確認できませんでした"
+  "sistema.ventana_pendiente_desconocido": "未保存の内容が残っているかどうかを確認できませんでした",
+  "sistema.autoarranque_carpeta_insegura": "Windows の起動時に開始する設定はオンにしません。この PC の他のユーザーが Luzeira のフォルダーを変更できるためです。ポータブル版を自分専用のフォルダー（例: ドキュメント）にもう一度展開してください。移動するだけでは権限がそのまま残るため不十分です。またはインストーラーを使ってください。"
 }

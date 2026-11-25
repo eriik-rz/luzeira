@@ -201,3 +201,84 @@ def test_max_seen_takes_only_what_the_updater_can_read(tmp_path, version):
     path = tmp_path / "config.json"
     path.write_text(f'{{"updates_max_seen": "{version}"}}', encoding="utf-8")
     assert load_config(path).updates_max_seen is None
+
+
+# --- R4-14, R2-06, R2-08 ------------------------------------------------------------------
+
+
+def test_save_config_syncs_to_disk_before_renaming(tmp_path, monkeypatch):
+    import os
+
+    from luzeira import config as config_module
+
+    calls = []
+    real_fsync, real_replace = os.fsync, os.replace
+    monkeypatch.setattr(
+        config_module.os, "fsync", lambda fd: (calls.append("fsync"), real_fsync(fd))[1]
+    )
+    monkeypatch.setattr(
+        config_module.os, "replace", lambda a, b: (calls.append("replace"), real_replace(a, b))[1]
+    )
+    save_config(AppConfig(brightness=33), tmp_path / "config.json")
+    assert calls == ["fsync", "replace"]
+    assert load_config(tmp_path / "config.json").brightness == 33
+
+
+def test_title_reads_at_most_the_limit(tmp_path, monkeypatch):
+    from luzeira import config as config_module
+
+    theme = make_theme(tmp_path, "grande")
+    limit = config_module.MAX_THEME_JSON_BYTES
+    # Un JSON válido pero más grande que el tope: sin título, y sin leerlo entero. Con
+    # el relleno detrás, en espacios: los primeros bytes ya son un JSON válido, así que
+    # solo el tope impide que salga el título (el cargador lo rechaza por tamaño).
+    big = json.dumps({**MINIMAL, "name": "Grande"}) + " " * limit
+    (theme / "theme.json").write_text(big, encoding="utf-8")
+    sizes = []
+    real_open = config_module.Path.open
+
+    def spy_open(self, *args, **kwargs):
+        fh = real_open(self, *args, **kwargs)
+        real_read = fh.read
+
+        def read(n=-1):
+            sizes.append(n)
+            return real_read(n)
+
+        fh.read = read
+        return fh
+
+    monkeypatch.setattr(config_module.Path, "open", spy_open)
+    titles = {t.name: t.title for t in list_themes(tmp_path)}
+    assert titles["grande"] == "grande"
+    assert sizes and all(0 <= n <= limit + 1 for n in sizes)
+
+
+def test_title_limit_matches_the_theme_loader():
+    from luzeira import config as config_module
+    from luzeira.temas import cargar
+
+    assert config_module.MAX_THEME_JSON_BYTES == cargar.MAX_JSON_BYTES
+
+
+def test_title_accepts_a_bom_like_the_loader(tmp_path):
+    theme = make_theme(tmp_path, "con-bom")
+    data = json.dumps({**MINIMAL, "name": "Con BOM"}).encode("utf-8")
+    (theme / "theme.json").write_bytes(b"\xef\xbb\xbf" + data)
+    assert {t.name: t.title for t in list_themes(tmp_path)}["con-bom"] == "Con BOM"
+
+
+def test_junctions_in_the_themes_folder_are_not_themes(tmp_path):
+    import sys
+
+    if sys.platform != "win32":
+        pytest.skip("junctions de Windows")
+    import _winapi
+
+    outside = make_theme(tmp_path / "fuera", "de-otro-sitio")
+    themes = tmp_path / "temas"
+    make_theme(themes, "normal")
+    _winapi.CreateJunction(str(outside), str(themes / "enlazado"))
+    names = [t.name for t in list_themes(themes)]
+    assert "normal" in names
+    assert "enlazado" not in names

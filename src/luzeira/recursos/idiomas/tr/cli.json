@@ -29,5 +29,6 @@
   "cli.editor_modo": "Düzenleyici modu: ekran şu anda kullanılmıyor.",
   "cli.editor_desarrollo": "Geliştirme modunda düzenleyici: {url} adresini aç",
   "cli.editor_api": "(API adresi: {url}). Durdurmak için Ctrl+C.",
+  "cli.editor_puerto_ocupado": "{url} adresinde düzenleyicinin Vite'ı olmayan başka bir program çalışıyor: belirteç gösterilmiyor. Onu kapat ve editor/ içinde “npm run dev” çalıştır.",
   "cli.editor_sin_compilar": "Düzenleyici derlenmemiş: editor/ içinde “npm run build” çalıştır."
 }

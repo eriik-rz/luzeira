@@ -16,6 +16,7 @@ from __future__ import annotations
 import ctypes
 import uuid
 from ctypes import wintypes
+from dataclasses import replace
 
 from luzeira.sensores.windows_gpu import Adapter, PdhSample, PerfCaps, PerfData
 
@@ -33,6 +34,7 @@ PDH_CSTATUS_NEW_DATA = 0x1
 # (medido en un Windows en español; otros idiomas, sin probar).
 ENGINE_PATH = r"\GPU Engine(*)\Utilization Percentage"
 DEDICATED_PATH = r"\GPU Adapter Memory(*)\Dedicated Usage"
+SHARED_PATH = r"\GPU Adapter Memory(*)\Shared Usage"
 
 
 class _PdhValueUnion(ctypes.Union):
@@ -57,7 +59,7 @@ class PDH_FMT_COUNTERVALUE_ITEM_W(ctypes.Structure):
 
 
 class RealPdhCounters:
-    """Una consulta PDH con los dos contadores de GPU."""
+    """Una consulta PDH con los contadores de GPU: motores, memoria dedicada y compartida."""
 
     def __init__(self) -> None:
         self._pdh = ctypes.WinDLL("pdh")
@@ -78,6 +80,13 @@ class RealPdhCounters:
         except Exception:
             self.close()
             raise
+        # La compartida solo hace falta en las integradas: si no está, no se cae todo PDH
+        # (la integrada se quedará sin memoria, con su motivo).
+        self._shared: ctypes.c_void_p | None
+        try:
+            self._shared = self._add(SHARED_PATH)
+        except OSError:
+            self._shared = None
 
     def _add(self, path: str) -> ctypes.c_void_p:
         handle = ctypes.c_void_p()
@@ -91,7 +100,8 @@ class RealPdhCounters:
         dedicated = self._array(self._dedicated)
         if engines is None or dedicated is None:
             return None
-        return PdhSample(engines=engines, dedicated=dedicated)
+        shared = self._array(self._shared) if self._shared is not None else None
+        return PdhSample(engines=engines, dedicated=dedicated, shared=shared or {})
 
     def _array(self, counter: ctypes.c_void_p) -> dict[str, float] | None:
         """Lee todas las instancias de un contador con comodín.
@@ -206,7 +216,87 @@ def _method(obj: ctypes.c_void_p, index: int, restype, *argtypes):
     return prototype(vtable[index])
 
 
+# --- DXCore (solo para saber si una tarjeta es integrada) --------------------------------
+# https://learn.microsoft.com/en-us/windows/win32/api/dxcore/nf-dxcore-dxcorecreateadapterfactory
+# https://learn.microsoft.com/en-us/windows/win32/dxcore/dxcore_interface/ne-dxcore_interface-dxcoreadapterproperty
+# Desde Windows 10 2004 (Learn: build 18936). También es COM. Las posiciones de la vtable
+# salen del orden de declaración en ``dxcore_interface.h`` (repo público
+# microsoft/DirectX-Headers); las plantillas ``inline`` de esa cabecera no ocupan sitio.
+# IDXCoreAdapterFactory: 3 CreateAdapterList, 4 GetAdapterByLuid.
+# IDXCoreAdapter: 3 IsValid, 4 IsAttributeSupported, 5 IsPropertySupported, 6 GetProperty.
+IID_IDXCoreAdapterFactory = "78ee5945-c36e-4b13-a669-005dd11c0f06"
+IID_IDXCoreAdapter = "f0db4c7f-fe5a-42a2-bd62-f2a6cf6fc83e"
+_DXCORE_GET_ADAPTER_BY_LUID = 4
+_DXCORE_IS_PROPERTY_SUPPORTED = 5
+_DXCORE_GET_PROPERTY = 6
+_DXCORE_IS_INTEGRATED = 12  # DXCoreAdapterProperty::IsIntegrated, de tipo bool (1 byte)
+
+
+def integrated_by_luid(luids: list[int]) -> dict[int, bool]:
+    """Qué tarjetas son integradas según DXCore (LUID → sí/no). Las que DXCore no conoce
+    (p. ej. la entrada repetida de DXGI) o un Windows sin DXCore no salen en el resultado:
+    entonces ``windows_gpu.is_integrated`` usa su regla prudente."""
+    try:
+        dxcore = ctypes.WinDLL("dxcore")
+    except OSError:
+        return {}  # Windows anterior a 2004
+    dxcore.DXCoreCreateAdapterFactory.restype = wintypes.LONG
+    factory = ctypes.c_void_p()
+    iid = GUID.from_text(IID_IDXCoreAdapterFactory)
+    if dxcore.DXCoreCreateAdapterFactory(ctypes.byref(iid), ctypes.byref(factory)) != 0:
+        return {}
+    out: dict[int, bool] = {}
+    try:
+        by_luid = _method(
+            factory,
+            _DXCORE_GET_ADAPTER_BY_LUID,
+            wintypes.LONG,
+            ctypes.POINTER(LUID),
+            ctypes.POINTER(GUID),
+            ctypes.POINTER(ctypes.c_void_p),
+        )
+        adapter_iid = GUID.from_text(IID_IDXCoreAdapter)
+        for luid in luids:
+            adapter = ctypes.c_void_p()
+            key = LUID.from_int(luid)
+            if by_luid(
+                factory, ctypes.byref(key), ctypes.byref(adapter_iid), ctypes.byref(adapter)
+            ):
+                continue  # DXCore no la conoce
+            try:
+                supported = _method(
+                    adapter, _DXCORE_IS_PROPERTY_SUPPORTED, ctypes.c_bool, ctypes.c_uint32
+                )
+                get = _method(
+                    adapter,
+                    _DXCORE_GET_PROPERTY,
+                    wintypes.LONG,
+                    ctypes.c_uint32,
+                    ctypes.c_size_t,
+                    ctypes.c_void_p,
+                )
+                value = ctypes.c_bool()
+                if supported(adapter, _DXCORE_IS_INTEGRATED) and not get(
+                    adapter, _DXCORE_IS_INTEGRATED, ctypes.sizeof(value), ctypes.byref(value)
+                ):
+                    out[luid] = bool(value.value)
+            finally:
+                _method(adapter, _RELEASE, wintypes.ULONG)(adapter)
+    finally:
+        _method(factory, _RELEASE, wintypes.ULONG)(factory)
+    return out
+
+
 def list_adapters() -> list[Adapter]:
+    adapters = _dxgi_adapters()
+    try:
+        integrated = integrated_by_luid([a.luid for a in adapters if not a.software])
+    except Exception:
+        integrated = {}  # sin DXCore se sigue: es solo para la memoria de las integradas
+    return [replace(a, integrated=integrated.get(a.luid)) for a in adapters]
+
+
+def _dxgi_adapters() -> list[Adapter]:
     dxgi = ctypes.WinDLL("dxgi")
     dxgi.CreateDXGIFactory1.restype = wintypes.DWORD
     factory = ctypes.c_void_p()
@@ -237,6 +327,7 @@ def list_adapters() -> list[Adapter]:
                         vendor_id=desc.VendorId,
                         dedicated_bytes=desc.DedicatedVideoMemory,
                         software=bool(desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE),
+                        shared_bytes=desc.SharedSystemMemory,
                     )
                 )
             finally:
@@ -263,6 +354,15 @@ def list_adapters() -> list[Adapter]:
 # el test real que compara con NVML la frecuencia máxima (``node_clocks``), y los límites
 # de cordura de ``windows_gpu`` para los disparates.
 # https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/d3dkmthk/ne-d3dkmthk-_kmtqueryadapterinfotype
+#
+# El tipo 6 (``KMTQAITYPE_ADAPTERADDRESS``) va antes del valor que descuadra la cuenta:
+# medido en 19045, el 13 (``DRIVERVERSION``) responde 2700 (WDDM 2.7), el 14 rechaza un
+# UINT y el 15 lo acepta, así que ``ADAPTERTYPE`` es el 15 y no el 14 de contar en Learn
+# (de ahí el desfase de uno de 61/62/63). El 6 sale contando y también midiendo: bus 7,
+# dispositivo 0, función 0 en la RTX 4070 SUPER, lo mismo que NVML (00000000:07:00.0) y
+# el Administrador de dispositivos. Con un búfer de 16 bytes responde 0xC000000D: el
+# tamaño es exacto.
+_KMT_ADAPTERADDRESS = 6
 _KMT_NODEPERFDATA = 61
 _KMT_ADAPTERPERFDATA = 62
 _KMT_ADAPTERPERFDATA_CAPS = 63
@@ -283,6 +383,16 @@ class D3DKMT_QUERYADAPTERINFO(ctypes.Structure):
 
 class D3DKMT_CLOSEADAPTER(ctypes.Structure):
     _fields_ = [("hAdapter", wintypes.UINT)]
+
+
+class D3DKMT_ADAPTERADDRESS(ctypes.Structure):
+    # https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/d3dkmthk/ns-d3dkmthk-_d3dkmt_adapteraddress
+    # Tres UINT: 12 bytes.
+    _fields_ = [
+        ("BusNumber", wintypes.UINT),
+        ("DeviceNumber", wintypes.UINT),
+        ("FunctionNumber", wintypes.UINT),
+    ]
 
 
 class D3DKMT_ADAPTER_PERFDATA(ctypes.Structure):
@@ -368,6 +478,11 @@ class RealKmtAdapter:
         data = D3DKMT_ADAPTER_PERFDATACAPS()
         _check(self._query(_KMT_ADAPTERPERFDATA_CAPS, data), "ADAPTERPERFDATA_CAPS")
         return PerfCaps(data.MaxFanRPM, data.TemperatureMax)
+
+    def pci_address(self) -> tuple[int, int, int]:
+        data = D3DKMT_ADAPTERADDRESS()
+        _check(self._query(_KMT_ADAPTERADDRESS, data), "ADAPTERADDRESS")
+        return int(data.BusNumber), int(data.DeviceNumber), int(data.FunctionNumber)
 
     def clock_hz(self) -> int:
         """Frecuencia del motor 0 (en las tarjetas medidas, el 3D, el que se usa al jugar)."""

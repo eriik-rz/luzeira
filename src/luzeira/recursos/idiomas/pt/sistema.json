@@ -10,10 +10,13 @@
   "sistema.actualizar_descarga_grande": "O download é maior do que o esperado.",
   "sistema.actualizar_no_puede": "Esta cópia da Luzeira não pode verificar atualizações.",
   "sistema.actualizar_instalador_distinto": "O instalador baixado não corresponde ao assinado. Não vou abri-lo.",
+  "sistema.actualizar_elevada": "A Luzeira está sendo executada como administrador e assim não se atualiza. Feche-a, abra-a normalmente e tente de novo.",
+  "sistema.actualizar_lenta": "O download do GitHub está lento demais. Tente mais tarde.",
   "sistema.ventana_titulo": "Luzeira — Editor de temas",
   "sistema.ventana_sin_guardar": "Há alterações não salvas ({reason}). Fechar mesmo assim?",
   "sistema.ventana_pendiente_errores": "há erros marcados em vermelho",
   "sistema.ventana_pendiente_incluido": "são alterações em um tema incluído; use “Salvar como” para mantê-las",
   "sistema.ventana_pendiente_fallo": "não foi possível salvar",
-  "sistema.ventana_pendiente_desconocido": "não consegui verificar se falta salvar algo"
+  "sistema.ventana_pendiente_desconocido": "não consegui verificar se falta salvar algo",
+  "sistema.autoarranque_carpeta_insegura": "Não ativei a inicialização com o Windows: outros usuários deste PC podem alterar a pasta da Luzeira. Descompacte de novo a versão portátil em uma pasta sua (por exemplo, Documentos); movê-la não basta, porque ela mantém as permissões. Ou use o instalador."
 }

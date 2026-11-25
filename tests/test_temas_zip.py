@@ -206,6 +206,31 @@ def fake_image(path: Path) -> Path:
     return entries_with("fondo.png", b"MZ ejecutable disfrazado")(path)
 
 
+def font_failing_when_painting(path: Path) -> Path:
+    # R2-03: FreeType tenía abierta la fuente rechazada (viva en la traza del error) y
+    # en Windows la carpeta temporal no se podía borrar: quedaba «.importando-*».
+    from test_temas_cargar import SEGOE, font_broken_hinting
+
+    if not SEGOE.is_file():
+        pytest.skip("hace falta Segoe UI para fabricar la fuente rota")
+    theme = {
+        "format": "luzeira-theme/1",
+        "name": "Fuente rota",
+        "orientation": "portrait",
+        "widgets": [
+            {
+                "type": "text",
+                "text": "hola",
+                "box": {"x": 0, "y": 0, "width": 100, "height": 30},
+                "style": {"font": "rota.ttf"},
+            }
+        ],
+    }
+    return make_zip(
+        path, {"theme.json": json.dumps(theme).encode(), "rota.ttf": font_broken_hinting()}
+    )
+
+
 MALICIOUS_ZIPS: list[tuple[str, Builder, str]] = [
     # No es un zip: mensaje claro, no BadZipFile.
     ("no-zip", not_a_zip, "no es un zip válido"),
@@ -272,6 +297,16 @@ MALICIOUS_ZIPS: list[tuple[str, Builder, str]] = [
     ("sin-theme-json", missing_theme_json, "Falta el fichero theme.json"),
     # Extrae bien pero la imagen es falsa: lo para load_theme y no deja restos.
     ("imagen-falsa", fake_image, "no es de verdad"),
+    # R2-07: zipfile corta el nombre en el primer nulo: «b.png\0/../../evil.png» se
+    # extraía como «b.png». Lo que se comprueba tiene que ser lo que dice el zip.
+    # (raw_info: el constructor de ZipInfo también lo cortaría al escribir.)
+    (
+        "nulo",
+        items_with((raw_info("img/b.png\x00/../../../evil.png"), png_bytes())),
+        "nombre no válido",
+    ),
+    # R2-03: la fuente rechazada no puede dejar la carpeta temporal a medias.
+    ("fuente-rota", font_failing_when_painting, "falla al pintar"),
 ]
 
 
@@ -301,6 +336,24 @@ def test_total_unzipped_limit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     themes = tmp_path / "temas"
     with pytest.raises(ThemeError, match="descomprimido ocupa más"):
         import_theme_zip(make_zip(tmp_path / "t.zip", e), themes)
+    assert leftovers(themes) == []
+
+
+@pytest.mark.parametrize(
+    "error", [MemoryError(), OSError("C:/Users/alguien/rename"), Image.DecompressionBombError("x")]
+)
+def test_unexpected_error_is_a_theme_error_and_cleans_up(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error: Exception
+) -> None:
+    # R2-04: la bandeja y el editor solo saben contar ThemeError; lo demás era un 500.
+    def fail(_path: object) -> None:
+        raise error
+
+    monkeypatch.setattr(cargar, "load_theme", fail)
+    themes = tmp_path / "temas"
+    with pytest.raises(ThemeError, match="fallo inesperado") as info:
+        import_theme_zip(make_zip(tmp_path / "t.zip", good_entries()), themes)
+    assert "alguien" not in str(info.value)  # ni rutas ni trazas en el mensaje
     assert leftovers(themes) == []
 
 

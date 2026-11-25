@@ -398,6 +398,34 @@ def test_nvml_unsupported_sensor_has_reason(monkeypatch):
     assert r["gpu.temperature"].value == 55.0
 
 
+def test_nvml_pci_address(monkeypatch):
+    mod, _ = make_fake_nvml()
+    # Lo que da ``nvmlDeviceGetPciInfo`` en la RTX 4070 SUPER (medido).
+    mod.nvmlDeviceGetPciInfo = lambda h: SimpleNamespace(busId="00000000:07:00.0")
+    monkeypatch.setattr(nvidia, "pynvml", mod)
+    src = nvidia.NvidiaSource()
+    assert src.pci_address == (7, 0, 0)
+    src.close()
+    assert src.pci_address is None  # sin GPU, no hay dirección
+
+
+def test_nvml_without_pci_info_still_reads(monkeypatch):
+    mod, _ = make_fake_nvml()  # sin nvmlDeviceGetPciInfo: falla al pedirlo
+    monkeypatch.setattr(nvidia, "pynvml", mod)
+    src = nvidia.NvidiaSource()
+    assert src.pci_address is None
+    assert src.has_gpu
+    assert src.read_all()["gpu.temperature"] == Reading(55.0, "°C")
+
+
+def test_parse_pci_bus_id():
+    assert nvidia.parse_pci_bus_id("00000000:07:00.0") == (7, 0, 0)
+    assert nvidia.parse_pci_bus_id(b"0000:0a:1f.3") == (10, 31, 3)  # versión antigua: bytes
+    assert nvidia.parse_pci_bus_id("00000001:07:00.0") is None  # otro dominio: no se sabe
+    assert nvidia.parse_pci_bus_id("00000000:07:20.0") is None  # dispositivo > 31
+    assert nvidia.parse_pci_bus_id("basura") is None
+
+
 def test_nvml_prefix_allows_several_gpus(monkeypatch):
     mod, _ = make_fake_nvml()
     monkeypatch.setattr(nvidia, "pynvml", mod)

@@ -10,10 +10,13 @@
   "sistema.actualizar_descarga_grande": "Il download è più grande del previsto.",
   "sistema.actualizar_no_puede": "Questa copia di Luzeira non può verificare gli aggiornamenti.",
   "sistema.actualizar_instalador_distinto": "Il programma di installazione scaricato non corrisponde a quello firmato. Non lo apro.",
+  "sistema.actualizar_elevada": "Luzeira è in esecuzione come amministratore e così non si aggiorna. Chiudila, riaprila normalmente e riprova.",
+  "sistema.actualizar_lenta": "Il download da GitHub è troppo lento. Riprova più tardi.",
   "sistema.ventana_titulo": "Luzeira — Editor dei temi",
   "sistema.ventana_sin_guardar": "Ci sono modifiche non salvate ({reason}). Chiudere comunque?",
   "sistema.ventana_pendiente_errores": "ci sono errori segnati in rosso",
   "sistema.ventana_pendiente_incluido": "sono modifiche a un tema incluso; usa «Salva con nome» per tenerle",
   "sistema.ventana_pendiente_fallo": "non è stato possibile salvare",
-  "sistema.ventana_pendiente_desconocido": "non è stato possibile verificare se resta qualcosa da salvare"
+  "sistema.ventana_pendiente_desconocido": "non è stato possibile verificare se resta qualcosa da salvare",
+  "sistema.autoarranque_carpeta_insegura": "Non attivo l'avvio con Windows: altri utenti di questo PC possono modificare la cartella di Luzeira. Estrai di nuovo la versione portatile in una tua cartella (per esempio Documenti); spostarla non basta, perché mantiene i permessi. Oppure usa il programma di installazione."
 }

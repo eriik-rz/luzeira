@@ -15,6 +15,8 @@
   "pantallas.no_puedo_abrir": "无法打开副屏（{device}）。",
   "pantallas.no_puedo_abrir_reintento": "无法打开副屏（{device}）。正在继续尝试。",
   "pantallas.conexion_perdida": "与副屏的连接断开了。USB 是不是被拔掉了？",
+  "pantallas.imagen_cortada": "图像发送到一半中断了，副屏可能还在等待剩下的部分。请拔下副屏再重新插上：重新连接后我会立即再试；如果没有重新连接，过一会儿也会再试。",
+  "pantallas.estado_desenchufar": "多次尝试后副屏仍没有回应。请拔下副屏再重新插上；在此期间我会不时继续尝试。",
   "pantallas.estado_arrancando": "正在启动 Luzeira……",
   "pantallas.estado_conectando": "已找到副屏。正在准备画面……",
   "pantallas.estado_en_reposo": "电脑睡眠期间，副屏已关闭。",
