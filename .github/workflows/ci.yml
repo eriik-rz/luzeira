@@ -62,9 +62,13 @@ jobs:
   modulo-sensores:
     runs-on: windows-2025
     timeout-minutes: 30
+    # bash, como el paso de tests de release.yml: si no, los tests del módulo corrían
+    # aquí con otros privilegios activos que en la release (Git Bash los activa) y un
+    # test que pasaba aquí cayó al etiquetar la v0.2.0 (2026-11-25).
     defaults:
       run:
         working-directory: modulo-sensores
+        shell: bash
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       DOTNET_NOLOGO: "1"

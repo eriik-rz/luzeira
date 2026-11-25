@@ -139,11 +139,23 @@ public sealed class SectionFileTests : IDisposable
     {
         // Con el descriptor de verdad (O:SY), un usuario normal no puede crear el fichero:
         // Windows no le deja poner a otro de propietario (ERROR_INVALID_OWNER, 1307). Así
-        // se ve que el servicio pide SYSTEM explícitamente.
+        // se ve que el servicio pide SYSTEM explícitamente. Con SeRestorePrivilege activo sí
+        // puede: en la release de GitHub (elevada, lanzada desde Git Bash) el fichero se
+        // creó (2026-11-25); lo más probable es que Git Bash active los privilegios del
+        // token. Entonces lo que se comprueba es que el fichero sea de SYSTEM.
         string folder = Folder();
-        Assert.Null(SectionFile.TryOpen(folder, out string? problem, out SectionOpenFailure failure, AcceptAll));
-        Assert.Equal(SectionOpenFailure.Other, failure);
-        Assert.Contains("1307", problem);
+        SectionFile? file = SectionFile.TryOpen(folder, out string? problem, out SectionOpenFailure failure, AcceptAll);
+        if (file is null)
+        {
+            Assert.Equal(SectionOpenFailure.Other, failure);
+            Assert.Contains("1307", problem);
+            return;
+        }
+        file.Dispose();
+        var owner = new FileInfo(Path.Combine(folder, SectionFile.FileName))
+            .GetAccessControl()
+            .GetOwner(typeof(System.Security.Principal.SecurityIdentifier));
+        Assert.Equal(FolderSecurity.SidSystem, owner?.Value);
     }
 
     [Fact]
