@@ -33,6 +33,11 @@ updates:
     groups:
       editor:
         patterns: ["*"]
+    ignore:
+      # TypeScript 7 rompe typescript-eslint (ERESOLVE en el PR del 2026-11-25): el salto
+      # de versión mayor se hace a mano cuando el linter la admita.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   # El módulo de sensores (C#): los paquetes de NuGet (Directory.Packages.props y los
   # packages.lock.json) y el SDK de global.json. Al aceptar uno de NuGet, revisar además
@@ -46,6 +51,10 @@ updates:
     groups:
       nuget:
         patterns: ["*"]
+    ignore:
+      # Los System.* van con el runtime (10.x, LTS): el 11 llega con el cambio de .NET.
+      - dependency-name: "System.*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: dotnet-sdk
     directory: /modulo-sensores
@@ -56,3 +65,8 @@ updates:
     groups:
       dotnet-sdk:
         patterns: ["*"]
+    ignore:
+      # .NET 10 es LTS (hasta 2028) y el módulo fija su runtime (RuntimeFrameworkVersion):
+      # el paso a otra versión mayor se decide a mano, no por un PR semanal.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
