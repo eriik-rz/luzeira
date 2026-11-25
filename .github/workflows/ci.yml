@@ -84,5 +84,5 @@ jobs:
           if ($rc.runtimeOptions.configProperties.'System.StartupHookProvider.IsSupported' -ne $false) { throw "startup hooks activados" }
           if ($rc.runtimeOptions.includedFrameworks[0].version -ne "10.0.15") { throw "otro runtime de .NET" }
           foreach ($f in "coreclr.dll", "LuzeiraSensores.dll", "LibreHardwareMonitorLib.dll") {
-            if (-not (Test-Path "publish/$f")) { throw "falta $f: ¿fichero único?" }
+            if (-not (Test-Path "publish/$f")) { throw "falta ${f}: ¿fichero único?" }
           }
