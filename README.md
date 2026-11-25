@@ -6,7 +6,7 @@ Tu pantalla USB de monitorización del PC, en tu idioma y como tú quieras.
 
 ¿Quieres verlo antes? [Mira la web de Luzeira](https://eriik-rz.github.io/luzeira/): ahí puedes probar el editor sin instalar nada. También hay vídeos en [TikTok](https://www.tiktok.com/@eriik_rz.dev) e [Instagram](https://www.instagram.com/eriik_rz.dev/).
 
-Luzeira es una app libre para las pequeñas pantallas USB que se ponen dentro o encima del PC (tipo *Turing Smart Screen* / *UsbPCMonitor*). Muestra la hora, el uso de CPU, GPU y RAM, la red, el disco y la temperatura de la gráfica, con 32 temas incluidos y un editor visual para hacer los tuyos, sin tocar ficheros.
+Luzeira es una app libre para las pequeñas pantallas USB que se ponen dentro o encima del PC (tipo *Turing Smart Screen* / *UsbPCMonitor*). Muestra la hora, el uso y la frecuencia de la CPU, la GPU y la RAM, la red, el disco y la temperatura de la gráfica (y la de la CPU, con un módulo opcional), con 32 temas incluidos y un editor visual para hacer los tuyos, sin tocar ficheros.
 
 ![Algunos de los temas incluidos](guia/temas.png)
 
@@ -38,14 +38,30 @@ Para desinstalar: *Configuración → Aplicaciones → Luzeira*. Te preguntará 
 
 - Windows 10 u 11 de 64 bits.
 - El componente **Microsoft Edge WebView2** para el editor (viene con Windows 11 y con Edge; si falta, el instalador te lo dice).
-- Los datos de la gráfica (uso, temperatura, consumo…) se leen, por ahora, solo en **tarjetas NVIDIA**. Con AMD o Intel el resto funciona y esos datos salen como «—».
+- **La gráfica:** con NVIDIA salen todos sus datos. Con AMD o Intel, el uso y la memoria siempre. La temperatura, el ventilador y la frecuencia salen si el controlador los da, y el consumo no sale. AMD e Intel están en pruebas: si algo sale raro, [avísanos](https://github.com/eriik-rz/luzeira/issues).
+
+## Temperatura de la CPU (opcional)
+
+Windows no deja leer la temperatura de la CPU sin permisos de administrador, y Luzeira nunca los pide. Por eso va en un módulo aparte, **Luzeira Sensores** (beta), que se instala solo si quieres:
+
+1. Instala el driver [PawnIO](https://pawnio.eu/), versión 2.2.0 o posterior.
+2. Descarga `LuzeiraSensores-<versión>-setup.exe` desde [Releases](https://github.com/eriik-rz/luzeira/releases/latest) y ábrelo. Pide permiso de administrador una vez.
+3. En el editor, añade el sensor «Temperatura de CPU» a tu tema. También están el consumo y la tensión de la CPU.
+
+El módulo es un servicio de Windows que solo lee los sensores de la CPU y deja los valores en un fichero que Luzeira lee sin permisos. No tiene red ni acepta órdenes. Sin él, Luzeira funciona igual y esos sensores muestran «—». Está probado en un Ryzen 7 5700X3D. En Intel y en otros AMD, está en pruebas.
 
 ## Pantallas soportadas
 
 | Pantalla | Estado |
 |---|---|
-| Turing Smart Screen 3,5" / UsbPCMonitor 3,5" (revisión A, USB `1A86:5722`) | ✅ |
-| Otras revisiones y tamaños | Más adelante |
+| Turing Smart Screen 3,5" / UsbPCMonitor 3,5" (revisión A, USB `1A86:5722`) | ✅ Probada |
+| XuanFang 3,5" (también «flagship», revisión B) | Beta |
+| Kipye Qiye 3,5" | Beta |
+| Turing Smart Screen 2,1", 5" y 8,8" (revisión C) | Beta |
+| WeAct 3,5" y 0,96" | Beta |
+| Turing Smart Screen de la primera versión (USB `1CBE`) | No: necesitan otro driver de Windows |
+
+«Beta» quiere decir que Luzeira las reconoce y habla su protocolo, pero nadie las ha probado todavía con el aparato de verdad. Si tienes una, [cuéntanos cómo va](https://github.com/eriik-rz/luzeira/issues). En una pantalla de otro tamaño, los temas se ven escalados y centrados.
 
 ## Licencia
 
