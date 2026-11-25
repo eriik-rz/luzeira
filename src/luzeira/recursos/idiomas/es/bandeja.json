@@ -33,6 +33,7 @@
   "bandeja.falta_confirmar": "Falta confirmar el aviso antes de probar esa pantalla.",
   "bandeja.pregunta_no_pendiente": "Esa pregunta ya no está pendiente.",
   "bandeja.acceso_creado": "Listo: tienes Luzeira en el escritorio.",
+  "bandeja.aviso_elevada": "Luzeira se está ejecutando como administrador. No le hace falta y es menos seguro: ciérrala y ábrela de la forma normal.",
   "bandeja.tema_no_carga": "El tema «{theme}» no se puede cargar. Uso «{default}».",
   "bandeja.algo_fallo": "Algo ha fallado. Los detalles están en el registro de Luzeira.",
   "bandeja.tema_con_error": "El tema «{theme}» tiene un error y no se puede usar.",

@@ -33,6 +33,7 @@
   "bandeja.falta_confirmar": "Confirmez d’abord l’avertissement avant de tester cet écran.",
   "bandeja.pregunta_no_pendiente": "Cette question n’est plus en attente.",
   "bandeja.acceso_creado": "C’est fait : Luzeira est sur votre Bureau.",
+  "bandeja.aviso_elevada": "Luzeira s’exécute en tant qu’administrateur. Elle n’en a pas besoin et c’est moins sûr : fermez-la et rouvrez-la normalement.",
   "bandeja.tema_no_carga": "Impossible de charger le thème « {theme} ». J’utilise « {default} ».",
   "bandeja.algo_fallo": "Un problème est survenu. Les détails sont dans le journal de Luzeira.",
   "bandeja.tema_con_error": "Le thème « {theme} » contient une erreur et ne peut pas être utilisé.",

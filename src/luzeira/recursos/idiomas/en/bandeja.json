@@ -33,6 +33,7 @@
   "bandeja.falta_confirmar": "You need to confirm the warning before trying that display.",
   "bandeja.pregunta_no_pendiente": "That question is no longer waiting for an answer.",
   "bandeja.acceso_creado": "Done: Luzeira is now on your desktop.",
+  "bandeja.aviso_elevada": "Luzeira is running as administrator. It doesn't need that, and it's less safe: close it and open it the normal way.",
   "bandeja.tema_no_carga": "The theme “{theme}” can't be loaded. Using “{default}”.",
   "bandeja.algo_fallo": "Something went wrong. The details are in Luzeira's log.",
   "bandeja.tema_con_error": "The theme “{theme}” has an error and can't be used.",

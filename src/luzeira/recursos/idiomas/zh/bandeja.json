@@ -33,6 +33,7 @@
   "bandeja.falta_confirmar": "试用这个副屏前，需要先确认提示。",
   "bandeja.pregunta_no_pendiente": "这个问题已经不需要回答了。",
   "bandeja.acceso_creado": "完成：桌面上已有 Luzeira 的快捷方式。",
+  "bandeja.aviso_elevada": "Luzeira 正以管理员身份运行。没有这个必要，而且不够安全：请关闭它，以普通方式重新打开。",
   "bandeja.tema_no_carga": "无法加载主题“{theme}”。改用“{default}”。",
   "bandeja.algo_fallo": "出了点问题。详细信息见 Luzeira 的日志。",
   "bandeja.tema_con_error": "主题“{theme}”有错误，无法使用。",

@@ -33,6 +33,7 @@
   "bandeja.falta_confirmar": "Przed wypróbowaniem tego ekranu musisz potwierdzić ostrzeżenie.",
   "bandeja.pregunta_no_pendiente": "To pytanie nie czeka już na odpowiedź.",
   "bandeja.acceso_creado": "Gotowe: Luzeira jest na pulpicie.",
+  "bandeja.aviso_elevada": "Luzeira działa jako administrator. Nie jest to potrzebne i jest mniej bezpieczne: zamknij ją i uruchom normalnie.",
   "bandeja.tema_no_carga": "Nie można wczytać motywu „{theme}”. Używam „{default}”.",
   "bandeja.algo_fallo": "Coś poszło nie tak. Szczegóły są w dzienniku Luzeiry.",
   "bandeja.tema_con_error": "Motyw „{theme}” ma błąd i nie można go użyć.",

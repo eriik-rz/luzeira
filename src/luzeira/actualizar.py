@@ -303,13 +303,14 @@ def check(
     return manifest if is_newer(manifest, installed, max_seen) else None
 
 
-def is_elevated() -> bool:
+def is_elevated(unknown: bool = True) -> bool:
     """¿Corre este proceso como administrador (token elevado de Windows)?
 
     Concepto: con el UAC, una cuenta de administrador arranca los programas con un
     «token» limitado; solo «Ejecutar como administrador» les da el elevado. Se pregunta a
     Windows con ``GetTokenInformation(TokenElevation)``. Si no se puede saber, se
-    contesta «sí»: es lo prudente (lo peor que pasa es que no se actualice sola)."""
+    contesta ``unknown``: «sí» por defecto, que es lo prudente para actualizar (lo peor que
+    pasa es que no se actualice sola); para un aviso, mejor «no» que asustar sin motivo."""
     if os.name != "nt":
         return hasattr(os, "geteuid") and os.geteuid() == 0
     import ctypes
@@ -334,7 +335,7 @@ def is_elevated() -> bool:
     if not advapi32.OpenProcessToken(
         kernel32.GetCurrentProcess(), token_query, ctypes.byref(token)
     ):
-        return True
+        return unknown
     try:
         elevation = wintypes.DWORD()
         size = wintypes.DWORD()
@@ -342,7 +343,7 @@ def is_elevated() -> bool:
             token, token_elevation, ctypes.byref(elevation), ctypes.sizeof(elevation),
             ctypes.byref(size),
         )  # fmt: skip
-        return True if not ok else bool(elevation.value)
+        return unknown if not ok else bool(elevation.value)
     finally:
         kernel32.CloseHandle(token)
 

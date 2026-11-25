@@ -33,6 +33,7 @@
   "bandeja.falta_confirmar": "そのディスプレイを試す前に、警告を確認してください。",
   "bandeja.pregunta_no_pendiente": "その質問はもう回答を待っていません。",
   "bandeja.acceso_creado": "デスクトップに Luzeira のショートカットを作成しました。",
+  "bandeja.aviso_elevada": "Luzeira が管理者として実行されています。その必要はなく、安全性も下がります。いったん閉じて、通常どおり開き直してください。",
   "bandeja.tema_no_carga": "テーマ「{theme}」を読み込めません。「{default}」を使います。",
   "bandeja.algo_fallo": "問題が発生しました。詳細は Luzeira のログに記録されています。",
   "bandeja.tema_con_error": "テーマ「{theme}」にはエラーがあるため使用できません。",

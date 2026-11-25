@@ -33,6 +33,7 @@
   "bandeja.falta_confirmar": "Bestätige zuerst den Hinweis, bevor du dieses Display testest.",
   "bandeja.pregunta_no_pendiente": "Diese Frage ist nicht mehr offen.",
   "bandeja.acceso_creado": "Fertig: Luzeira ist jetzt auf dem Desktop.",
+  "bandeja.aviso_elevada": "Luzeira läuft als Administrator. Das braucht sie nicht, und es ist weniger sicher: Schließe Luzeira und starte sie ganz normal.",
   "bandeja.tema_no_carga": "Das Design „{theme}“ lässt sich nicht laden. Ich verwende „{default}“.",
   "bandeja.algo_fallo": "Etwas ist schiefgegangen. Details stehen im Protokoll von Luzeira.",
   "bandeja.tema_con_error": "Das Design „{theme}“ hat einen Fehler und kann nicht verwendet werden.",

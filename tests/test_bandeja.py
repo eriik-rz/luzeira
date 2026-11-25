@@ -294,6 +294,24 @@ def test_editor_opens_on_start_only_when_asked(monkeypatch, open_editor):
     assert opened == ([True] if open_editor else [])
 
 
+@pytest.mark.parametrize("elevated", [True, False])
+def test_running_as_administrator_is_warned_on_start(monkeypatch, elevated):
+    # C-77.5: «Ejecutar como administrador» no hace falta y da permisos de más.
+    monkeypatch.setattr(bandeja.autoarranque, "is_enabled", lambda: False)
+    tray = bandeja.TrayApp(AppConfig())
+    asked, notes = [], []
+    # Si no se puede saber, «no»: un aviso falso asustaría sin motivo.
+    monkeypatch.setattr(
+        bandeja.actualizar, "is_elevated", lambda unknown=True: asked.append(unknown) or elevated
+    )
+    monkeypatch.setattr(tray, "_notify", lambda text, title="Luzeira": notes.append(text))
+    monkeypatch.setattr(tray, "_start_service", lambda: None)
+    monkeypatch.setattr(tray.icon, "update_menu", lambda: None)
+    tray._setup(type("FakeIcon", (), {"visible": False})())
+    assert asked == [False]
+    assert notes == ([t("bandeja.aviso_elevada")] if elevated else [])
+
+
 # --- menú «Pantalla» (C-44) -----------------------------------------------------------
 
 

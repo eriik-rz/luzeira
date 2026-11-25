@@ -33,6 +33,7 @@
   "bandeja.falta_confirmar": "Falta confirmar o aviso antes de testar essa tela.",
   "bandeja.pregunta_no_pendiente": "Essa pergunta não está mais pendente.",
   "bandeja.acceso_creado": "Pronto: a Luzeira está na sua área de trabalho.",
+  "bandeja.aviso_elevada": "A Luzeira está sendo executada como administrador. Isso não é necessário e é menos seguro: feche-a e abra-a normalmente.",
   "bandeja.tema_no_carga": "Não é possível carregar o tema “{theme}”. Usando “{default}”.",
   "bandeja.algo_fallo": "Algo deu errado. Os detalhes estão no registro da Luzeira.",
   "bandeja.tema_con_error": "O tema “{theme}” tem um erro e não pode ser usado.",

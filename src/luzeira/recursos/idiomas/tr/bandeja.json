@@ -33,6 +33,7 @@
   "bandeja.falta_confirmar": "Bu ekranı denemeden önce uyarıyı onaylaman gerekiyor.",
   "bandeja.pregunta_no_pendiente": "Bu soru artık yanıt beklemiyor.",
   "bandeja.acceso_creado": "Tamam: Luzeira artık masaüstünde.",
+  "bandeja.aviso_elevada": "Luzeira yönetici olarak çalışıyor. Buna gerek yok ve daha az güvenli: kapatın ve normal şekilde açın.",
   "bandeja.tema_no_carga": "“{theme}” teması yüklenemiyor. “{default}” kullanılıyor.",
   "bandeja.algo_fallo": "Bir şeyler ters gitti. Ayrıntılar Luzeira'nın günlüğünde.",
   "bandeja.tema_con_error": "“{theme}” temasında bir hata var ve kullanılamıyor.",

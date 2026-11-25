@@ -1316,6 +1316,11 @@ class TrayApp:
         icon.visible = True
         if self._startup_notice:
             self._notify(self._startup_notice)
+        if actualizar.is_elevated(unknown=False):
+            # «Ejecutar como administrador» funciona, pero no hace falta y todo lo que
+            # abra (el editor, los temas) correría con permisos de más (C-77.5).
+            log.warning("Luzeira se está ejecutando como administrador.")
+            self._notify(t("bandeja.aviso_elevada"))
         self._start_service()
         threading.Thread(target=self._updates_loop, name="actualizaciones", daemon=True).start()
         if self._open_editor_on_start:

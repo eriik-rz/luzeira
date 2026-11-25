@@ -33,6 +33,7 @@
   "bandeja.falta_confirmar": "Перед проверкой этого экрана нужно подтвердить предупреждение.",
   "bandeja.pregunta_no_pendiente": "Этот вопрос уже не ждёт ответа.",
   "bandeja.acceso_creado": "Готово: ярлык Luzeira на рабочем столе.",
+  "bandeja.aviso_elevada": "Luzeira запущена от имени администратора. Это не нужно и менее безопасно: закройте её и откройте обычным способом.",
   "bandeja.tema_no_carga": "Не удаётся загрузить тему «{theme}». Используется «{default}».",
   "bandeja.algo_fallo": "Что-то пошло не так. Подробности — в журнале Luzeira.",
   "bandeja.tema_con_error": "В теме «{theme}» ошибка, её нельзя использовать.",
