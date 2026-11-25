@@ -704,3 +704,75 @@ def test_the_default_opener_points_at_programdata(monkeypatch, tmp_path):
         "name": "sensores.bin",
         "size": modulo.SECTION_SIZE,
     }
+
+
+# --- versión instalada, para avisar de módulos nuevos ----------------------------------
+
+
+class CountingReader(FakeReader):
+    """Devuelve las copias de ``datas`` una tras otra y apunta cuántas veces se leyó."""
+
+    def __init__(self, *datas):
+        super().__init__(datas[0])
+        self.datas = list(datas)
+        self.reads = 0
+
+    def read(self):
+        self.reads += 1
+        self.data = self.datas[min(self.reads, len(self.datas)) - 1]
+        return super().read()
+
+
+def test_installed_version_comes_from_the_header_and_the_file_is_let_go():
+    reader = CountingReader(build(module_version=b"0.2.0"))
+    assert modulo.installed_version(lambda: reader) == "0.2.0"
+    assert reader.reads == 1 and reader.closed
+
+
+def test_installed_version_waits_out_a_half_written_copy():
+    reader = CountingReader(build(sequence=3), build(sequence=4, module_version=b"0.3.1"))
+    assert modulo.installed_version(lambda: reader) == "0.3.1"
+    assert reader.reads == 2 and reader.closed
+    always_odd = CountingReader(build(sequence=5))
+    assert modulo.installed_version(lambda: always_odd) is None
+    assert always_odd.reads == 3  # no se queda leyendo para siempre
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        None,  # sin módulo
+        build(module_version=b""),
+        build(module_version=b"0.2.0-beta"),
+        build(module_version=b"0.2"),
+        build(module_version=b"\xd9\xa1.2.0"),  # cifra árabe en UTF-8
+        build(version=2),  # un formato que no conocemos
+        b"basura",
+    ],
+)
+def test_installed_version_is_none_when_it_cannot_be_trusted(data):
+    reader = CountingReader(data)
+    assert modulo.installed_version(lambda: reader) is None
+    assert reader.closed
+
+
+@pytest.mark.parametrize("error", [SectionUntrusted("propietario"), OSError("CreateFileW 5")])
+def test_installed_version_never_raises(error):
+    reader = FakeReader(error)
+    assert modulo.installed_version(lambda: reader) is None
+    assert reader.closed
+
+    def broken_opener():
+        raise error
+
+    assert modulo.installed_version(broken_opener) is None
+
+
+def test_installed_version_opens_nothing_outside_windows(monkeypatch):
+    from types import SimpleNamespace
+
+    opened = []
+    monkeypatch.setattr(modulo, "os", SimpleNamespace(name="posix"))
+    monkeypatch.setattr(modulo, "real_reader", lambda: opened.append(1))
+    assert modulo.installed_version() is None  # con el lector de verdad: ni se intenta
+    assert opened == []

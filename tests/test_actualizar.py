@@ -500,6 +500,175 @@ def test_the_real_client_has_a_total_deadline(tmp_path, monkeypatch):
         http.save(actualizar.MANIFEST_URL, tmp_path / "lento", 100)
 
 
+def test_a_404_from_github_is_still_the_same_error_for_the_app(monkeypatch):
+    # NotFoundError es un UpdateError con el mismo texto: para la app nada cambia.
+    import urllib.error
+
+    http = actualizar.GitHubHttp()
+
+    def not_found(url, timeout):
+        raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+
+    monkeypatch.setattr(http._opener, "open", not_found)
+    with pytest.raises(actualizar.NotFoundError) as exc:
+        http.get(actualizar.MANIFEST_URL, 4096)
+    assert isinstance(exc.value, UpdateError)
+    assert str(exc.value) == idioma.t("sistema.actualizar_sin_versiones")
+
+
+# --- módulo de sensores: su propio manifiesto firmado -----------------------------------
+
+MODULE_INSTALLER = b"MZ esto haria de instalador del modulo " * 50
+
+
+def module_manifest(version: str = "0.2.0", data: bytes = MODULE_INSTALLER, **changes):
+    fields = {
+        "app": "luzeira-sensores",
+        "version": version,
+        "file": f"LuzeiraSensores-{version}-setup.exe",
+        "size": len(data),
+        "sha256": hashlib.sha256(data).hexdigest(),
+    }
+    fields.update(changes)
+    return actualizar.ModuleManifest(**fields)
+
+
+class FakeHttp404(FakeHttp):
+    """Como FakeHttp, pero lo que no tiene es un 404 de GitHub (como el cliente real)."""
+
+    def get(self, url: str, limit: int) -> bytes:
+        if url not in self.files:
+            self.asked.append(url)
+            raise actualizar.NotFoundError("404")
+        return super().get(url, limit)
+
+
+def github_with_module(private, m, sig=None) -> FakeHttp404:
+    data = actualizar.module_manifest_bytes(m)
+    return FakeHttp404(
+        {
+            actualizar.MODULE_MANIFEST_URL: data,
+            actualizar.MODULE_SIGNATURE_URL: sig or base64.b64encode(private.sign(data)),
+        }
+    )
+
+
+def test_module_urls_are_fixed_and_separate_from_the_app():
+    base = "https://github.com/eriik-rz/luzeira/releases/latest"
+    assert base + "/download/modulo.json" == actualizar.MODULE_MANIFEST_URL
+    assert base + "/download/modulo.json.sig" == actualizar.MODULE_SIGNATURE_URL
+    assert base == actualizar.MODULE_PAGE_URL
+    for url in (actualizar.MODULE_MANIFEST_URL, actualizar.MODULE_PAGE_URL):
+        actualizar._check_url(url)  # dentro de la lista de GitHub
+
+
+def test_check_module_finds_a_new_module(key):
+    private, public = key
+    m = module_manifest("0.2.0")
+    http = github_with_module(private, m)
+    assert actualizar.check_module("0.1.0", http=http, keys=[public]) == m
+    assert http.asked == [actualizar.MODULE_MANIFEST_URL, actualizar.MODULE_SIGNATURE_URL]
+    assert actualizar.check_module("0.2.0", http=http, keys=[public]) is None  # el instalado
+    assert actualizar.check_module("0.3.0", http=http, keys=[public]) is None  # uno más viejo
+    big = github_with_module(private, module_manifest("9.0.0"))
+    assert actualizar.check_module("0.1.0", http=big, keys=[public]) is None  # salto imposible
+
+
+def test_a_release_without_modulo_json_is_none_without_noise(key):
+    _, public = key
+    http = FakeHttp404({})
+    assert actualizar.check_module("0.1.0", http=http, keys=[public]) is None
+    assert http.asked == [actualizar.MODULE_MANIFEST_URL]  # ni siquiera pide la firma
+
+
+def test_a_modulo_json_without_signature_is_an_error_not_none(key):
+    _, public = key
+    data = actualizar.module_manifest_bytes(module_manifest())
+    http = FakeHttp404({actualizar.MODULE_MANIFEST_URL: data})
+    with pytest.raises(actualizar.NotFoundError):  # UpdateError: bandeja lo apunta en el log
+        actualizar.check_module("0.1.0", http=http, keys=[public])
+
+
+def test_check_module_without_keys_or_with_a_strange_version_never_connects(key):
+    _, public = key
+    http = FakeHttp404({})
+    with pytest.raises(UpdateError):
+        actualizar.check_module("0.1.0", http=http, keys=[])
+    with pytest.raises(ValueError):
+        actualizar.check_module("0.1.0-beta", http=http, keys=[public])
+    assert http.asked == []
+
+
+def test_an_app_signature_never_passes_as_a_module_one_and_back(key):
+    # Separación de dominio: la misma clave firma los dos manifiestos (y SHA256SUMS).
+    private, public = key
+    app_data, app_sig = signed(private, manifest("0.2.0"))
+    with pytest.raises(UpdateError, match="no es válida"):
+        actualizar.verify_module_manifest(app_data, app_sig, [public])
+    module_data = actualizar.module_manifest_bytes(module_manifest("0.2.0"))
+    module_sig = base64.b64encode(private.sign(module_data))
+    with pytest.raises(UpdateError, match="no es válida"):
+        actualizar.verify_manifest(module_data, module_sig, [public])
+    # Y por la red: un manifest.json servido como modulo.json no se ofrece.
+    http = FakeHttp404(
+        {actualizar.MODULE_MANIFEST_URL: app_data, actualizar.MODULE_SIGNATURE_URL: app_sig}
+    )
+    with pytest.raises(UpdateError, match="no es válida"):
+        actualizar.check_module("0.1.0", http=http, keys=[public])
+
+
+def test_a_module_manifest_with_another_key_is_rejected(key):
+    _, public = key
+    stranger, _ = new_key()
+    http = github_with_module(stranger, module_manifest())
+    with pytest.raises(UpdateError, match="firma"):
+        actualizar.check_module("0.1.0", http=http, keys=[public])
+
+
+def test_a_signed_module_manifest_whose_file_does_not_match_is_rejected(key):
+    private, public = key
+    for raw in [
+        # el nombre no es el de esa versión
+        b'{"app":"luzeira-sensores","version":"0.2.0","file":"LuzeiraSensores-0.3.0-setup.exe",'
+        b'"size":1,"sha256":"' + b"a" * 64 + b'"}',
+        # el instalador de la app con app = luzeira-sensores
+        b'{"app":"luzeira-sensores","version":"0.2.0","file":"Luzeira-0.2.0-instalador.exe",'
+        b'"size":1,"sha256":"' + b"a" * 64 + b'"}',
+        # campos de más
+        b'{"app":"luzeira-sensores","version":"0.2.0","file":"LuzeiraSensores-0.2.0-setup.exe",'
+        b'"size":1,"sha256":"' + b"a" * 64 + b'","url":"https://evil.example"}',
+    ]:
+        sig = base64.b64encode(private.sign(raw))
+        with pytest.raises(UpdateError, match="no es válida"):
+            actualizar.verify_module_manifest(raw, sig, [public])
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"app": "luzeira"},
+        {"file": "..\\LuzeiraSensores-0.2.0-setup.exe"},
+        {"file": "LuzeiraSensores-0.2.0-setup.exe.bat"},
+        {"file": "LuzeiraSensores-\u0661.2.0-setup.exe"},  # cifras de otro alfabeto
+        {"version": "0.2.0-rc1"},
+        {"sha256": "A" * 64},
+        {"size": 0},
+        {"size": actualizar.MAX_MODULE_BYTES + 1},
+    ],
+)
+def test_module_manifest_fields_are_strict(changes):
+    with pytest.raises(ValueError):
+        module_manifest(**changes)
+
+
+def test_the_module_signed_bytes_are_compact_json_in_field_order():
+    m = module_manifest("0.2.0", size=5, sha256="b" * 64)
+    assert actualizar.module_manifest_bytes(m) == (
+        b'{"app":"luzeira-sensores","version":"0.2.0","file":"LuzeiraSensores-0.2.0-setup.exe",'
+        b'"size":5,"sha256":"' + b"b" * 64 + b'"}'
+    )
+
+
 def test_the_installer_deadline_is_generous_for_a_real_installer():
     # Un instalador de 20 MB (los de la 0.1.x pesan unos 20) tiene más de 10 minutos.
     assert actualizar.SMALL_DEADLINE + 20 * 1024 * 1024 / actualizar.MIN_SPEED > 600

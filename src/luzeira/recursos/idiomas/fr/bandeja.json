@@ -26,6 +26,7 @@
   "bandeja.actualizar_fallo": "Je n’ai pas pu vérifier s’il existe une nouvelle version. Les détails sont dans le journal.",
   "bandeja.actualizar_fallo_descarga": "Je n’ai pas pu télécharger la nouvelle version. Les détails sont dans le journal.",
   "bandeja.actualizar_fallo_instalador": "Je n’ai pas pu ouvrir le programme d’installation de la nouvelle version.",
+  "bandeja.modulo_disponible": "Une nouvelle version du module « Luzeira Capteurs » est disponible : la {version}. Téléchargez-la depuis le menu de cette icône (« Télécharger Luzeira Capteurs »).",
   "bandeja.pantalla_generica": "écran",
   "bandeja.no_compatible": "{device} : {model} — pas encore compatible",
   "bandeja.brillo_no_valido": "Cette luminosité ne fait pas partie des choix possibles.",
@@ -69,6 +70,7 @@
   "bandeja.menu_carpeta_temas": "Ouvrir le dossier des thèmes",
   "bandeja.menu_actualizar": "Mettre à jour",
   "bandeja.menu_actualizar_a": "Mettre à jour vers la version {version}",
+  "bandeja.menu_descargar_modulo": "Télécharger Luzeira Capteurs {version}",
   "bandeja.menu_buscar_actualizaciones": "Rechercher des mises à jour",
   "bandeja.menu_avisar_versiones": "M’avertir des nouvelles versions",
   "bandeja.menu_salir": "Quitter"

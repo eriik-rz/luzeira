@@ -26,6 +26,7 @@
   "bandeja.actualizar_fallo": "Ich konnte nicht prüfen, ob es eine neue Version gibt. Details stehen im Protokoll.",
   "bandeja.actualizar_fallo_descarga": "Ich konnte die neue Version nicht herunterladen. Details stehen im Protokoll.",
   "bandeja.actualizar_fallo_instalador": "Ich konnte das Setup der neuen Version nicht öffnen.",
+  "bandeja.modulo_disponible": "Es gibt eine neue Version des Moduls „Luzeira Sensoren“: {version}. Lade sie über das Menü dieses Symbols herunter („Luzeira Sensoren herunterladen“).",
   "bandeja.pantalla_generica": "Display",
   "bandeja.no_compatible": "{device}: {model} – noch nicht unterstützt",
   "bandeja.brillo_no_valido": "Diese Helligkeit steht nicht zur Auswahl.",
@@ -69,6 +70,7 @@
   "bandeja.menu_carpeta_temas": "Designordner öffnen",
   "bandeja.menu_actualizar": "Aktualisieren",
   "bandeja.menu_actualizar_a": "Auf Version {version} aktualisieren",
+  "bandeja.menu_descargar_modulo": "Luzeira Sensoren {version} herunterladen",
   "bandeja.menu_buscar_actualizaciones": "Jetzt nach Updates suchen",
   "bandeja.menu_avisar_versiones": "Über neue Versionen informieren",
   "bandeja.menu_salir": "Beenden"

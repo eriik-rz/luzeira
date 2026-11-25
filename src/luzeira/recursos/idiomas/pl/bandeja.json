@@ -26,6 +26,7 @@
   "bandeja.actualizar_fallo": "Nie udało się sprawdzić, czy jest nowa wersja. Szczegóły są w dzienniku.",
   "bandeja.actualizar_fallo_descarga": "Nie udało się pobrać nowej wersji. Szczegóły są w dzienniku.",
   "bandeja.actualizar_fallo_instalador": "Nie udało się otworzyć instalatora nowej wersji.",
+  "bandeja.modulo_disponible": "Jest nowa wersja modułu „Luzeira Czujniki”: {version}. Pobierz ją z menu tej ikony („Pobierz Luzeira Czujniki”).",
   "bandeja.pantalla_generica": "ekran",
   "bandeja.no_compatible": "{device}: {model} — jeszcze nieobsługiwany",
   "bandeja.brillo_no_valido": "Tej jasności nie można wybrać.",
@@ -69,6 +70,7 @@
   "bandeja.menu_carpeta_temas": "Otwórz folder motywów",
   "bandeja.menu_actualizar": "Aktualizuj",
   "bandeja.menu_actualizar_a": "Aktualizuj do wersji {version}",
+  "bandeja.menu_descargar_modulo": "Pobierz Luzeira Czujniki {version}",
   "bandeja.menu_buscar_actualizaciones": "Sprawdź aktualizacje teraz",
   "bandeja.menu_avisar_versiones": "Powiadamiaj o nowych wersjach",
   "bandeja.menu_salir": "Zakończ"

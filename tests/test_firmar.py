@@ -427,3 +427,122 @@ def test_cmd_rekey_asks_twice_and_stops_if_they_differ(firmar, key, tmp_path):
     answers = iter(["una contrasena larga", FRASE, FRASE])
     firmar.cmd_rekey(args, password=lambda prompt: next(answers))
     assert firmar.read_key(dest, FRASE.encode())
+
+
+# --- módulo de sensores: modulo.json, solo si la release trae su instalador --------------
+
+MODULE = "LuzeiraSensores-0.2.0-setup.exe"
+
+
+class FakeGitHubWithModule(FakeGitHub):
+    """El mismo borrador, con el instalador del módulo en SHA256SUMS. ``unattested``: los
+    ficheros cuya attestation falla (aunque el commit sea el bueno)."""
+
+    def __init__(self, exe: bytes, module: bytes, *, module_sums: bytes | None = None,
+                 unattested: frozenset[str] = frozenset()):  # fmt: skip
+        super().__init__(exe)
+        self.module = module
+        self.unattested = unattested
+        line = module_sums or f"{hashlib.sha256(module).hexdigest()}  {MODULE}\n".encode()
+        self.sums += line
+
+    def __call__(self, args) -> None:
+        args = list(args)
+        patterns = [args[i + 1] for i, a in enumerate(args) if a == "-p"]
+        if args[:2] == ["release", "download"] and patterns == [MODULE]:
+            folder = Path(args[args.index("-D") + 1])
+            (folder / MODULE).write_bytes(self.module)
+            self.events.append("download " + MODULE)
+            return
+        if args[:2] == ["attestation", "verify"] and Path(args[2]).name in self.unattested:
+            self.events.append("attest " + Path(args[2]).name)
+            raise SystemExit("gh ha fallado: no sigo.")
+        super().__call__(args)
+
+
+def test_cmd_sign_signs_modulo_json_when_the_release_has_the_module(firmar, key, monkeypatch):
+    pem, public = key
+    gh = FakeGitHubWithModule(b"MZ el instalador bueno", b"MZ el modulo bueno")
+    run_sign(firmar, monkeypatch, pem, gh)
+    assert gh.events == [
+        "git v0.2.0",
+        "download",
+        "attest Luzeira-0.2.0-instalador.exe",
+        "attest SHA256SUMS",
+        "download " + MODULE,
+        "attest " + MODULE,  # atestiguado igual que el de la app, antes de la contraseña
+        "password",
+        "decrypt",
+        "upload",
+    ]
+    assert set(gh.uploaded) == {
+        "manifest.json", "manifest.json.sig", "SHA256SUMS.sig", "modulo.json", "modulo.json.sig"
+    }  # fmt: skip
+    m = actualizar.verify_module_manifest(
+        gh.uploaded["modulo.json"], gh.uploaded["modulo.json.sig"], [public]
+    )
+    assert m.version == "0.2.0" and m.file == MODULE
+    assert m.sha256 == hashlib.sha256(b"MZ el modulo bueno").hexdigest()
+    assert m.size == len(b"MZ el modulo bueno")
+    # La de la app sigue siendo la de la app.
+    assert (
+        actualizar.verify_manifest(
+            gh.uploaded["manifest.json"], gh.uploaded["manifest.json.sig"], [public]
+        ).file
+        == "Luzeira-0.2.0-instalador.exe"
+    )
+
+
+def test_cmd_sign_refuses_a_module_that_is_not_attested(firmar, key, monkeypatch):
+    gh = FakeGitHubWithModule(b"MZ", b"MZ modulo", unattested=frozenset({MODULE}))
+    with pytest.raises(SystemExit, match="gh ha fallado"):
+        run_sign(firmar, monkeypatch, key[0], gh)
+    assert "password" not in gh.events and "decrypt" not in gh.events
+    assert gh.uploaded == {}
+
+
+def test_cmd_sign_refuses_a_module_that_does_not_match_sums(firmar, key, monkeypatch):
+    gh = FakeGitHubWithModule(
+        b"MZ", b"MZ modulo cambiado", module_sums=f"{'0' * 64}  {MODULE}\n".encode()
+    )
+    with pytest.raises(SystemExit, match="SHA256SUMS"):
+        run_sign(firmar, monkeypatch, key[0], gh)
+    assert "password" not in gh.events and gh.uploaded == {}
+
+
+def test_two_module_installers_in_sums_are_refused(firmar):
+    sums = f"{'a' * 64}  {MODULE}\n{'b' * 64}  LuzeiraSensores-0.3.0-setup.exe\n"
+    with pytest.raises(SystemExit, match="más de un"):
+        firmar.module_in_sums(sums)
+    assert firmar.module_in_sums(f"{'a' * 64}  Luzeira-0.2.0-instalador.exe\n") is None
+    assert firmar.module_in_sums(f"{'a' * 64}  {MODULE}\n") == MODULE
+    # Lo que no tiene la forma exacta no cuenta como instalador del módulo.
+    for name in ("LuzeiraSensores-0.2.0-setup.exe.bat", "LuzeiraSensores-02.0.0-setup.exe"):
+        assert firmar.module_in_sums(f"{'a' * 64}  {name}\n") is None
+
+
+@pytest.mark.parametrize(
+    "version, size, sha",
+    [
+        ("0.1.0", 1, "a" * 64),
+        ("0.2.0", 28_139_780, "0123456789abcdef" * 4),
+        ("9999.9999.9999", actualizar.MAX_MODULE_BYTES, "f" * 64),
+    ],
+)
+def test_module_manifest_bytes_are_identical_to_the_app(firmar, version, size, sha):
+    file = f"LuzeiraSensores-{version}-setup.exe"
+    fields = {"app": "luzeira-sensores", "version": version, "file": file, "size": size,
+              "sha256": sha}  # fmt: skip
+    ours = firmar.manifest_bytes(firmar.Manifest(**fields))
+    assert ours == actualizar.module_manifest_bytes(actualizar.ModuleManifest(**fields))
+
+
+def test_module_limits_and_names_are_the_same_as_the_app(firmar, tmp_path):
+    assert firmar.MAX_MODULE_BYTES == actualizar.MAX_MODULE_BYTES
+    exe = tmp_path / MODULE
+    exe.write_bytes(b"MZ modulo")
+    sums = f"{hashlib.sha256(b'MZ modulo').hexdigest()}  {MODULE}\n"
+    m = firmar.make_module_manifest(exe, sums)
+    assert actualizar.ModuleManifest(**vars(m)).file == MODULE  # la app lo acepta
+    with pytest.raises(SystemExit, match="SHA256SUMS"):
+        firmar.make_module_manifest(exe, f"{'0' * 64}  {MODULE}\n")

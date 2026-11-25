@@ -26,6 +26,7 @@
   "bandeja.actualizar_fallo": "Yeni sürüm olup olmadığı kontrol edilemedi. Ayrıntılar günlükte.",
   "bandeja.actualizar_fallo_descarga": "Yeni sürüm indirilemedi. Ayrıntılar günlükte.",
   "bandeja.actualizar_fallo_instalador": "Yeni sürümün yükleyicisi açılamadı.",
+  "bandeja.modulo_disponible": "“Luzeira Sensörler” modülünün yeni bir sürümü var: {version}. Bu simgenin menüsünden indirebilirsin.",
   "bandeja.pantalla_generica": "ekran",
   "bandeja.no_compatible": "{device}: {model} — henüz desteklenmiyor",
   "bandeja.brillo_no_valido": "Bu parlaklık seçilebilecekler arasında değil.",
@@ -69,6 +70,7 @@
   "bandeja.menu_carpeta_temas": "Temalar klasörünü aç",
   "bandeja.menu_actualizar": "Güncelle",
   "bandeja.menu_actualizar_a": "{version} sürümüne güncelle",
+  "bandeja.menu_descargar_modulo": "Luzeira Sensörler {version} sürümünü indir",
   "bandeja.menu_buscar_actualizaciones": "Güncellemeleri şimdi denetle",
   "bandeja.menu_avisar_versiones": "Yeni sürümleri bana bildir",
   "bandeja.menu_salir": "Çıkış"

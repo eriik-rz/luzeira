@@ -26,6 +26,7 @@
   "bandeja.actualizar_fallo": "Não consegui verificar se há versão nova. Os detalhes estão no registro.",
   "bandeja.actualizar_fallo_descarga": "Não consegui baixar a versão nova. Os detalhes estão no registro.",
   "bandeja.actualizar_fallo_instalador": "Não consegui abrir o instalador da versão nova.",
+  "bandeja.modulo_disponible": "Há uma versão nova do módulo “Luzeira Sensores”: a {version}. Baixe pelo menu deste ícone (“Baixar Luzeira Sensores”).",
   "bandeja.pantalla_generica": "tela",
   "bandeja.no_compatible": "{device}: {model} — ainda não compatível",
   "bandeja.brillo_no_valido": "Esse brilho não está entre as opções disponíveis.",
@@ -69,6 +70,7 @@
   "bandeja.menu_carpeta_temas": "Abrir pasta de temas",
   "bandeja.menu_actualizar": "Atualizar",
   "bandeja.menu_actualizar_a": "Atualizar para a versão {version}",
+  "bandeja.menu_descargar_modulo": "Baixar Luzeira Sensores {version}",
   "bandeja.menu_buscar_actualizaciones": "Procurar atualizações agora",
   "bandeja.menu_avisar_versiones": "Avisar sobre versões novas",
   "bandeja.menu_salir": "Sair"

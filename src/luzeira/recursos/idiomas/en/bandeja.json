@@ -26,6 +26,7 @@
   "bandeja.actualizar_fallo": "I couldn't check for a new version. The details are in the log.",
   "bandeja.actualizar_fallo_descarga": "I couldn't download the new version. The details are in the log.",
   "bandeja.actualizar_fallo_instalador": "I couldn't open the installer for the new version.",
+  "bandeja.modulo_disponible": "There's a new version of the “Luzeira Sensors” module: {version}. Download it from this icon's menu (“Download Luzeira Sensors”).",
   "bandeja.pantalla_generica": "display",
   "bandeja.no_compatible": "{device}: {model} — not supported yet",
   "bandeja.brillo_no_valido": "That brightness isn't one of the levels you can choose.",
@@ -69,6 +70,7 @@
   "bandeja.menu_carpeta_temas": "Open themes folder",
   "bandeja.menu_actualizar": "Update",
   "bandeja.menu_actualizar_a": "Update to version {version}",
+  "bandeja.menu_descargar_modulo": "Download Luzeira Sensors {version}",
   "bandeja.menu_buscar_actualizaciones": "Check for updates now",
   "bandeja.menu_avisar_versiones": "Tell me about new versions",
   "bandeja.menu_salir": "Quit"

@@ -25,6 +25,7 @@ import queue
 import sys
 import threading
 import time
+import webbrowser
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
@@ -64,6 +65,7 @@ from luzeira.pantallas.modelos import (
     model_by_key,
     remembered_device,
 )
+from luzeira.sensores import modulo
 from luzeira.servicio import DisplayService, Settings, Status
 from luzeira.sistema import autoarranque, paquete, tarea_inicio
 from luzeira.sistema.energia import PowerListener
@@ -133,6 +135,9 @@ MSG_STORE_SHORTCUT = "bandeja.acceso_store"
 MSG_UPDATE_DOWNLOADING = "bandeja.actualizar_descargando"
 MSG_UPDATE_INSTALLING = "bandeja.actualizar_instalando"
 MSG_UPDATE_FAILED = "bandeja.actualizar_fallo"
+# Módulo de sensores (ADR-007): solo se avisa y se abre su página; no se instala desde aquí.
+MSG_MODULE_AVAILABLE = "bandeja.modulo_disponible"
+MENU_MODULE_DOWNLOAD = "bandeja.menu_descargar_modulo"
 _UPDATE_FIRST_DELAY = 60.0  # s tras arrancar: que la pantalla se encienda primero
 _UPDATE_TICK = 3600.0  # s entre miradas al reloj
 _UPDATE_EVERY = 24 * 3600.0  # s entre comprobaciones automáticas
@@ -451,6 +456,11 @@ class TrayApp:
         self._update_busy = False
         self._update_notified: str | None = None
         self._update_wake = threading.Event()
+        # Módulo de sensores: la versión nueva firmada que se ofrece (solo un enlace), la
+        # última de la que se avisó, y cómo se lee la instalada (los tests la cambian).
+        self._module: actualizar.ModuleManifest | None = None
+        self._module_notified: str | None = None
+        self._module_version: Callable[[], str | None] = modulo.installed_version
         self._closing = False
         # El idioma, lo primero: el aviso de abajo ya sale en el del usuario.
         idioma.set_language(config.language)
@@ -997,6 +1007,7 @@ class TrayApp:
         checked_at = time.time()
         try:
             manifest = actualizar.check(max_seen=self.config.updates_max_seen)
+            module_ok, module = self._check_module()  # nunca lanza
         except Exception as exc:
             if isinstance(exc, actualizar.UpdateError):
                 log.warning("No se pudo comprobar si hay versión nueva: %s", exc)
@@ -1011,9 +1022,49 @@ class TrayApp:
         finally:
             self._release_update()
         self._post(self._safe(lambda: self._update_checked(manifest, checked_at, manual)))
+        if module_ok:
+            self._post(self._safe(lambda: self._module_checked(module, manual)))
         if manifest is None:
-            return t(MSG_UP_TO_DATE, version=__version__)
-        return t(MSG_UPDATE_AVAILABLE, version=manifest.version)
+            text = t(MSG_UP_TO_DATE, version=__version__)
+        else:
+            text = t(MSG_UPDATE_AVAILABLE, version=manifest.version)
+        if manual and module is not None:
+            # Una sola respuesta: dos avisos seguidos podrían taparse uno a otro.
+            text += "\n" + t(MSG_MODULE_AVAILABLE, version=module.version)
+        return text
+
+    def _check_module(self) -> tuple[bool, actualizar.ModuleManifest | None]:
+        """Después de la app, el módulo de sensores, si está instalado. ``(False, None)``
+        si algo falla: se apunta en el registro y la comprobación de la app sigue igual
+        (ni su texto ni su estado cambian). Nunca lanza."""
+        try:
+            installed = self._module_version()
+            if installed is None:
+                return True, None  # sin módulo (o sin saber su versión): nada que ofrecer
+            return True, actualizar.check_module(installed)
+        except actualizar.UpdateError as exc:
+            log.warning("No se pudo comprobar si hay módulo de sensores nuevo: %s", exc)
+        except Exception:
+            log.exception("Fallo al comprobar si hay módulo de sensores nuevo")
+        return False, None
+
+    def _module_checked(self, module: actualizar.ModuleManifest | None, manual: bool) -> None:
+        """En el hilo del icono: se ofrece (menú) y se avisa una sola vez por versión. Si lo
+        pidió el usuario, el aviso ya va en la respuesta de ``check_updates``."""
+        self._module = module
+        if module is not None and module.version != self._module_notified:
+            self._module_notified = module.version
+            if not manual:
+                self._notify(t(MSG_MODULE_AVAILABLE, version=module.version))
+
+    def _open_module_page(self) -> None:
+        """Abre en el navegador la release de la que salió ``modulo.json``. No se baja ni se
+        instala nada desde aquí: el instalador del módulo pide administrador (ADR-007)."""
+        webbrowser.open(actualizar.MODULE_PAGE_URL)
+
+    def _module_label(self) -> str:
+        module = self._module
+        return t(MENU_MODULE_DOWNLOAD, version=module.version if module else "")
 
     def _save_last_check(self, checked_at: float) -> None:
         self._save(self.config.model_copy(update={"updates_last_check": checked_at}))
@@ -1284,6 +1335,11 @@ class TrayApp:
                 self._safe(self._install_from_menu),
                 visible=lambda _item: self._update is not None,
                 enabled=lambda _item: not self._update_busy,
+            ),
+            Item(
+                lambda _item: self._module_label(),
+                self._safe(self._open_module_page),
+                visible=lambda _item: self._module is not None and self._can_update(),
             ),
             Item(
                 t("bandeja.menu_buscar_actualizaciones"),

@@ -51,6 +51,13 @@ que apunta tu etiqueta local** (``--source-digest``): si alguien con la cuenta d
 moviera la etiqueta a otro commit, no firmas su build. Después comprueba el instalador
 contra ``SHA256SUMS``, pide la contraseña, firma ``manifest.json`` y ``SHA256SUMS`` y sube
 ``manifest.json``, ``manifest.json.sig`` y ``SHA256SUMS.sig`` al borrador.
+
+Si ``SHA256SUMS`` lista también el instalador del módulo de sensores
+(``LuzeiraSensores-<versión del módulo>-setup.exe``, de ``empaquetar.py --modulo``), lo
+baja, exige su attestation igual que la del instalador de la app y lo comprueba contra
+``SHA256SUMS``, también antes de pedir la contraseña; después firma ``modulo.json`` (su
+manifiesto, con ``app`` = ``luzeira-sensores``: una firma de uno no vale por el otro) y
+sube ``modulo.json`` y ``modulo.json.sig``. Sin ese instalador, todo sigue como arriba.
 Publicar lo haces tú después: ``gh release edit v0.2.0 --draft=false -R eriik-rz/luzeira``.
 
 Las contraseñas se piden en una ventanita de Windows: así las escribes tú y no pasan por
@@ -96,6 +103,9 @@ MIN_PASSWORD = 25
 _VERSION = re.compile(r"(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 MAX_INSTALLER_BYTES = 200 * 1024 * 1024
+MAX_MODULE_BYTES = 100 * 1024 * 1024
+#: El instalador del módulo de sensores tal como lo nombra luzeira-sensores.iss.
+_MODULE_FILE = re.compile(r"LuzeiraSensores-(" + _VERSION.pattern + r")-setup\.exe")
 #: Una línea de SHA256SUMS: «<sha256>  <fichero>». Se exige el formato antes de firmarlo,
 #: así la firma de SHA256SUMS nunca puede valer como la de un manifest.json (no es JSON).
 _SUMS_LINE = re.compile(r"[0-9a-f]{64}  [A-Za-z0-9][A-Za-z0-9._-]{0,99}")
@@ -130,7 +140,8 @@ def parse_version(text: str) -> tuple[int, int, int]:
 
 @dataclass(frozen=True)
 class Manifest:
-    """Lo mismo que ``luzeira.actualizar.Manifest``, en el mismo orden de campos."""
+    """Lo mismo que ``luzeira.actualizar.Manifest``, en el mismo orden de campos. Vale
+    también para ``ModuleManifest`` (los mismos campos, con ``app="luzeira-sensores"``)."""
 
     app: str
     version: str
@@ -272,6 +283,42 @@ def make_manifest(version: str, installer: Path, sums: str) -> Manifest:
     return manifest
 
 
+def module_in_sums(sums: str) -> str | None:
+    """El nombre del instalador del módulo que lista ``SHA256SUMS``, o ``None`` si esta
+    release no lo trae. Dos (de versiones distintas) no: no sabría cuál firmar."""
+    files = (line.split("  ", 1)[-1] for line in sums.splitlines())
+    names = [name for name in files if _MODULE_FILE.fullmatch(name)]
+    if len(names) > 1:
+        sys.exit("SHA256SUMS lista más de un instalador del módulo. No firmo.")
+    return names[0] if names else None
+
+
+def make_module_manifest(installer: Path, sums: str) -> Manifest:
+    """El ``modulo.json`` del instalador del módulo, comprobando que casa con ``SHA256SUMS``.
+    La versión es la del nombre del fichero (la del módulo, no la de la app)."""
+    match = _MODULE_FILE.fullmatch(installer.name)
+    if match is None:
+        sys.exit(f"{installer.name} no es un instalador del módulo. No firmo.")
+    version = match[1]
+    parse_version(version)
+    data = installer.read_bytes()
+    digest = hashlib.sha256(data).hexdigest()
+    if f"{digest}  {installer.name}" not in (line.strip() for line in sums.splitlines()):
+        sys.exit(f"{installer.name} no casa con SHA256SUMS de la release. No firmo.")
+    manifest = Manifest(
+        app="luzeira-sensores", version=version, file=installer.name, size=len(data),
+        sha256=digest,
+    )  # fmt: skip
+    # Lo que la app exige (luzeira.actualizar.ModuleManifest y verify_module_manifest).
+    if (
+        manifest.file != f"LuzeiraSensores-{version}-setup.exe"
+        or not 0 < manifest.size <= MAX_MODULE_BYTES
+        or not _SHA256.fullmatch(manifest.sha256)
+    ):
+        sys.exit("El manifiesto del módulo no lo aceptaría la app. No firmo.")
+    return manifest
+
+
 def _check_key(private: Ed25519PrivateKey) -> Ed25519PublicKey:
     """⚠ Compara con el ``PUBLIC_KEYS`` de este árbol, no con el de las versiones que tiene
     la gente instaladas. Si algún día se cambia de clave, la versión que la estrena se
@@ -397,6 +444,14 @@ def cmd_sign(
         sums = sums_data.decode("ascii", errors="replace")
         check_sums(sums)
         manifest = make_manifest(version, installer, sums)
+        # El módulo de sensores, si esta release lo trae: igual que el de la app, bajado,
+        # atestiguado y contra SHA256SUMS, todo antes de pedir la contraseña.
+        module = None
+        module_name = module_in_sums(sums)
+        if module_name is not None:
+            run(["release", "download", tag, "-R", REPO, "-p", module_name, "-D", tmp])
+            run(attestation_args(folder / module_name, tag, commit))
+            module = make_module_manifest(folder / module_name, sums)
         # La clave se descifra solo ahora, con todo comprobado.
         private = read_key(args.clave, password(f"Contraseña de {args.clave.name}:").encode())
         data, sig = sign(manifest, private)
@@ -404,13 +459,13 @@ def cmd_sign(
         (folder / "manifest.json").write_bytes(data)
         (folder / "manifest.json.sig").write_bytes(sig)
         (folder / "SHA256SUMS.sig").write_bytes(sums_sig)
-        run(
-            [
-                "release", "upload", tag, "-R", REPO,
-                str(folder / "manifest.json"), str(folder / "manifest.json.sig"),
-                str(folder / "SHA256SUMS.sig"),
-            ]
-        )  # fmt: skip
+        uploads = ["manifest.json", "manifest.json.sig", "SHA256SUMS.sig"]
+        if module is not None:
+            module_data, module_sig = sign(module, private)
+            (folder / "modulo.json").write_bytes(module_data)
+            (folder / "modulo.json.sig").write_bytes(module_sig)
+            uploads += ["modulo.json", "modulo.json.sig"]
+        run(["release", "upload", tag, "-R", REPO, *(str(folder / name) for name in uploads)])
     print(
         f"\nFirmada {tag} (commit {commit}). Revisa el borrador en GitHub y, si todo está "
         f"bien, publícala:\n    gh release edit {tag} --draft=false -R {REPO}"

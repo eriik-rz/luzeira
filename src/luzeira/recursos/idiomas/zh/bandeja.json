@@ -26,6 +26,7 @@
   "bandeja.actualizar_fallo": "无法检查是否有新版本。详细信息见日志。",
   "bandeja.actualizar_fallo_descarga": "无法下载新版本。详细信息见日志。",
   "bandeja.actualizar_fallo_instalador": "无法打开新版本的安装程序。",
+  "bandeja.modulo_disponible": "“Luzeira 传感器”模块有新版本：{version}。请在此图标菜单中选择“下载 Luzeira 传感器”。",
   "bandeja.pantalla_generica": "副屏",
   "bandeja.no_compatible": "{device}：{model} — 暂不支持",
   "bandeja.brillo_no_valido": "这个亮度不在可选范围内。",
@@ -69,6 +70,7 @@
   "bandeja.menu_carpeta_temas": "打开主题文件夹",
   "bandeja.menu_actualizar": "更新",
   "bandeja.menu_actualizar_a": "更新到 {version} 版本",
+  "bandeja.menu_descargar_modulo": "下载 Luzeira 传感器 {version}",
   "bandeja.menu_buscar_actualizaciones": "立即检查更新",
   "bandeja.menu_avisar_versiones": "有新版本时提醒我",
   "bandeja.menu_salir": "退出"

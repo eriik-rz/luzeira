@@ -72,6 +72,8 @@ from __future__ import annotations
 
 import logging
 import math
+import os
+import re
 import struct
 import time
 from collections.abc import Callable
@@ -224,6 +226,56 @@ def real_reader() -> SectionReader:
     from luzeira.sensores.windows_cpu import RealModuleFileReader, programdata_dir
 
     return RealModuleFileReader(programdata_dir() / FOLDER_NAME, FILE_NAME, SECTION_SIZE)
+
+
+#: Forma de la versión que publica el módulo. La comprobación estricta (sin ceros
+#: delante…) la hace ``actualizar.parse_version``; aquí solo se descarta lo que no lo es.
+_MODULE_VERSION = re.compile(r"[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}")
+#: Lecturas si el servicio está justo escribiendo (secuencia impar) al copiar.
+_VERSION_TRIES = 3
+
+
+def installed_version(opener: Callable[[], SectionReader] | None = None) -> str | None:
+    """La versión del módulo instalado, leída **una vez** de su fichero (la escribe el
+    propio servicio en la cabecera), para avisar de versiones nuevas.
+
+    ``None`` si no está instalado, no se puede leer, no es de fiar (mismas comprobaciones
+    que :class:`ModuleSource`, con el mismo lector) o la versión no tiene forma de versión.
+    Nunca lanza. ``opener``: el lector de verdad (:func:`real_reader`) si no se da otro
+    (solo los tests dan otro); con él, fuera de Windows ni siquiera se abre nada.
+
+    Límite: si el servicio no ha llegado a arrancar nunca, no hay fichero y no se puede
+    saber la versión: entonces no se avisa (como si no estuviera)."""
+    if opener is None:
+        if os.name != "nt":
+            return None
+        opener = real_reader
+    reader: SectionReader | None = None
+    try:
+        reader = opener()
+        for _ in range(_VERSION_TRIES):
+            data = reader.read()
+            if data is None:
+                return None
+            try:
+                version = parse_section(data).module_version
+            except BadSection:
+                continue  # a medio escribir, o de un formato que no conocemos
+            return version if _MODULE_VERSION.fullmatch(version) else None
+        return None
+    except SectionUntrusted:
+        log.warning("No se mira la versión del módulo: su fichero no es de fiar.")
+        return None
+    except Exception as exc:
+        # Solo el tipo de error: el mensaje podría llevar datos del equipo.
+        log.warning("No se pudo leer la versión del módulo (%s).", type(exc).__name__)
+        return None
+    finally:
+        if reader is not None:
+            try:
+                reader.close()
+            except Exception as exc:
+                log.debug("Al soltar el fichero del módulo: %s.", type(exc).__name__)
 
 
 class ModuleSource:

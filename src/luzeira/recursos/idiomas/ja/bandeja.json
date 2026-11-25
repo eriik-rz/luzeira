@@ -26,6 +26,7 @@
   "bandeja.actualizar_fallo": "新しいバージョンがあるかどうかを確認できませんでした。詳細はログに記録されています。",
   "bandeja.actualizar_fallo_descarga": "新しいバージョンをダウンロードできませんでした。詳細はログに記録されています。",
   "bandeja.actualizar_fallo_instalador": "新しいバージョンのインストーラーを開けませんでした。",
+  "bandeja.modulo_disponible": "「Luzeira センサー」モジュールの新しいバージョン {version} があります。このアイコンのメニューの「Luzeira センサーをダウンロード」からダウンロードしてください。",
   "bandeja.pantalla_generica": "ディスプレイ",
   "bandeja.no_compatible": "{device}: {model} — まだ対応していません",
   "bandeja.brillo_no_valido": "その明るさは選択できません。",
@@ -69,6 +70,7 @@
   "bandeja.menu_carpeta_temas": "テーマ フォルダーを開く",
   "bandeja.menu_actualizar": "更新",
   "bandeja.menu_actualizar_a": "バージョン {version} に更新",
+  "bandeja.menu_descargar_modulo": "Luzeira センサー {version} をダウンロード",
   "bandeja.menu_buscar_actualizaciones": "今すぐ更新を確認",
   "bandeja.menu_avisar_versiones": "新しいバージョンを通知する",
   "bandeja.menu_salir": "終了"

@@ -26,6 +26,7 @@
   "bandeja.actualizar_fallo": "Не удалось проверить наличие новой версии. Подробности — в журнале.",
   "bandeja.actualizar_fallo_descarga": "Не удалось скачать новую версию. Подробности — в журнале.",
   "bandeja.actualizar_fallo_instalador": "Не удалось открыть установщик новой версии.",
+  "bandeja.modulo_disponible": "Вышла новая версия модуля «Luzeira Датчики»: {version}. Скачайте её из меню этого значка («Скачать Luzeira Датчики»).",
   "bandeja.pantalla_generica": "экран",
   "bandeja.no_compatible": "{device}: {model} — пока не поддерживается",
   "bandeja.brillo_no_valido": "Такой яркости нет среди доступных.",
@@ -69,6 +70,7 @@
   "bandeja.menu_carpeta_temas": "Открыть папку тем",
   "bandeja.menu_actualizar": "Обновить",
   "bandeja.menu_actualizar_a": "Обновить до версии {version}",
+  "bandeja.menu_descargar_modulo": "Скачать Luzeira Датчики {version}",
   "bandeja.menu_buscar_actualizaciones": "Проверить обновления",
   "bandeja.menu_avisar_versiones": "Сообщать о новых версиях",
   "bandeja.menu_salir": "Выход"

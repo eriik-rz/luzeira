@@ -25,6 +25,13 @@ por un objeto falso que se pasa como parámetro (``http=``).
 Si Luzeira corre **como administrador**, no descarga ni lanza nada (:func:`is_elevated`):
 la carpeta de descargas es del usuario, y un programa sin permisos podría cambiar el
 instalador justo antes de que una app elevada lo abriera (y heredaría los permisos).
+
+El **módulo opcional de sensores** (ADR-007) tiene su propio manifiesto firmado,
+``modulo.json`` (:class:`ModuleManifest`, :func:`check_module`), en la misma release y con
+la misma clave. Va aparte y no como un campo más de ``manifest.json``: ``Manifest`` no
+admite campos de más (``extra="forbid"``) y las versiones ya instaladas rechazarían el
+manifiesto entero. Del módulo solo se **avisa**: su instalador pide administrador y lo
+lanza el usuario desde la página de la release (:data:`MODULE_PAGE_URL`).
 """
 
 from __future__ import annotations
@@ -59,6 +66,12 @@ REPO = "eriik-rz/luzeira"
 RELEASES = f"https://github.com/{REPO}/releases"
 MANIFEST_URL = f"{RELEASES}/latest/download/manifest.json"
 SIGNATURE_URL = f"{RELEASES}/latest/download/manifest.json.sig"
+MODULE_MANIFEST_URL = f"{RELEASES}/latest/download/modulo.json"
+MODULE_SIGNATURE_URL = f"{RELEASES}/latest/download/modulo.json.sig"
+#: Lo que se abre en el navegador para bajar el módulo. Es la última release y no la de
+#: una versión concreta: ``modulo.json`` no dice en qué release de la app va (la etiqueta
+#: es la de la app, no la del módulo), y es la misma de la que se acaba de leer.
+MODULE_PAGE_URL = f"{RELEASES}/latest"
 #: GitHub sirve los ficheros de una release redirigiendo a su almacén. Ningún otro host
 #: vale, ni siquiera en una redirección.
 ALLOWED_HOSTS = frozenset(
@@ -76,6 +89,8 @@ PUBLIC_KEYS: tuple[str, ...] = (
 MAX_MANIFEST_BYTES = 4096
 MAX_SIGNATURE_BYTES = 512
 MAX_INSTALLER_BYTES = 200 * 1024 * 1024
+#: El del módulo pesa unos 28 MB (0.1.0, .NET autocontenido): con 100 hay margen de sobra.
+MAX_MODULE_BYTES = 100 * 1024 * 1024
 TIMEOUT = 20  # s de espera por cada lectura (no es el total: eso son los plazos de abajo)
 #: Plazo total para bajar el manifiesto o su firma (pesan menos de 4 KB).
 SMALL_DEADLINE = 60
@@ -105,6 +120,11 @@ INSTALLER_ARGS = ("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/ACTUALIZAR
 
 class UpdateError(Exception):
     """Algo no ha salido bien. El mensaje es para el usuario, en su idioma."""
+
+
+class NotFoundError(UpdateError):
+    """GitHub ha contestado 404. Para la app es un error más (mismo mensaje); para
+    ``modulo.json`` quiere decir que esa release no trae el módulo."""
 
 
 Version = tuple[int, int, int]
@@ -143,6 +163,32 @@ def manifest_bytes(manifest: Manifest) -> bytes:
     return manifest.model_dump_json().encode("ascii")
 
 
+class ModuleManifest(BaseModel):
+    """Lo que firma quien publica sobre el instalador del módulo de sensores.
+
+    Mismos campos y en el mismo orden que :class:`Manifest`, pero ``app`` es otro texto
+    exacto: así una firma de uno nunca vale como del otro (separación de dominio). Un
+    ``manifest.json`` firmado no pasa por ``modulo.json`` ni al revés, y ``SHA256SUMS``
+    (también firmado con la misma clave) no es JSON."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    app: str = Field(pattern=r"^luzeira-sensores$")
+    version: str = Field(pattern=_VERSION.pattern)
+    file: str = Field(pattern=r"^LuzeiraSensores-[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}-setup\.exe$")
+    size: int = Field(gt=0, le=MAX_MODULE_BYTES)
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @property
+    def parsed_version(self) -> Version:
+        return parse_version(self.version)
+
+
+def module_manifest_bytes(manifest: ModuleManifest) -> bytes:
+    """Los bytes de ``modulo.json`` que se firman, como :func:`manifest_bytes`."""
+    return manifest.model_dump_json().encode("ascii")
+
+
 def _load_keys(keys: Iterable[str]) -> list[Ed25519PublicKey]:
     loaded = []
     for key in keys:
@@ -151,8 +197,8 @@ def _load_keys(keys: Iterable[str]) -> list[Ed25519PublicKey]:
     return loaded
 
 
-def verify_manifest(data: bytes, signature: bytes, keys: Iterable[str]) -> Manifest:
-    """Comprueba la firma y, solo si vale, lee el manifiesto. Lanza :class:`UpdateError`."""
+def _verify_signature(data: bytes, signature: bytes, keys: Iterable[str]) -> None:
+    """Lanza :class:`UpdateError` si ``signature`` no es de ``data`` con ninguna clave."""
     try:
         sig = base64.b64decode(signature.strip(), validate=True)
     except ValueError:
@@ -162,9 +208,13 @@ def verify_manifest(data: bytes, signature: bytes, keys: Iterable[str]) -> Manif
             key.verify(sig, data)
         except InvalidSignature:
             continue
-        break
-    else:
-        raise UpdateError(t("sistema.actualizar_firma_no_valida"))
+        return
+    raise UpdateError(t("sistema.actualizar_firma_no_valida"))
+
+
+def verify_manifest(data: bytes, signature: bytes, keys: Iterable[str]) -> Manifest:
+    """Comprueba la firma y, solo si vale, lee el manifiesto. Lanza :class:`UpdateError`."""
+    _verify_signature(data, signature, keys)
     try:
         manifest = Manifest.model_validate_json(data)
     except ValidationError:
@@ -174,7 +224,19 @@ def verify_manifest(data: bytes, signature: bytes, keys: Iterable[str]) -> Manif
     return manifest
 
 
-def is_newer(manifest: Manifest, installed: str, max_seen: str | None) -> bool:
+def verify_module_manifest(data: bytes, signature: bytes, keys: Iterable[str]) -> ModuleManifest:
+    """Lo mismo que :func:`verify_manifest`, para ``modulo.json``."""
+    _verify_signature(data, signature, keys)
+    try:
+        manifest = ModuleManifest.model_validate_json(data)
+    except ValidationError:
+        raise UpdateError(t("sistema.actualizar_info_no_valida")) from None
+    if not manifest.file.startswith(f"LuzeiraSensores-{manifest.version}-"):
+        raise UpdateError(t("sistema.actualizar_info_no_valida"))
+    return manifest
+
+
+def is_newer(manifest: Manifest | ModuleManifest, installed: str, max_seen: str | None) -> bool:
     """¿Merece la pena ofrecerla? Tiene que ser más nueva que la instalada y no más
     vieja que la mayor que ya se haya visto: así no se puede ofrecer una versión
     antigua aunque esté bien firmada.
@@ -240,7 +302,7 @@ class GitHubHttp:
             return self._opener.open(url, timeout=TIMEOUT)
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
-                raise UpdateError(t("sistema.actualizar_sin_versiones")) from None
+                raise NotFoundError(t("sistema.actualizar_sin_versiones")) from None
             raise UpdateError(t("sistema.actualizar_error_github", code=exc.code)) from None
         except (urllib.error.URLError, OSError):
             raise UpdateError(t("sistema.actualizar_sin_conexion")) from None
@@ -301,6 +363,34 @@ def check(
     signature = http.get(SIGNATURE_URL, MAX_SIGNATURE_BYTES)
     manifest = verify_manifest(data, signature, keys)
     return manifest if is_newer(manifest, installed, max_seen) else None
+
+
+def check_module(
+    installed: str,
+    *,
+    http: Http | None = None,
+    keys: Iterable[str] | None = None,
+) -> ModuleManifest | None:
+    """La versión nueva firmada del módulo de sensores, o ``None`` si ya se tiene la
+    última o la release no trae ``modulo.json`` (404: no es un error). ``installed`` es
+    la que publica el propio módulo (``modulo.installed_version``).
+
+    Sin «la más alta vista» (``max_seen``): de aquí no sale ninguna descarga, así que lo
+    peor que puede hacer quien sirva un ``modulo.json`` viejo y bien firmado es que no se
+    avise. El tope de salto (:data:`MAX_MAJOR_JUMP`) sí se aplica (está en ``is_newer``)."""
+    keys = tuple(PUBLIC_KEYS if keys is None else keys)
+    if not keys:
+        raise UpdateError(t("sistema.actualizar_no_puede"))
+    parse_version(installed)  # ValueError antes de conectar si el módulo dice algo raro
+    http = http or GitHubHttp()
+    try:
+        data = http.get(MODULE_MANIFEST_URL, MAX_MANIFEST_BYTES)
+    except NotFoundError:
+        return None
+    # La firma sí tiene que estar: un modulo.json sin firma es un error, no «no hay».
+    signature = http.get(MODULE_SIGNATURE_URL, MAX_SIGNATURE_BYTES)
+    manifest = verify_module_manifest(data, signature, keys)
+    return manifest if is_newer(manifest, installed, None) else None
 
 
 def is_elevated(unknown: bool = True) -> bool:

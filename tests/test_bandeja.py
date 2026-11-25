@@ -51,6 +51,12 @@ def app(monkeypatch):
     monkeypatch.setattr(bandeja.autoarranque, "blocked_by_user", lambda: False)
     monkeypatch.setattr(bandeja, "list_ports", lambda: list(PORTS))
     tray = bandeja.TrayApp(AppConfig())
+    # Nunca el fichero del módulo de este equipo: si estuviera instalado, la comprobación
+    # del módulo saldría a GitHub de verdad.
+    tray._module_version = lambda: None
+    monkeypatch.setattr(
+        bandeja.actualizar, "check_module", lambda *a, **k: pytest.fail("red de verdad")
+    )
     notes = []
     monkeypatch.setattr(tray, "_notify", lambda text, title="Luzeira": notes.append(text))
     tray.notes = notes
@@ -1108,6 +1114,140 @@ def test_the_notice_points_to_the_editor():
     assert "editor" in t(bandeja.MSG_UPDATE_AVAILABLE, version="0.9.0")
 
 
+# --- módulo de sensores (ADR-007): solo se avisa y se abre su página ---------------------
+
+
+def a_module(version="0.2.0"):
+    return bandeja.actualizar.ModuleManifest(
+        app="luzeira-sensores",
+        version=version,
+        file=f"LuzeiraSensores-{version}-setup.exe",
+        size=1,
+        sha256="0" * 64,
+    )
+
+
+@pytest.fixture
+def with_module(app, monkeypatch):
+    """El módulo 0.1.0 instalado y GitHub ofreciendo lo que se ponga en ``offer``."""
+    offer = {"module": a_module(), "asked": []}
+    app._module_version = lambda: "0.1.0"
+
+    def check_module(installed, **kw):
+        offer["asked"].append(installed)
+        result = offer["module"]
+        if isinstance(result, BaseException):
+            raise result
+        return result
+
+    monkeypatch.setattr(bandeja.actualizar, "check_module", check_module)
+    return offer
+
+
+def test_a_new_module_is_offered_in_the_menu_and_notified_once(
+    app, with_keys, with_module, monkeypatch
+):
+    app.config = app.config.model_copy(update={"updates": True})
+    monkeypatch.setattr(bandeja.actualizar, "check", lambda **kw: None)
+    for _ in range(2):
+        app.check_updates(manual=False)
+        app._drain()
+    assert with_module["asked"] == ["0.1.0", "0.1.0"]  # con la versión que dice el módulo
+    assert app.notes == [t(bandeja.MSG_MODULE_AVAILABLE, version="0.2.0")]
+    assert t(bandeja.MENU_MODULE_DOWNLOAD, version="0.2.0") in menu_texts(app)
+    # Otra versión más nueva: se avisa otra vez (una vez por versión).
+    with_module["module"] = a_module("0.3.0")
+    app.check_updates(manual=False)
+    app._drain()
+    assert app.notes[-1] == t(bandeja.MSG_MODULE_AVAILABLE, version="0.3.0") and len(app.notes) == 2
+
+
+def test_the_module_menu_opens_the_release_page_and_installs_nothing(
+    app, with_keys, with_module, monkeypatch
+):
+    monkeypatch.setattr(bandeja.actualizar, "check", lambda **kw: None)
+    opened = []
+    monkeypatch.setattr(bandeja.webbrowser, "open", opened.append)
+    for name in ("download", "launch"):
+        monkeypatch.setattr(bandeja.actualizar, name, lambda *a, n=name, **k: pytest.fail(n))
+    app.check_updates(manual=False)
+    app._drain()
+    [item] = [
+        i
+        for i in walk(app.icon.menu)
+        if i.visible and i.text == t(bandeja.MENU_MODULE_DOWNLOAD, version="0.2.0")
+    ]
+    item(app.icon)
+    assert opened == [bandeja.actualizar.MODULE_PAGE_URL]
+    assert opened[0] == "https://github.com/eriik-rz/luzeira/releases/latest"
+
+
+def test_a_manual_check_says_it_in_its_answer_not_in_a_second_notice(
+    app, with_keys, with_module, monkeypatch
+):
+    monkeypatch.setattr(bandeja.actualizar, "check", lambda **kw: a_manifest())
+    text = app.check_updates(manual=True)
+    app._drain()
+    assert text == (
+        t(bandeja.MSG_UPDATE_AVAILABLE, version="0.9.0")
+        + "\n"
+        + t(bandeja.MSG_MODULE_AVAILABLE, version="0.2.0")
+    )
+    assert app.notes == []  # la respuesta la enseña quien preguntó
+    app.check_updates(manual=False)  # y luego, en automático, ya no se repite
+    app._drain()
+    assert t(bandeja.MSG_MODULE_AVAILABLE, version="0.2.0") not in app.notes
+
+
+@pytest.mark.parametrize(
+    "error",
+    [bandeja.actualizar.UpdateError("La firma no es válida."), ValueError("rara"), None],
+    ids=["update-error", "otro-error", "version-ilegible"],
+)
+def test_a_module_failure_never_changes_the_app_result(
+    app, with_keys, with_module, monkeypatch, error
+):
+    monkeypatch.setattr(bandeja.actualizar, "check", lambda **kw: a_manifest())
+    if error is None:
+        app._module_version = lambda: (_ for _ in ()).throw(OSError("boom"))
+    else:
+        with_module["module"] = error
+    text = app.check_updates(manual=True)
+    app._drain()
+    assert text == t(bandeja.MSG_UPDATE_AVAILABLE, version="0.9.0")
+    assert app._update is not None and app._update.version == "0.9.0"
+    assert app.saved[-1].updates_max_seen == "0.9.0" and not app._update_busy
+    assert app._module is None and app.notes == []
+
+
+def test_a_module_failure_keeps_what_was_already_offered(app, with_keys, with_module, monkeypatch):
+    monkeypatch.setattr(bandeja.actualizar, "check", lambda **kw: None)
+    app.check_updates(manual=False)
+    app._drain()
+    with_module["module"] = bandeja.actualizar.UpdateError("No he podido conectar con GitHub.")
+    app.check_updates(manual=False)
+    app._drain()
+    assert app._module is not None and app._module.version == "0.2.0"
+
+
+def test_without_the_module_installed_nothing_is_asked(app, with_keys, with_module, monkeypatch):
+    monkeypatch.setattr(bandeja.actualizar, "check", lambda **kw: None)
+    app._module_version = lambda: None
+    app._module = a_module()  # lo de antes de desinstalarlo
+    assert app.check_updates(manual=True) == t(bandeja.MSG_UP_TO_DATE, version=bandeja.__version__)
+    app._drain()
+    assert with_module["asked"] == [] and app._module is None
+
+
+def test_a_failed_app_check_does_not_look_at_the_module(app, with_keys, with_module, monkeypatch):
+    def fail(**kw):
+        raise bandeja.actualizar.UpdateError("No he podido conectar con GitHub.")
+
+    monkeypatch.setattr(bandeja.actualizar, "check", fail)
+    app.check_updates(manual=True)
+    assert with_module["asked"] == []
+
+
 # --- versión de Microsoft Store (paquete MSIX, C-52) ------------------------------------
 
 
@@ -1124,6 +1264,17 @@ def test_store_has_no_updater_even_with_keys(store_app, settings, with_keys, mon
     assert settings.check_updates() == t(bandeja.MSG_STORE_UPDATES)
     store_app.config = store_app.config.model_copy(update={"updates": True})
     assert one_loop_turn(store_app, monkeypatch) == []  # nunca se conecta
+
+
+def test_store_never_checks_nor_offers_the_module(store_app, with_keys, with_module, monkeypatch):
+    # En la Store ni se menciona el módulo (norma 10.1.5, ADR-007).
+    monkeypatch.setattr(bandeja.actualizar, "check", lambda **kw: None)
+    assert store_app.check_updates(manual=True) == t(bandeja.MSG_STORE_UPDATES)
+    store_app.check_updates(manual=False)
+    store_app._drain()
+    assert with_module["asked"] == [] and store_app.notes == []
+    store_app._module = a_module()  # aunque quedara algo de antes
+    assert t(bandeja.MENU_MODULE_DOWNLOAD, version="0.2.0") not in menu_texts(store_app)
 
 
 class FakeStartupTask:

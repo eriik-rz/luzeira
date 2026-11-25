@@ -26,6 +26,7 @@
   "bandeja.actualizar_fallo": "Impossibile verificare se c'è una nuova versione. I dettagli sono nel registro.",
   "bandeja.actualizar_fallo_descarga": "Impossibile scaricare la nuova versione. I dettagli sono nel registro.",
   "bandeja.actualizar_fallo_instalador": "Impossibile aprire il programma di installazione della nuova versione.",
+  "bandeja.modulo_disponible": "C'è una nuova versione del modulo «Luzeira Sensori»: la {version}. Scaricala dal menu di questa icona («Scarica Luzeira Sensori»).",
   "bandeja.pantalla_generica": "schermo",
   "bandeja.no_compatible": "{device}: {model} — non ancora supportato",
   "bandeja.brillo_no_valido": "Questa luminosità non è tra quelle disponibili.",
@@ -69,6 +70,7 @@
   "bandeja.menu_carpeta_temas": "Apri cartella dei temi",
   "bandeja.menu_actualizar": "Aggiorna",
   "bandeja.menu_actualizar_a": "Aggiorna alla versione {version}",
+  "bandeja.menu_descargar_modulo": "Scarica Luzeira Sensori {version}",
   "bandeja.menu_buscar_actualizaciones": "Cerca aggiornamenti ora",
   "bandeja.menu_avisar_versiones": "Avvisami delle nuove versioni",
   "bandeja.menu_salir": "Esci"
