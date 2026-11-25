@@ -12,10 +12,11 @@ Se lanza **aislado** (``uv run --script``): con la cabecera de arriba (PEP 723),
 monta un entorno propio con solo ``cryptography`` (y lo que ella necesita). Así, la clave
 se descifra sin cargar las demás dependencias de la app ni sus ficheros ``.pth``.
 
-⚠ Fijado del todo solo cuando exista ``scripts/firmar.py.lock`` (C-77). Hasta entonces,
-``cryptography`` va por versión exacta, pero ``cffi`` y ``pycparser`` se resuelven sin fijar
-en cada entorno nuevo. Se crea una vez con ``uv lock --script scripts/firmar.py`` (y se
-commitea); a partir de ahí, uv lo usa solo. El script avisa al arrancar si no lo encuentra.
+Todo el entorno va fijado, con hashes, en ``scripts/firmar.py.lock`` (creado con
+``uv lock --script scripts/firmar.py``; C-77). uv lo usa solo; con ``--locked`` se niega
+a seguir si la cabecera y el lock no cuadran. El script avisa al arrancar si falta.
+Sin caracteres fuera de cp1252 en lo que se imprime: la consola de Windows en español no
+los puede escribir y ``--help`` fallaría (medido el 2026-11-25 con un signo de aviso).
 
 Por lo mismo (no cargar la app), este script **no importa** ``luzeira``: lee
 ``PUBLIC_KEYS`` y ``REPO`` del código de ``src/luzeira/actualizar.py`` como texto (sin
@@ -24,14 +25,14 @@ lo mismo que la app.
 
 Una vez (y otra para la clave de reserva)::
 
-    uv run --script scripts/firmar.py generar-clave --salida C:/fuera/del/repo/firma.pem
+    uv run --locked --script scripts/firmar.py generar-clave --salida C:/fuera/del/repo/firma.pem
 
 Imprime la clave pública: va en ``PUBLIC_KEYS`` de ``src/luzeira/actualizar.py``.
 
 En cada versión, con la release ya en borrador (la deja así el workflow ``release``) y
 la etiqueta ``vX.Y.Z`` en tu repo local (la que subiste)::
 
-    uv run --script scripts/firmar.py firmar v0.2.0 --clave C:/ruta/luzeira-firma.pem
+    uv run --locked --script scripts/firmar.py firmar v0.2.0 --clave C:/ruta/luzeira-firma.pem
 
 Antes de pedir la contraseña: baja el instalador y ``SHA256SUMS`` del borrador y exige
 que los dos vengan atestiguados por ``release.yml``, en esa etiqueta y en **el commit al
@@ -364,7 +365,7 @@ def lock_notice(lock: Path = LOCK) -> str:
     if lock.is_file():
         return f"[firmar] Entorno fijado por {lock.name}."
     return (
-        f"[firmar] ⚠ No hay {lock.name}: cffi y pycparser no están fijados (C-77). "
+        f"[firmar] AVISO: no hay {lock.name}: cffi y pycparser no están fijados (C-77). "
         "Para fijarlos: uv lock --script scripts/firmar.py"
     )
 

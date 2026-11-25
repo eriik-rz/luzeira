@@ -333,7 +333,7 @@ def test_cmd_sign_refuses_a_sha256sums_with_extra_content(firmar, key, monkeypat
 def test_lock_notice_says_whether_the_environment_is_pinned(firmar, tmp_path):
     # Sin firmar.py.lock, cffi y pycparser van sin fijar (C-77): se avisa, sin bloquear.
     lock = tmp_path / "firmar.py.lock"
-    assert "No hay firmar.py.lock" in firmar.lock_notice(lock)
+    assert "no hay firmar.py.lock" in firmar.lock_notice(lock)
     lock.write_text("version = 1\n", encoding="utf-8")
     assert "fijado por firmar.py.lock" in firmar.lock_notice(lock)
     assert SCRIPT.with_name("firmar.py.lock") == firmar.LOCK
@@ -344,6 +344,12 @@ def test_the_docstring_does_not_promise_a_lock_that_is_not_there():
     if not SCRIPT.with_name("firmar.py.lock").is_file():
         assert "--locked" not in text
         assert "uv lock --script scripts/firmar.py" in text
+
+
+def test_help_can_be_printed_on_a_spanish_windows_console():
+    # La consola de Windows en español es cp1252: «⚠» en el docstring hizo fallar --help.
+    module_doc = SCRIPT.read_text(encoding="utf-8").split('"""')[1]
+    module_doc.encode("cp1252")
 
 
 def test_main_prints_the_lock_notice(firmar, monkeypatch, capsys):
