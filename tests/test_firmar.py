@@ -359,3 +359,71 @@ def test_main_prints_the_lock_notice(firmar, monkeypatch, capsys):
     firmar.main()  # cmd_sign falso: no firma nada, solo se mira lo que imprime antes
     assert called == ["v0.2.0"]
     assert "firmar.py.lock" in capsys.readouterr().out
+
+
+# --- cambiar-contraseña (C-76) ----------------------------------------------------------
+
+FRASE = "caballo grapa bateria correcta nube faro"
+
+
+@pytest.mark.parametrize(
+    "password",
+    ["corta", "contrasenamuylarga pero solo cinco palabras", "a b c d e f"],
+    ids=["corta", "cinco-palabras", "seis-pero-corta"],
+)
+def test_a_password_that_is_not_a_passphrase_is_refused(firmar, password):
+    with pytest.raises(SystemExit):
+        firmar.check_passphrase(password)
+
+
+def test_a_six_word_passphrase_is_accepted(firmar):
+    firmar.check_passphrase(FRASE)
+
+
+def test_rekey_keeps_the_same_key_and_leaves_the_old_file_alone(firmar, key, tmp_path):
+    path, public = key
+    before = path.read_bytes()
+    dest = tmp_path / "nueva.pem"
+    assert firmar.rekey(path, b"una contrasena larga", dest, FRASE.encode()) == public
+    assert path.read_bytes() == before
+    assert firmar.public_key_of(firmar.read_key(dest, FRASE.encode())) == public
+    with pytest.raises(SystemExit):
+        firmar.read_key(dest, b"una contrasena larga")  # la vieja ya no abre la nueva
+
+
+def test_rekey_never_overwrites_and_refuses_a_key_the_app_does_not_know(
+    firmar, key, tmp_path, monkeypatch
+):
+    path, _ = key
+    taken = tmp_path / "ya-existe.pem"
+    taken.write_bytes(b"algo")
+    with pytest.raises(SystemExit):
+        firmar.rekey(path, b"una contrasena larga", taken, FRASE.encode())
+    assert taken.read_bytes() == b"algo"
+    monkeypatch.setattr(firmar, "PUBLIC_KEYS", ("otra",))
+    dest = tmp_path / "nueva.pem"
+    with pytest.raises(SystemExit):
+        firmar.rekey(path, b"una contrasena larga", dest, FRASE.encode())
+    assert not dest.exists()
+
+
+def test_rekey_never_writes_inside_the_repo(firmar, key):
+    path, _ = key
+    with pytest.raises(SystemExit):
+        firmar.rekey(path, b"una contrasena larga", firmar.ROOT / "clave.pem", FRASE.encode())
+    assert not (firmar.ROOT / "clave.pem").exists()
+
+
+def test_cmd_rekey_asks_twice_and_stops_if_they_differ(firmar, key, tmp_path):
+    import argparse
+
+    path, _ = key
+    dest = tmp_path / "nueva.pem"
+    answers = iter(["una contrasena larga", FRASE, FRASE + " distinta"])
+    args = argparse.Namespace(clave=path, salida=dest)
+    with pytest.raises(SystemExit):
+        firmar.cmd_rekey(args, password=lambda prompt: next(answers))
+    assert not dest.exists()
+    answers = iter(["una contrasena larga", FRASE, FRASE])
+    firmar.cmd_rekey(args, password=lambda prompt: next(answers))
+    assert firmar.read_key(dest, FRASE.encode())

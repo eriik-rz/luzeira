@@ -29,6 +29,17 @@ Una vez (y otra para la clave de reserva)::
 
 Imprime la clave pública: va en ``PUBLIC_KEYS`` de ``src/luzeira/actualizar.py``.
 
+Para cambiar la contraseña de una clave (la misma clave: las versiones instaladas siguen
+aceptando sus firmas). Escribe una copia nueva y no toca la vieja::
+
+    uv run --locked --script scripts/firmar.py cambiar-contraseña ^
+        --clave C:/ruta/firma.pem --salida C:/ruta/firma-nueva.pem
+
+La contraseña es una frase de 6 palabras o más (C-76): el PEM de ``cryptography`` deriva
+la clave con PBKDF2 de solo 2048 vueltas y no deja subirlas, así que lo que la protege de
+verdad es la longitud de la frase. Guárdala en una entrada del gestor distinta de la del
+fichero: quien consiga una sola de las dos no puede firmar.
+
 En cada versión, con la release ya en borrador (la deja así el workflow ``release``) y
 la etiqueta ``vX.Y.Z`` en tu repo local (la que subiste)::
 
@@ -77,7 +88,9 @@ from cryptography.hazmat.primitives.serialization import (
 ROOT = Path(__file__).resolve().parent.parent
 ACTUALIZAR = ROOT / "src" / "luzeira" / "actualizar.py"
 LOCK = Path(__file__).resolve().with_name("firmar.py.lock")
-MIN_PASSWORD = 12
+#: Una frase de paso (C-76): con el KDF débil del PEM, la fuerza está en la longitud.
+MIN_WORDS = 6
+MIN_PASSWORD = 25
 
 # Los mismos patrones que luzeira.actualizar (test_firmar compara los resultados).
 _VERSION = re.compile(r"(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})")
@@ -195,6 +208,32 @@ def write_key(path: Path, password: bytes) -> str:
     return public_key_of(private)
 
 
+def check_passphrase(password: str) -> None:
+    """Una frase de ``MIN_WORDS`` palabras o más y ``MIN_PASSWORD`` caracteres o más."""
+    if len(re.findall(r"\w+", password)) < MIN_WORDS or len(password) < MIN_PASSWORD:
+        sys.exit(
+            f"Demasiado corta: usa una frase de {MIN_WORDS} palabras o más "
+            f"(y {MIN_PASSWORD} caracteres o más), por ejemplo cinco o seis palabras al azar."
+        )
+
+
+def rekey(source: Path, old: bytes, dest: Path, new: bytes) -> str:
+    """Escribe en ``dest`` la misma clave de ``source``, cifrada con ``new``, y comprueba
+    que se lee y que es la misma. ``source`` no se toca. Devuelve la clave pública."""
+    check_outside_repo(dest)
+    if dest.exists():
+        sys.exit(f"Ya existe {dest}: no lo sobrescribo.")
+    private = read_key(source, old)
+    _check_key(private)  # la que la app conoce: no recifrar una clave equivocada
+    pem = private.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, BestAvailableEncryption(new))
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(pem)
+    if public_key_of(read_key(dest, new)) != public_key_of(private):  # pragma: no cover
+        dest.unlink()
+        sys.exit("La copia nueva no es la misma clave. La he borrado; la vieja sigue igual.")
+    return public_key_of(private)
+
+
 def read_key(path: Path, password: bytes) -> Ed25519PrivateKey:
     try:
         key = load_pem_private_key(path.read_bytes(), password=password)
@@ -297,19 +336,37 @@ def tag_commit(tag: str) -> str:
 
 
 def cmd_generate(args: argparse.Namespace) -> None:
-    password = ask_password(f"Contraseña nueva para {args.salida.name} (mínimo 12 caracteres):")
-    if len(password) < MIN_PASSWORD:
-        sys.exit("Demasiado corta.")
+    password = ask_password(
+        f"Frase de paso nueva para {args.salida.name} ({MIN_WORDS} palabras o más):"
+    )
+    check_passphrase(password)
     if ask_password("Repítela:") != password:
         sys.exit("No coinciden.")
     public = write_key(args.salida, password.encode("utf-8"))
     print(
         f"\nClave privada (cifrada) en: {args.salida}\n"
         f"\nClave PÚBLICA (para PUBLIC_KEYS de src/luzeira/actualizar.py):\n\n    {public}\n"
-        "\nGuarda en tu gestor de contraseñas, en una entrada nueva:\n"
-        "  - la contraseña que acabas de poner;\n"
+        "\nGuarda en tu gestor de contraseñas, en DOS entradas distintas:\n"
+        "  - la frase de paso que acabas de poner;\n"
         "  - el fichero .pem como adjunto (o su texto, que va cifrado).\n"
         "Sin las dos cosas no se pueden firmar versiones nuevas."
+    )
+
+
+def cmd_rekey(args: argparse.Namespace, *, password: Callable[[str], str] = ask_password) -> None:
+    """``password``: la ventanita (los tests la cambian)."""
+    old = password(f"Contraseña ACTUAL de {args.clave.name}:")
+    new = password(f"Frase de paso NUEVA ({MIN_WORDS} palabras o más):")
+    check_passphrase(new)
+    if password("Repite la frase nueva:") != new:
+        sys.exit("No coinciden.")
+    public = rekey(args.clave, old.encode("utf-8"), args.salida, new.encode("utf-8"))
+    print(
+        f"\nHecho: {args.salida} es la misma clave (pública {public}), con la frase nueva.\n"
+        "Ahora:\n"
+        "  1. Guarda la frase nueva en el gestor, en una entrada DISTINTA de la del .pem.\n"
+        "  2. Cambia el adjunto .pem de su entrada por el nuevo.\n"
+        f"  3. Cuando lo hayas comprobado, borra el viejo: {args.clave}"
     )
 
 
@@ -376,6 +433,10 @@ def main() -> None:
     g = sub.add_parser("generar-clave", help="crea una clave de firma nueva, cifrada")
     g.add_argument("--salida", type=Path, required=True, help="fichero .pem, fuera del repo")
     g.set_defaults(func=cmd_generate)
+    c = sub.add_parser("cambiar-contraseña", help="la misma clave, con otra contraseña")
+    c.add_argument("--clave", type=Path, required=True, help="el .pem actual (no se toca)")
+    c.add_argument("--salida", type=Path, required=True, help="el .pem nuevo, fuera del repo")
+    c.set_defaults(func=cmd_rekey)
     s = sub.add_parser("firmar", help="firma el borrador de una release")
     s.add_argument("etiqueta", help="vX.Y.Z")
     s.add_argument("--clave", type=Path, required=True, help="el .pem de generar-clave")
