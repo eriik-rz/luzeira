@@ -7,8 +7,8 @@
 // `mergeKey`, para que Ctrl+Z deshaga el gesto entero y no píxel a píxel.
 
 import { clampBox, nudgeBox } from './geometry.ts'
-import { duplicateWidget } from './theme.ts'
-import { MAX_WIDGETS, screenSize, type Box, type Orientation, type Theme, type Widget } from './types.ts'
+import { canvasField, duplicateWidget } from './theme.ts'
+import { isLandscape, MAX_WIDGETS, screenSize, type Box, type Orientation, type Size, type Theme, type Widget } from './types.ts'
 
 export const HISTORY_LIMIT = 100
 /** Dos cambios con la misma `mergeKey` separados menos que esto se funden. */
@@ -39,6 +39,8 @@ export type Action =
   /** Pone este tema tal cual (mismo objeto) conservando los ids: «Guardar como». */
   | { type: 'replaceTheme'; theme: Theme }
   | { type: 'setOrientation'; orientation: Orientation }
+  /** Cambia el lienzo (tamaño de la pantalla para la que se hace el tema). */
+  | { type: 'setCanvas'; canvas: Size }
   | { type: 'add'; widget: Widget }
   | { type: 'duplicate'; id: string }
   | { type: 'remove'; id: string }
@@ -111,6 +113,25 @@ function commit(
   }
 }
 
+/** `theme` con ese lienzo (sin el campo si es el de siempre de su orientación). */
+function withCanvas(theme: Theme, canvas: Size | undefined): Theme {
+  const next: Theme = { ...theme }
+  delete next.canvas
+  return { ...next, ...canvasField(theme.orientation, canvas) }
+}
+
+/** `theme` con los elementos metidos dentro de su pantalla (los que ya caben, sin tocar). */
+function fitWidgets(theme: Theme, widgets: Widget[]): Theme {
+  const screen = screenSize(theme)
+  return {
+    ...theme,
+    widgets: widgets.map((w) => {
+      const box = clampBox(w.box, screen)
+      return sameBox(box, w.box) ? w : { ...w, box }
+    }),
+  }
+}
+
 function withWidgets(doc: Doc, widgets: Widget[], ids = doc.ids): Doc {
   return { theme: { ...doc.theme, widgets }, ids }
 }
@@ -170,14 +191,20 @@ export function reducer(state: EditorState, action: Action): EditorState {
     case 'setOrientation': {
       if (action.orientation === doc.theme.orientation) return state
       // Al girar, los elementos que ya no caben se recolocan dentro (si no, el tema
-      // dejaría de ser válido y no se podría guardar).
-      const next = { ...doc.theme, orientation: action.orientation }
-      const nextScreen = screenSize(next)
-      next.widgets = doc.theme.widgets.map((w) => {
-        const box = clampBox(w.box, nextScreen)
-        return sameBox(box, w.box) ? w : { ...w, box }
-      })
-      return commit(state, { ...doc, theme: next })
+      // dejaría de ser válido y no se podría guardar). El lienzo gira con la pantalla.
+      const turned = isLandscape(action.orientation) !== isLandscape(doc.theme.orientation)
+      const canvas = doc.theme.canvas && turned
+        ? { width: doc.theme.canvas.height, height: doc.theme.canvas.width }
+        : doc.theme.canvas
+      const next = withCanvas({ ...doc.theme, orientation: action.orientation }, canvas)
+      return commit(state, { ...doc, theme: fitWidgets(next, doc.theme.widgets) })
+    }
+
+    case 'setCanvas': {
+      const current = screenSize(doc.theme)
+      if (current.width === action.canvas.width && current.height === action.canvas.height) return state
+      const next = withCanvas(doc.theme, action.canvas)
+      return commit(state, { ...doc, theme: fitWidgets(next, doc.theme.widgets) })
     }
 
     case 'add': {

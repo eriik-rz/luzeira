@@ -48,7 +48,28 @@ def test_every_known_display_is_listed_with_model_and_certainty(capsys):
     assert "XuanFang" in rev_b and "beta" in rev_b and "número de serie" in rev_b
     assert "revisión A" in unknown and "XuanFang" in unknown and "confirmación" in unknown
     assert "Kipye" in kipye and "no es seguro" in kipye
-    assert "todavía no compatible" in rev_c
+    # Fase 5: la rev C ya tiene driver. Con CT21INCH (2,1", 2,8" o 5") no se sabe el
+    # tamaño: se dice que lo elija, y ya no «todavía no compatible».
+    assert "revisión C" in rev_c and "tamaño" in rev_c and "confirmación" in rev_c
+    assert "todavía no compatible" not in rev_c
+
+
+@pytest.mark.parametrize(
+    ("port", "expected"),
+    [
+        (com("COM12", 0x1A86, 0xCA50, "CT50INCH"), 'Turing de 5" (revisión C) (beta)'),
+        (com("COM13", 0x1A86, 0xFE0C, "AB0001"), 'WeAct Display FS 3,5" (beta)'),
+        (com("COM14", 0x1A86, 0xFE0C, "AD0001"), 'WeAct Display FS 0,96" (beta)'),
+        (com("COM15", 0x1A86, 0xFE0C, "XX"), "WeAct Display FS (beta), pero no sé"),
+        (com("COM16", 0x1234, 0x5678, "CT21INCH"), "todavía no compatible"),
+    ],
+)
+def test_rev_c_and_weact_lines_say_what_detection_will_do(capsys, port, expected):
+    # Ninguna de estas se abre sola (``open_auto``): o se propone o se elige el tamaño.
+    assert cli._detect([port]) == 0
+    line = capsys.readouterr().out.strip()
+    assert expected in line
+    assert "número de serie" in line or "tamaño" in line or "no compatible" in line
 
 
 def test_nothing_known_says_so(capsys):

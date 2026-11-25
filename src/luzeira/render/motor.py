@@ -15,6 +15,7 @@ El motor no sabe nada del puerto serie ni de dónde salen los datos: recibe func
 from __future__ import annotations
 
 import logging
+import math
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -63,6 +64,8 @@ TICK_TOLERANCE = 0.25
 # rasterizarlo (``_fit_text``). Lo recortado quedaba fuera de la caja: no se ve.
 TEXT_BOX_FACTOR = 4
 MAX_TEXT_PIXELS = 2_000_000
+
+Box4 = tuple[int, int, int, int]  # (izquierda, arriba, derecha, abajo), derecha/abajo excluidas
 
 
 @dataclass(frozen=True)
@@ -194,17 +197,60 @@ def _fit_text(
     return _cut(text, lo, anchor)
 
 
+@dataclass(frozen=True)
+class Fit:
+    """Cómo cabe el tema en la pantalla: factor de escala y esquina del tema escalado.
+
+    El tema se escala **igual en los dos ejes** (sin deformarlo) hasta tocar los bordes
+    del lado que antes llegue, y se centra; lo que sobra se rellena con el color de fondo
+    del tema. Un tema del mismo tamaño que la pantalla: ``scale`` 1 y sin desplazar.
+    """
+
+    scale: float
+    x: int  # desplazamiento del tema escalado dentro de la pantalla
+    y: int
+    width: int  # tamaño del tema ya escalado
+    height: int
+
+    @property
+    def identity(self) -> bool:
+        return self.scale == 1 and self.x == 0 and self.y == 0
+
+    def box(self, x: int, y: int, width: int, height: int) -> Box4:
+        """Una caja del tema en píxeles de la pantalla. Se escalan los **bordes** (no el
+        ancho): dos cajas pegadas en el tema siguen pegadas, sin rendijas de redondeo."""
+        if self.identity:
+            return (x, y, x + width, y + height)
+        s = self.scale
+        # Al encoger (escala < 1), una caja de 1-2 px pegada al borde redondeaba fuera de
+        # la pantalla (revisor de la fase 4): se acota a la zona del tema, sin dejar nunca
+        # una caja vacía (como mínimo 1 px).
+        right_edge, bottom_edge = self.x + self.width, self.y + self.height
+        right = min(right_edge, max(self.x + round(x * s) + 1, self.x + round((x + width) * s)))
+        bottom = min(bottom_edge, max(self.y + round(y * s) + 1, self.y + round((y + height) * s)))
+        left = min(self.x + round(x * s), right - 1)
+        top = min(self.y + round(y * s), bottom - 1)
+        return (left, top, right, bottom)
+
+
+def fit(theme_size: tuple[int, int], screen: tuple[int, int]) -> Fit:
+    """El escalado uniforme y centrado de un tema de ``theme_size`` en ``screen``."""
+    if theme_size == screen:
+        return Fit(1, 0, 0, *screen)
+    scale = min(screen[0] / theme_size[0], screen[1] / theme_size[1])
+    width = min(screen[0], max(1, round(theme_size[0] * scale)))
+    height = min(screen[1], max(1, round(theme_size[1] * scale)))
+    return Fit(scale, (screen[0] - width) // 2, (screen[1] - height) // 2, width, height)
+
+
+def _anchor(align: str, width: int) -> tuple[int, str]:
+    """(x, anclaje) de un texto en una caja de ``width``, centrado en vertical."""
+    return {"left": (0, "lm"), "center": (width // 2, "mm"), "right": (width, "rm")}[align]
+
+
 def _interval(widget: ClockWidget | SensorWidget | BarWidget) -> float:
     """Cada cuánto se repinta. El reloj, en cada tick (solo se envía si cambia el texto)."""
     return getattr(widget, "interval", 0.0)
-
-
-Box4 = tuple[int, int, int, int]  # (izquierda, arriba, derecha, abajo), derecha/abajo excluidas
-
-
-def _box_of(widget) -> Box4:
-    b = widget.box
-    return (b.x, b.y, b.x + b.width, b.y + b.height)
 
 
 def _intersect(a: Box4, b: Box4) -> Box4 | None:
@@ -240,8 +286,15 @@ class Renderer:
         files: Mapping[str, Path] | None = None,
         now: Callable[[], datetime] = datetime.now,
         clock: Callable[[], float] = time.monotonic,
+        output_size: tuple[int, int] | None = None,
     ) -> None:
-        """``files``: rutas relativas del tema -> ficheros ya validados por el cargador."""
+        """``files``: rutas relativas del tema -> ficheros ya validados por el cargador.
+
+        ``output_size``: tamaño de la pantalla (ancho, alto, con su orientación ya
+        aplicada). Sin él, el del tema (la vista previa del editor). Si no coincide, el
+        tema se pinta escalado y centrado (:func:`fit`), **componiendo a la resolución de
+        la pantalla**: cajas, letras, grosores e imágenes se escalan antes de pintar, así
+        el texto sale nítido (escalar la imagen ya hecha lo emborronaría)."""
         self.theme = theme
         self._font_for_uncached = font_for
         self._fonts: dict[Style, ImageFont.FreeTypeFont | ImageFont.ImageFont] = {}
@@ -255,10 +308,98 @@ class Renderer:
         self._files = dict(files or {})
         self._now = now
         self._clock = clock
-        self.size = theme.size
-        self._background = self._build_background()
-        self._layers = [self._make_layer(w) for w in theme.widgets]
+        self._scaled_styles: dict[Style, Style] = {}
+        # (estilo del tema, texto, caja) → estilo escalado y, si hace falta, encogido.
+        self._fitted_styles: dict[tuple, Style] = {}
         self._frame: Image.Image | None = None  # lo que hay ahora en la pantalla
+        self._target = output_size or theme.size
+        self._build(self._target)
+
+    def _build(self, size: tuple[int, int]) -> None:
+        """Prepara fondo y capas para una pantalla de ``size``. Todo o nada: si algo falla
+        (una imagen que ha cambiado en disco), el motor se queda como estaba."""
+        old = getattr(self, "_fit", None), dict(self._scaled_styles)
+        self._fit = fit(self.theme.size, size)
+        self._scaled_styles.clear()
+        self._fitted_styles.clear()
+        try:
+            background = self._build_background(size)
+            layers = [self._make_layer(w) for w in self.theme.widgets]
+        except BaseException:
+            if old[0] is not None:
+                self._fit, self._scaled_styles = old
+            raise
+        self.size, self._background, self._layers = size, background, layers
+        self._frame = None
+
+    def set_output_size(self, size: tuple[int, int]) -> None:
+        """La pantalla es de ``size`` (al conectar, o al girarla). No pinta nada aún: la
+        próxima imagen completa ya sale a ese tamaño (si preparar el tema falla, el fallo
+        sale ahí, donde el servicio ya lo gestiona y reintenta)."""
+        if size != self._target:
+            self._target = size
+            self._frame = None  # ``changed`` pide entonces una imagen completa
+
+    def _style(self, style: Style) -> Style:
+        """El estilo con la letra al tamaño de la pantalla (el mismo objeto sin escalar,
+        para que las cachés de fuentes no cambien en el caso de siempre)."""
+        if self._fit.scale == 1:
+            return style
+        scaled = self._scaled_styles.get(style)
+        if scaled is None:
+            # model_copy no valida: un tamaño por debajo del mínimo del tema (6) es lo
+            # que toca al encoger un tema grande en una pantalla pequeña.
+            size = max(1, round(style.size * self._fit.scale))
+            scaled = self._scaled_styles[style] = style.model_copy(update={"size": size})
+        return scaled
+
+    def _text_style(self, widget, text: str, size: tuple[int, int]) -> Style:
+        """Estilo con que se pinta ``text`` en la caja ya escalada (``size``).
+
+        Al escalar, el tamaño de letra se redondea (28,125 → 28) y el hinting de la
+        fuente cambia el ancho: un texto que cabía justo en el tema podía salirse de su
+        caja escalada y recortarse (la «a» de «activo» en Neón vertical a 7"; revisor de
+        la fase 4). Si cabía en el tema y escalado no cabe, se encoge la letra lo justo
+        (hasta un 20 % como mucho). Uno que ya se salía en el tema se deja como está."""
+        style = self._style(widget.style)
+        if self._fit.scale == 1:
+            return style
+        key = (widget.style, text, size, widget.box.width, widget.box.height)
+        found = self._fitted_styles.get(key)
+        if found is None:
+            if len(self._fitted_styles) >= 256:
+                self._fitted_styles.clear()
+            found = self._fitted_styles[key] = self._shrink_to_fit(widget, text, style, size)
+        return found
+
+    def _shrink_to_fit(self, widget, text: str, style: Style, size: tuple[int, int]) -> Style:
+        if not self._overflows(style, text, size):
+            return style
+        b = widget.box
+        if self._overflows(widget.style, text, (b.width, b.height)):
+            return style
+        floor = max(1, math.floor(style.size * 0.8))
+        trial = style
+        for letter in range(style.size - 1, floor - 1, -1):
+            trial = style.model_copy(update={"size": letter})
+            if not self._overflows(trial, text, size):
+                break
+        return trial
+
+    def _overflows(self, style: Style, text: str, size: tuple[int, int]) -> bool:
+        """¿``text`` pintado con ``style`` se sale por los lados de una caja ``size``?
+        (1 px de margen, como test_temas_incluidos: hay letras que asoman 1 px)."""
+        x, anchor = _anchor(style.align, size[0])
+        try:
+            font, visible = self._font_for_text(style, text, size, anchor)
+            left, _, right, _ = font.getbbox(visible, anchor=anchor)
+        except (OSError, ValueError, Image.DecompressionBombError):
+            return False  # una fuente que falla al medir: lo resuelve _draw_text
+        return x + left < -1 or x + right > size[0] + 1
+
+    def _box_of(self, widget) -> Box4:
+        b = widget.box
+        return self._fit.box(b.x, b.y, b.width, b.height)
 
     def _font_for(self, style: Style) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
         """Fuente para un estilo, en caché: resolverla comprueba el fichero en disco y
@@ -331,44 +472,46 @@ class Renderer:
             return _fit_cover(self._open(rel).convert("RGB"), size)
         return _fit_contain(self._open(rel), size)
 
-    def _build_background(self) -> Image.Image:
+    def _build_background(self, size: tuple[int, int]) -> Image.Image:
+        """Fondo de toda la pantalla: el color del tema (también en las franjas que sobran
+        al centrar un tema de otro tamaño) y la imagen del tema, escalada a la zona del
+        tema."""
         bg = self.theme.background
-        base = Image.new("RGBA", self.size, bg.color)
+        base = Image.new("RGBA", size, bg.color)
         if bg.image:
-            base.paste(self._scaled(bg.image, self.size, "cover"))
+            f = self._fit
+            base.paste(self._scaled(bg.image, (f.width, f.height), "cover"), (f.x, f.y))
         return base
 
     def _make_layer(self, widget) -> _Layer:
         dynamic = isinstance(widget, ClockWidget | SensorWidget | BarWidget)
-        layer = _Layer(widget, _box_of(widget), self._blank(widget), dynamic)
+        box = self._box_of(widget)
+        layer = _Layer(widget, box, self._blank(widget, box), dynamic)
         if isinstance(widget, TextWidget):
             text = localized(widget.text, widget.text_i18n, idioma.current())
-            self._draw_text(layer.image, text, widget.style)
+            self._draw_text(layer.image, text, self._text_style(widget, text, layer.image.size))
         elif isinstance(widget, ImageWidget):
-            b = widget.box
-            img = self._scaled(widget.file, (b.width, b.height), "contain")
-            layer.image.alpha_composite(
-                img, ((b.width - img.width) // 2, (b.height - img.height) // 2)
-            )
+            # La imagen original, escalada una sola vez a la caja ya escalada (no la del
+            # tema escalada otra vez: saldría más borrosa).
+            width, height = box[2] - box[0], box[3] - box[1]
+            img = self._scaled(widget.file, (width, height), "contain")
+            layer.image.alpha_composite(img, ((width - img.width) // 2, (height - img.height) // 2))
         return layer
 
     # --- pintado de un widget ------------------------------------------------------
 
     @staticmethod
-    def _blank(widget) -> Image.Image:
-        """Lienzo del widget: transparente, o de su color de fondo propio si lo tiene."""
-        b = widget.box
+    def _blank(widget, box: Box4) -> Image.Image:
+        """Lienzo del widget (``box``, en píxeles de la pantalla): transparente, o de su
+        color de fondo propio si lo tiene."""
         color = widget.style.background
-        return Image.new("RGBA", (b.width, b.height), color if color else (0, 0, 0, 0))
+        size = (box[2] - box[0], box[3] - box[1])
+        return Image.new("RGBA", size, color if color else (0, 0, 0, 0))
 
     def _draw_text(self, tile: Image.Image, text: str, style: Style) -> None:
         draw = ImageDraw.Draw(tile)
         y = tile.height // 2
-        x, anchor = {
-            "left": (0, "lm"),
-            "center": (tile.width // 2, "mm"),
-            "right": (tile.width, "rm"),
-        }[style.align]
+        x, anchor = _anchor(style.align, tile.width)
         # Dos intentos como mucho: con la fuente del tema y, si falla, con la de Luzeira.
         for _ in range(2):
             font, visible = self._font_for_text(style, text, tile.size, anchor)
@@ -396,7 +539,9 @@ class Renderer:
         w, h = tile.size
         if reading.value is None:
             # RQ-05: sin dato no se pinta igual que 0 %: solo el contorno de la pista.
-            draw.rectangle((0, 0, w - 1, h - 1), outline=widget.track)
+            # Contorno de 1 px del tema: en una pantalla mayor, más grueso en proporción.
+            thickness = max(1, round(self._fit.scale))
+            draw.rectangle((0, 0, w - 1, h - 1), outline=widget.track, width=thickness)
             return
         draw.rectangle((0, 0, w - 1, h - 1), fill=widget.track)
         ratio = (reading.value - widget.min) / (widget.max - widget.min)
@@ -410,13 +555,15 @@ class Renderer:
             if filled:
                 draw.rectangle((0, h - filled, w - 1, h - 1), fill=widget.fill)
 
-    def _render(self, widget: ClockWidget | SensorWidget | BarWidget) -> Image.Image:
-        tile = self._blank(widget)
+    def _render(self, layer: _Layer) -> Image.Image:
+        widget = layer.widget
+        tile = self._blank(widget, layer.box)
         if isinstance(widget, ClockWidget):
-            self._draw_text(tile, format_clock(widget.format, self._now()), widget.style)
+            text = format_clock(widget.format, self._now())
+            self._draw_text(tile, text, self._text_style(widget, text, tile.size))
         elif isinstance(widget, SensorWidget):
             text = format_reading(widget, self._read_sensor(widget.sensor))
-            self._draw_text(tile, text, widget.style)
+            self._draw_text(tile, text, self._text_style(widget, text, tile.size))
         else:
             self._draw_bar(tile, widget, self._read_sensor(widget.sensor))
         return tile
@@ -443,11 +590,16 @@ class Renderer:
     # --- API ---------------------------------------------------------------------
 
     def full_frame(self) -> Image.Image:
-        """Imagen completa (fondo + todas las capas). Reinicia el estado de cambios."""
+        """Imagen completa (fondo + todas las capas). Reinicia el estado de cambios.
+
+        Si la pantalla ha cambiado de tamaño (``set_output_size``), antes se prepara el
+        tema para el tamaño nuevo."""
+        if self._target != self.size:
+            self._build(self._target)
         now = self._clock()
         for layer in self._layers:
             if layer.dynamic:
-                layer.image = self._render(layer.widget)
+                layer.image = self._render(layer)
                 layer.last_pixels = layer.image.tobytes()
                 layer.next_update = now + _interval(layer.widget)
         self._frame = self._compose((0, 0, *self.size))
@@ -467,7 +619,7 @@ class Renderer:
             layer.next_update += _interval(layer.widget)
             if layer.next_update < now:
                 layer.next_update = now + _interval(layer.widget)
-            tile = self._render(layer.widget)
+            tile = self._render(layer)
             pixels = tile.tobytes()
             if pixels != layer.last_pixels:
                 layer.image, layer.last_pixels = tile, pixels

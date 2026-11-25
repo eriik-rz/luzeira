@@ -37,6 +37,7 @@
   "modelo.validar.max_min": "Максимум должен быть больше минимума.",
   "modelo.validar.nombre": "У темы должно быть имя.",
   "modelo.validar.elementos": "Максимум элементов в теме: {max}.",
+  "modelo.validar.lienzo": "Этот размер экрана не подходит к этой ориентации. Выберите размер из списка.",
   "modelo.validar.traducciones": "Переводы этого текста недействительны.",
   "modelo.validar.traducciones_muchas": "Максимум языков на один текст: {max}.",
   "modelo.validar.traduccion_codigo": "«{codigo}» — недопустимый код языка (две строчные латинские буквы, например «en»).",

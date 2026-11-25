@@ -37,6 +37,7 @@
   "modelo.validar.max_min": "Maksimum musi być większe niż minimum.",
   "modelo.validar.nombre": "Motyw potrzebuje nazwy.",
   "modelo.validar.elementos": "Maksymalna liczba elementów w motywie: {max}.",
+  "modelo.validar.lienzo": "Ten rozmiar ekranu nie pasuje do tej orientacji. Wybierz jeden z listy.",
   "modelo.validar.traducciones": "Tłumaczenia tego tekstu są nieprawidłowe.",
   "modelo.validar.traducciones_muchas": "Maksymalna liczba języków na tekst: {max}.",
   "modelo.validar.traduccion_codigo": "„{codigo}” to nieprawidłowy kod języka (dwie małe litery, np. „en”).",

@@ -333,13 +333,60 @@ def set_info(monkeypatch, app, info):
 
 def test_display_menu_lists_only_compatible_models_per_port(app):
     labels = [i.text for i in submenu(app, "Pantalla", "Elegir modelo y puerto")]
+    # Fase 5: la rev C ya tiene driver (beta). Su saludo no dice el tamaño y CT21INCH lo
+    # llevan el 2,1"/2,8" y algún 5", así que salen los tres, elegibles, en vez de la línea
+    # deshabilitada «todavía no compatible» de antes.
     assert labels == [
         'COM3: Turing / UsbPCMonitor 3,5"',  # su serie la identifica: solo ese modelo
         'COM8: Kipye Qiye 3,5" (beta)',
-        'COM11: Turing de 2,1", 5" u 8,8" (revisión C) — todavía no compatible',
+        'COM11: Turing de 2,1" o 2,8" redonda (revisión C) (beta)',
+        'COM11: Turing de 5" (revisión C) (beta)',
+        'COM11: Turing de 8,8" (revisión C) (beta)',
     ]  # el Bluetooth (COM4) no sale: no tiene USB
     rev_c = submenu(app, "Pantalla", "Elegir modelo y puerto")[-1]
-    assert not rev_c.enabled
+    assert rev_c.enabled
+
+
+def test_display_menu_still_says_not_compatible_when_nothing_can_be_offered(app, monkeypatch):
+    # El serie de una rev C con otro USB: se reconoce, pero no hay nada que ofrecer (R5-07).
+    impostor = PortInfo("COM12", 0x1234, 0x5678, "CT21INCH", "Dispositivo serie USB (COM12)")
+    monkeypatch.setattr(bandeja, "list_ports", lambda: [impostor])
+    app._ports_cache = None
+    [line] = submenu(app, "Pantalla", "Elegir modelo y puerto")
+    assert line.text.endswith("todavía no compatible") and not line.enabled
+
+
+def test_display_menu_offers_only_the_weact_its_serial_names(app, monkeypatch):
+    weact = PortInfo("COM13", 0x1A86, 0xFE0C, "AB1234", "Dispositivo serie USB (COM13)")
+    unknown = PortInfo("COM14", 0x1A86, 0xFE0C, "ZZ", "Dispositivo serie USB (COM14)")
+    monkeypatch.setattr(bandeja, "list_ports", lambda: [weact, unknown])
+    app._ports_cache = None
+    labels = [i.text for i in submenu(app, "Pantalla", "Elegir modelo y puerto")]
+    assert labels == [
+        'COM13: WeAct Display FS 3,5" (beta)',
+        'COM14: WeAct Display FS 3,5" (beta)',
+        'COM14: WeAct Display FS 0,96" (beta)',
+    ]
+
+
+def test_advanced_mode_leaves_out_a_weact_too(app, monkeypatch):
+    # Revisor de la fase 5: el protocolo de la WeAct no tiene marco; como la rev C, ningún
+    # otro modelo se le manda, ni en el modo avanzado.
+    weact = PortInfo("COM13", 0x1A86, 0xFE0C, "AB1234", "Dispositivo serie USB (COM13)")
+    monkeypatch.setattr(bandeja, "list_ports", lambda: [REV_A_PORT, weact])
+    app._ports_cache = None
+    ports = submenu(app, "Pantalla", "Modo avanzado (cualquier puerto)")
+    assert [p.text for p in ports] == ["Dispositivo serie USB (COM3)"]
+
+
+def test_rev_c_bridge_without_serial_is_remembered_with_its_own_com(app, chosen, monkeypatch):
+    # Sin serie, la elección solo casa en el mismo COM del puente: guardar el COM del
+    # despierto (COM7) la dejaba sin casar en cada arranque (revisor de la fase 5).
+    choice = DisplayChoice("turing-rev-c-5", "COM11", 0x1A86, 0xCA21, "")
+    app._try_choice(choice)
+    set_info(monkeypatch, app, DisplayInfo("turing-rev-c-5", "COM7", choice=choice))
+    app._show_status(Status.RUNNING, "Mostrando…")
+    assert app.config.display.device == "COM11"
 
 
 def test_display_menu_offers_both_models_only_when_the_serial_does_not_decide(app, monkeypatch):
@@ -363,7 +410,10 @@ def test_advanced_mode_offers_every_port_but_rev_c_and_every_model(app):
         "Dispositivo serie USB (COM8)",
     ]
     models = [m.text for m in ports[1].submenu.items]
+    # Ni los tamaños de la rev C ni la WeAct (fase 5): solo casan con su propio USB, así
+    # que en otro puerto serían una opción muerta (y mandarlas a otro aparato, R5-01/02).
     assert len(models) == 3 and all("revisión C" not in m for m in models)
+    assert all("WeAct" not in m for m in models)
 
 
 def test_display_menu_says_what_is_connected(app, monkeypatch):
@@ -667,11 +717,17 @@ def test_settings_snapshot_offers_the_same_closed_list_as_the_menu(app, settings
     assert [c["label"] for c in snap["choices"]] == menu
     assert snap["display_auto"] and snap["display_text"] == "Ninguna pantalla conectada"
     assert snap["brightness_levels"] == [25, 50, 75, 100] and snap["autostart"] is False
-    rev_a, kipye, rev_c = snap["choices"]
+    # Fase 5: la rev C sale con sus tres tamaños, elegibles (antes, una línea sin ``id``).
+    rev_a, kipye, *rev_c = snap["choices"]
     assert rev_a["warning"] is None and not rev_a["beta"]
     assert "rayas" in kipye["warning"]  # el texto de la Kipye, sin saludo
-    assert rev_c["id"] is None  # se ve, pero no se puede elegir
-    # 3 puertos x 3 modelos con driver: la rev C no sale en el modo avanzado (R5-02).
+    assert [c["id"] for c in rev_c] == [
+        "lista:COM11:turing-rev-c-21",
+        "lista:COM11:turing-rev-c-5",
+        "lista:COM11:turing-rev-c-88",
+    ]
+    assert all("20 segundos" in c["warning"] and "saludo" in c["warning"] for c in rev_c)
+    # 3 puertos x 3 modelos: ni la rev C (R5-02) ni la WeAct salen en el modo avanzado.
     assert len(snap["advanced"]) == 3 * 3
     assert not any(o["id"].startswith("avanzado:COM11:") for o in snap["advanced"])
     assert all("Cuidado" in o["warning"] for o in snap["advanced"])

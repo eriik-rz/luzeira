@@ -37,6 +37,7 @@
   "modelo.validar.max_min": "最大值必须大于最小值。",
   "modelo.validar.nombre": "主题需要一个名称。",
   "modelo.validar.elementos": "每个主题最多 {max} 个元素。",
+  "modelo.validar.lienzo": "这个屏幕尺寸与当前方向不符。请从列表中选择。",
   "modelo.validar.traducciones": "这段文本的翻译无效。",
   "modelo.validar.traducciones_muchas": "每段文本最多 {max} 种语言。",
   "modelo.validar.traduccion_codigo": "“{codigo}”不是有效的语言代码（两个小写字母，例如“en”）。",

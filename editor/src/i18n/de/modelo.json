@@ -37,6 +37,7 @@
   "modelo.validar.max_min": "Das Maximum muss größer als das Minimum sein.",
   "modelo.validar.nombre": "Das Design braucht einen Namen.",
   "modelo.validar.elementos": "Höchstens {max} Elemente pro Design.",
+  "modelo.validar.lienzo": "Diese Displaygröße passt nicht zu dieser Ausrichtung. Wähle eine aus der Liste.",
   "modelo.validar.traducciones": "Die Übersetzungen dieses Textes sind ungültig.",
   "modelo.validar.traducciones_muchas": "Höchstens {max} Sprachen pro Text.",
   "modelo.validar.traduccion_codigo": "„{codigo}“ ist kein gültiger Sprachcode (zwei Kleinbuchstaben, z. B. „en“).",

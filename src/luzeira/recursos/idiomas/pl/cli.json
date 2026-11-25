@@ -16,6 +16,8 @@
   "cli.detectar_segura": "{model}. Rozpoznany po numerze seryjnym.",
   "cli.detectar_segura_beta": "{model} (beta: jeszcze nietestowany z prawdziwym ekranem). Rozpoznany po numerze seryjnym.",
   "cli.detectar_parece": "wygląda na {model} (beta), ale tylko po USB: to niepewne. Nic nie zostanie do niego wysłane bez twojego potwierdzenia.",
+  "cli.detectar_beta_confirmar": "wygląda na {model} (beta) według USB i numeru seryjnego. Bez twojego potwierdzenia nic nie zostanie wysłane.",
+  "cli.detectar_elegir_tamano": "{model} (beta), ale nie znam jego rozmiaru: wybierz go w „Ekran” > „Wybierz model i port”. Bez twojego potwierdzenia nic nie zostanie wysłane.",
   "cli.demo_hola": "Cześć!",
   "cli.demo_funciona": "Twój ekran działa.",
   "cli.demo_conectado": "Podłączony: {model} ({width}x{height}).",

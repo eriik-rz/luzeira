@@ -16,6 +16,8 @@
   "cli.detectar_segura": "{model}. Riconosciuto dal numero di serie.",
   "cli.detectar_segura_beta": "{model} (beta: non ancora provato con uno schermo vero). Riconosciuto dal numero di serie.",
   "cli.detectar_parece": "sembra un {model} (beta), ma solo dal suo USB: non è sicuro. Non gli verrà inviato nulla senza la tua conferma.",
+  "cli.detectar_beta_confirmar": "sembra un {model} (beta) dal suo USB e dal numero di serie. Non gli verrà inviato nulla senza la tua conferma.",
+  "cli.detectar_elegir_tamano": "un {model} (beta), ma non so di che misura è: sceglilo in «Schermo» > «Scegli modello e porta». Non gli verrà inviato nulla senza la tua conferma.",
   "cli.demo_hola": "Ciao!",
   "cli.demo_funciona": "Il tuo schermo funziona.",
   "cli.demo_conectado": "Collegato: {model} ({width}x{height}).",

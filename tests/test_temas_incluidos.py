@@ -307,3 +307,50 @@ def test_builtin_theme_draws_its_english_labels_in_english():
     net = label(loaded.theme.model_copy(update={"widgets": widgets}), "es")
     assert label(loaded.theme, "en") == net
     assert label(loaded.theme, "es") != net
+
+
+@pytest.mark.parametrize("scale_screen", [(480, 800), (600, 1024)], ids=["x1,5", "x1,875"])
+@pytest.mark.parametrize("name", BUILTIN)
+def test_builtin_texts_fit_their_box_when_scaled(name, scale_screen, monkeypatch):
+    """En una pantalla de 5" (escala 1,5) y de 7" (1,875) los textos siguen cabiendo en su
+    caja escalada: el motor redondea la letra y, si hace falta, la encoge (fase 4).
+
+    Solo en español, para no multiplicar por 11 un test que ya tarda: lo que cambia con
+    el idioma (qué textos) lo cubre el test de arriba; aquí se mira el escalado. Con la
+    fuente que elige el motor (``_font_for_text``) y la misma medida que arriba.
+    """
+    from PIL import Image, ImageDraw
+
+    from luzeira.render.motor import _anchor, month_names, weekday_names
+    from luzeira.temas.fuentes import font_for_text
+
+    monkeypatch.setattr(idioma, "_active", "es")
+    loaded = load_theme(BUILTIN_THEMES / name)
+    width, height = loaded.theme.size
+    screen = scale_screen if width < height else scale_screen[::-1]
+    r = Renderer(
+        loaded.theme,
+        font_for=lambda style: resolve_font(style, loaded.files),
+        read_sensor=lambda s: Reading(None, ""),
+        files=loaded.files,
+        output_size=screen,
+    )
+    units = _sensor_units()
+    draw = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    overflow = []
+    for i, widget in enumerate(loaded.theme.widgets):
+        if widget.type not in ("text", "clock", "sensor"):
+            continue
+        left, top, right, bottom = r._box_of(widget)
+        size = (right - left, bottom - top)
+        base = resolve_font(widget.style, loaded.files)
+        names = "".join(weekday_names() + month_names())
+        for text in _worst_texts(widget, units, font_for_text(base, widget.style, names, "es")):
+            style = r._text_style(widget, text, size)
+            x, anchor = _anchor(style.align, size[0])
+            font, visible = r._font_for_text(style, text, size, anchor)
+            box = draw.textbbox((x, size[1] // 2), visible, font=font, anchor=anchor)
+            if box[0] < -1 or box[2] > size[0] + 1 or box[1] < -2 or box[3] > size[1] + 2:
+                overflow.append(f"#{i} {text!r} {box} en {size[0]}x{size[1]}")
+                break
+    assert overflow == []

@@ -16,6 +16,8 @@
   "cli.detectar_segura": "{model}。已通过序列号识别。",
   "cli.detectar_segura_beta": "{model}（测试版：尚未在真实副屏上测试）。已通过序列号识别。",
   "cli.detectar_parece": "看起来像 {model}（测试版），但只是根据 USB 判断：不能确定。未经你确认，不会向它发送任何内容。",
+  "cli.detectar_beta_confirmar": "根据 USB 和序列号，看起来是 {model}（测试版）。未经你确认，不会向它发送任何内容。",
+  "cli.detectar_elegir_tamano": "一块 {model}（测试版），但不知道它的尺寸：请在“副屏”>“选择型号和端口”中选择。未经你确认，不会向它发送任何内容。",
   "cli.demo_hola": "你好！",
   "cli.demo_funciona": "你的副屏工作正常。",
   "cli.demo_conectado": "已连接：{model}（{width}x{height}）。",

@@ -2108,3 +2108,75 @@ def test_failure_mid_response_sends_one_status_line(env, caplog):
     )
     assert server.dev_origin.blown
     assert _status_lines(data) == [b"HTTP/1.1 500 Internal Server Error"]
+
+
+# --- lienzo (``canvas``): pantallas de otros tamaños --------------------------------------
+
+TYPES_TS = Path(__file__).parent.parent / "editor" / "src" / "model" / "types.ts"
+
+
+def _ts_block(name: str) -> str:
+    import re
+
+    text = TYPES_TS.read_text(encoding="utf-8")
+    match = re.search(rf"export const {name}\b[^=]*=\s*(\{{.*?\n\}}|\[.*?\n\])", text, re.S)
+    assert match, f"no encuentro {name} en types.ts"
+    return match.group(1)
+
+
+def test_editor_tables_match_python(env):
+    # La tabla de lienzos del editor (types.ts) y la de Python (la que sirve /api/info)
+    # son la misma, y la de tamaños por orientación también.
+    import re
+
+    from luzeira.temas.modelo import CANVAS_SIZES_PORTRAIT
+
+    _, client, *_ = env
+    _, body = client.json("GET", "/api/info")
+    ts_portrait = [
+        (int(w), int(h))
+        for w, h in re.findall(r"\[(\d+),\s*(\d+)\]", _ts_block("CANVAS_SIZES_PORTRAIT"))
+    ]
+    assert ts_portrait == list(CANVAS_SIZES_PORTRAIT)
+    served = {(c["width"], c["height"]) for c in body["canvases"]}
+    assert served == set(ts_portrait) | {(h, w) for w, h in ts_portrait}
+    ts_orientation = {
+        k: (int(w), int(h))
+        for k, w, h in re.findall(
+            r"'?([a-z-]+)'?:\s*\{\s*width:\s*(\d+),\s*height:\s*(\d+)\s*\}",
+            _ts_block("ORIENTATION_SIZES"),
+        )
+    }
+    assert ts_orientation == {k: (v["width"], v["height"]) for k, v in body["sizes"].items()}
+
+
+def test_preview_has_canvas_size(env):
+    _, client, *_ = env
+    theme = theme_dict(
+        orientation="portrait",
+        canvas={"width": 480, "height": 800},
+        widgets=[
+            {"type": "text", "text": "a", "box": {"x": 400, "y": 700, "width": 80, "height": 100}}
+        ],
+    )
+    status, _, data = _preview(client, "mio", theme)
+    assert status == 200 and Image.open(io.BytesIO(data)).size == (480, 800)
+
+
+def test_canvas_is_saved_only_when_given(env):
+    _, client, user, *_ = env
+    assert client.json("PUT", "/api/temas/mio", theme_dict())[0] == 200
+    assert "canvas" not in json.loads((user / "mio" / "theme.json").read_text(encoding="utf-8"))
+    big = theme_dict(orientation="landscape", canvas={"width": 1920, "height": 480})
+    assert client.json("PUT", "/api/temas/mio", big)[0] == 200
+    saved = json.loads((user / "mio" / "theme.json").read_text(encoding="utf-8"))
+    assert saved["canvas"] == {"width": 1920, "height": 480}
+
+
+def test_canvas_not_allowed_points_to_the_canvas_field(env):
+    _, client, *_ = env
+    theme = theme_dict(orientation="landscape", canvas={"width": 500, "height": 300})
+    status, body = client.json("PUT", "/api/temas/mio", theme)
+    assert status == 400
+    assert [d["path"] for d in body["details"]] == ["canvas"]
+    assert "1920x480" in body["details"][0]["message"]

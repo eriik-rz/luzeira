@@ -54,7 +54,7 @@ from luzeira.temas.cargar import (
     pydantic_message,
     slugify,
 )
-from luzeira.temas.modelo import RangeError, Theme, WidgetOffScreen
+from luzeira.temas.modelo import CanvasNotAllowed, RangeError, Theme, WidgetOffScreen
 
 MAX_TITLE = 60  # igual que Theme.name
 MAX_LISTED_FILES = 500  # tope de recursos que se listan de una carpeta
@@ -226,6 +226,8 @@ def _detail(item: dict) -> dict:
     path = _loc_path(tuple(item["loc"]))
     message = _item_message(item)
     error = item.get("ctx", {}).get("error") if item["type"] == "value_error" else None
+    if not path and isinstance(error, CanvasNotAllowed):
+        path = "canvas"  # el editor lo pinta junto al campo «Tamaño de la pantalla»
     if not path and isinstance(error, WidgetOffScreen) and error.n >= 1:
         path = f"widgets.{error.n - 1}.box"
         kind = t(f"servidor.tipo.{error.kind}") if error.kind in _WIDGET_TYPE_NAMES else error.kind

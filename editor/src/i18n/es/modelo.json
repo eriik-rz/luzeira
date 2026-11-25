@@ -37,6 +37,7 @@
   "modelo.validar.max_min": "El máximo tiene que ser mayor que el mínimo.",
   "modelo.validar.nombre": "El tema necesita un nombre.",
   "modelo.validar.elementos": "Como mucho {max} elementos por tema.",
+  "modelo.validar.lienzo": "Ese tamaño de pantalla no vale con esta orientación. Elige uno de la lista.",
   "modelo.validar.traducciones": "Las traducciones de este texto no son válidas.",
   "modelo.validar.traducciones_muchas": "Como mucho {max} idiomas por texto.",
   "modelo.validar.traduccion_codigo": "«{codigo}» no es un código de idioma válido (dos letras en minúscula, como «en»).",

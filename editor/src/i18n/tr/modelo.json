@@ -37,6 +37,7 @@
   "modelo.validar.max_min": "En büyük değer en küçükten büyük olmalı.",
   "modelo.validar.nombre": "Temanın bir adı olmalı.",
   "modelo.validar.elementos": "Tema başına en fazla {max} öğe.",
+  "modelo.validar.lienzo": "Bu ekran boyutu bu yönle olmaz. Listeden birini seç.",
   "modelo.validar.traducciones": "Bu metnin çevirileri geçerli değil.",
   "modelo.validar.traducciones_muchas": "Metin başına en fazla {max} dil.",
   "modelo.validar.traduccion_codigo": "“{codigo}” geçerli bir dil kodu değil (küçük harfle iki harf, örneğin “en”).",

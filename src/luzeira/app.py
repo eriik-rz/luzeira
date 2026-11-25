@@ -22,7 +22,7 @@ from luzeira.config import DEFAULT_THEME as CONFIG_DEFAULT_THEME
 from luzeira.pantallas import DisplayError, TuringRevA
 from luzeira.render import Renderer
 from luzeira.sensores import default_hub
-from luzeira.servicio import FLIPPED, ORIENTATIONS
+from luzeira.servicio import FLIPPED, ORIENTATIONS, display_size
 from luzeira.temas import load_theme, resolve_font
 
 log = logging.getLogger(__name__)
@@ -77,6 +77,10 @@ def run(
         display.screen_on()
         display.set_brightness(brightness)
         display.set_orientation(orientation)
+        # En una pantalla de otro tamaño (5", 7"...) el tema se pinta escalado y centrado.
+        size = display_size(display)
+        if size is not None:
+            renderer.set_output_size(size)
         time.sleep(1.0)  # que las velocidades (red, disco, CPU) tengan un intervalo real
         hub.poll()
         display.draw_image(renderer.full_frame())

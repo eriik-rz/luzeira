@@ -18,6 +18,7 @@ from luzeira.pantallas.modelos import (
     REV_A,
     REV_B,
     REV_C,
+    REV_C_SIZES,
     DisplayChoice,
     PortInfo,
     compatible_models,
@@ -114,7 +115,7 @@ def test_closed_list_is_filtered_by_usb_id():
     assert compatible_models(info(UNKNOWN_CH552)) == [REV_A, REV_B]
     assert compatible_models(info(KIPYE_PORT)) == [KIPYE]
     assert compatible_models(info(BLUETOOTH)) == []  # sin USB: solo en modo avanzado
-    assert compatible_models(info(REV_C_SLEEPING)) == []  # sin driver
+    assert compatible_models(info(REV_C_SLEEPING)) == list(REV_C_SIZES)  # rev C: los 3 tamaños
 
 
 def test_closed_list_offers_only_the_model_its_serial_proves():

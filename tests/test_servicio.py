@@ -447,8 +447,10 @@ def test_invalid_brightness_is_rejected():
 
 
 def test_unexpected_error_sets_error_status_and_releases_everything():
+    # Fuera de pintar: un fallo de draw_image ya no sube (se reintenta, ver
+    # test_driver_failing_to_draw_does_not_kill_the_service).
     class Boom(FakeDisplay):
-        def draw_image(self, image, x=0, y=0):
+        def set_brightness(self, percent):
             raise ZeroDivisionError
 
     hub = FakeHub()
@@ -1008,3 +1010,133 @@ def test_reconnections_that_reach_an_image_do_not_ask_to_replug():
         h.wait_status(Status.RUNNING)
     assert all(d.failed_at is not None for d in opener.displays[:10])
     assert not any(REPLUG in str(m) for _s, m in h.statuses)
+
+
+# --- pantallas de otro tamaño (lienzo) ------------------------------------------------
+
+
+class SizedDisplay(FakeDisplay):
+    """Pantalla de 5" (480x800 en vertical) que dice su tamaño, como los drivers reales."""
+
+    native = (480, 800)
+
+    def __init__(self, log: list, fail_on_draw: int | None = None) -> None:
+        super().__init__(log, fail_on_draw)
+        self.orientation = Orientation.PORTRAIT
+        self.sizes: list[tuple[int, int, tuple[int, int]]] = []
+
+    @property
+    def width(self) -> int:
+        return self.native[1] if self.orientation.is_landscape else self.native[0]
+
+    @property
+    def height(self) -> int:
+        return self.native[0] if self.orientation.is_landscape else self.native[1]
+
+    def set_orientation(self, orientation: Orientation) -> None:
+        self.orientation = orientation
+        super().set_orientation(orientation)
+
+    def draw_image(self, image, x: int = 0, y: int = 0) -> None:
+        self.sizes.append((x, y, image.size))
+        super().draw_image(image, x, y)
+
+
+def test_full_frame_is_drawn_at_the_display_size_and_follows_the_flip():
+    # El tema Esencial es de 480x320: en la 5" girada (800x480) se pinta escalado a su
+    # tamaño, nunca en la esquina. Al girarlo 180° sigue siendo de 800x480.
+    opener = Opener(make=lambda index, log, fail: SizedDisplay(log, fail))
+    with Harness(opener=opener) as h:
+        h.wait_for(lambda: opener.displays and opener.displays[0].sizes)
+        display = opener.displays[0]
+        assert display.sizes[0] == (0, 0, (800, 480))
+        h.service.apply(Settings(THEME, flip=True))
+        h.wait_for(
+            lambda: ("orientation", Orientation.REVERSE_LANDSCAPE) in opener.calls_of(display)
+        )
+        h.wait_for(lambda: display.sizes.count((0, 0, (800, 480))) >= 2)
+        # Ningún parche se sale de la pantalla.
+        for x, y, (w, hh) in display.sizes:
+            assert x + w <= 800 and y + hh <= 480
+
+
+def test_display_without_size_gets_the_theme_size():
+    # Un driver que no dice su tamaño (o dice algo raro): al tamaño del tema, como antes.
+    from luzeira.servicio import display_size
+
+    class Odd:
+        width, height = 480.0, 800
+
+    class Huge:
+        width, height = 480, 4000
+
+    assert display_size(FakeDisplay([])) is None
+    assert display_size(Odd()) is None
+    assert display_size(Huge()) is None
+    assert display_size(SizedDisplay([])) == (480, 800)
+
+
+def test_stop_while_a_slow_display_is_opening_ends_quickly(monkeypatch):
+    # Despertar una rev C son hasta ~20 s de esperas dentro de ``open_chosen``. Con el
+    # ``open_choice`` de verdad, esas esperas atienden a stop(): termina en < 2 s y el
+    # driver ha cerrado lo que abrió (``comun.open_probed``).
+    from luzeira import servicio
+
+    started = threading.Event()
+    waited: list[float] = []
+
+    def slow_open_chosen(choice, *, sleep):
+        started.set()
+        for _ in range(30):  # 30 s si nadie la corta
+            waited.append(1.0)
+            sleep(1.0)
+        raise AssertionError("la espera no se ha cortado")
+
+    monkeypatch.setattr(servicio, "open_chosen", slow_open_chosen)
+    h = Harness(choice=REV_B_CHOICE)
+    h.thread.start()
+    assert started.wait(1)
+    start = time.monotonic()
+    h.service.stop()
+    h.thread.join(2)
+    assert not h.thread.is_alive()
+    assert time.monotonic() - start < 2
+    assert len(waited) == 1 and h.hub.closed
+
+
+def test_new_theme_on_an_open_display_is_drawn_at_the_display_size():
+    # Cambiar de tema con la 5" abierta: el motor nuevo también va al tamaño de la
+    # pantalla (no al del tema), desde su primera imagen.
+    opener = Opener(make=lambda index, log, fail: SizedDisplay(log, fail))
+    with Harness(opener=opener) as h:
+        h.wait_for(lambda: opener.displays and opener.displays[0].sizes)
+        display = opener.displays[0]
+        before = len(display.sizes)
+        h.service.apply(Settings(THEME.parent / "ambar"))
+        h.wait_for(lambda: len(display.sizes) > before and h.service.status == Status.RUNNING)
+        h.wait_for(lambda: "mbar" in h.service.message)
+        fulls = [s for x, y, s in display.sizes if (x, y) == (0, 0)]
+        assert fulls and set(fulls) == {(800, 480)}
+
+
+@pytest.mark.parametrize(
+    "error",
+    [ValueError("(900, 0) está fuera de la pantalla 800x480"), RuntimeError("bug del driver")],
+    ids=["fuera", "bug"],
+)
+def test_driver_failing_to_draw_does_not_kill_the_service(error):
+    # Un parche fuera de la pantalla (ValueError) o un bug del driver: se trata como un
+    # fallo del render (aviso y reintento), no tumba el hilo.
+    class Picky(SizedDisplay):
+        def draw_image(self, image, x: int = 0, y: int = 0) -> None:
+            if self.draws == 0:
+                self.draws += 1
+                raise error
+            super().draw_image(image, x, y)
+
+    opener = Opener(make=lambda index, log, fail: Picky(log, fail))
+    with Harness(opener=opener) as h:
+        h.wait_status(Status.THEME_ERROR)
+        h.wait_status(Status.RUNNING, timeout=3)
+        assert h.thread.is_alive()
+        assert opener.displays[0].sizes[0][2] == (800, 480)

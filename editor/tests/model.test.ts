@@ -36,7 +36,7 @@ setLanguage('es')
 
 import { clampBox, moveBox, resizeBox, boxInside, pickBelow } from '../src/model/geometry.ts'
 import { reducer, initialState, gapToIndex, HISTORY_LIMIT, MERGE_WINDOW_MS, type EditorState } from '../src/model/editorState.ts'
-import { normalizeTheme, createWidget, placeNewBox } from '../src/model/theme.ts'
+import { normalizeTheme, createWidget, placeNewBox, canvasOptions } from '../src/model/theme.ts'
 import { validateTheme, widgetIndexOf, fieldOf } from '../src/model/validate.ts'
 import {
   appliedMessage,
@@ -52,6 +52,7 @@ import {
 } from '../src/model/contract.ts'
 import { formatClock, formatReading } from '../src/model/format.ts'
 import type { Theme, ThemeJson } from '../src/model/types.ts'
+import { canvasSizesFor, isAllowedCanvas, screenSize } from '../src/model/types.ts'
 
 const LANDSCAPE = { width: 480, height: 320 }
 
@@ -671,4 +672,94 @@ test('propiedades: «Antes» y «Después» van cada uno con sus traducciones', 
   assert.equal(suffix.suffix, ' load')
   assert.ok(!('suffix_i18n' in suffix))
   assert.deepEqual(suffix.prefix_i18n, { en: 'CPU ' })
+})
+
+// --- Lienzo (pantallas de otros tamaños) ----------------------------------------------
+
+test('sin lienzo, el tamaño de siempre; con él, el del lienzo', () => {
+  assert.deepEqual(screenSize(theme), LANDSCAPE)
+  assert.equal('canvas' in theme, false)
+  const big = normalizeTheme({ ...json, canvas: { width: 800, height: 480 } })
+  assert.deepEqual(screenSize(big), { width: 800, height: 480 })
+  // El de siempre escrito a mano no se guarda (así lo leen las versiones viejas).
+  const same = normalizeTheme({ ...json, canvas: { width: 480, height: 320 } })
+  assert.equal('canvas' in same, false)
+})
+
+test('los lienzos de cada orientación', () => {
+  assert.deepEqual(
+    canvasSizesFor('portrait').map((s) => `${s.width}x${s.height}`),
+    ['320x480', '480x480', '480x800', '600x1024', '480x1920'],
+  )
+  assert.ok(canvasSizesFor('reverse-landscape').every((s) => s.width >= s.height))
+  assert.ok(isAllowedCanvas({ width: 1920, height: 480 }, 'landscape'))
+  assert.ok(!isAllowedCanvas({ width: 1920, height: 480 }, 'portrait'))
+})
+
+test('cambiar el lienzo guarda el campo y recoloca lo que ya no cabe', () => {
+  let s = initialState(theme)
+  s = reducer(s, { type: 'setCanvas', canvas: { width: 800, height: 480 } })
+  assert.deepEqual(s.present.theme.canvas, { width: 800, height: 480 })
+  assert.deepEqual(s.present.theme.widgets[2].box, theme.widgets[2].box) // ya cabía
+  s = reducer(s, { type: 'setCanvas', canvas: { width: 480, height: 480 } })
+  assert.deepEqual(validateTheme(s.present.theme), [])
+  // Volver al de siempre quita el campo.
+  s = reducer(s, { type: 'setCanvas', canvas: { width: 480, height: 320 } })
+  assert.equal('canvas' in s.present.theme, false)
+  s = reducer(s, { type: 'undo' })
+  assert.deepEqual(s.present.theme.canvas, { width: 480, height: 480 })
+})
+
+test('encoger el lienzo mete dentro lo que se sale', () => {
+  const wide = normalizeTheme({
+    ...json,
+    canvas: { width: 1920, height: 480 },
+    widgets: [{ type: 'text', text: 'X', box: { x: 1800, y: 400, width: 100, height: 60 } }],
+  })
+  const s = reducer(initialState(wide), { type: 'setCanvas', canvas: { width: 800, height: 480 } })
+  assert.deepEqual(s.present.theme.widgets[0].box, { x: 700, y: 400, width: 100, height: 60 })
+  assert.deepEqual(validateTheme(s.present.theme), [])
+})
+
+test('el mismo lienzo no crea un paso de deshacer', () => {
+  const s = initialState(theme)
+  assert.equal(reducer(s, { type: 'setCanvas', canvas: { width: 480, height: 320 } }), s)
+})
+
+test('girar la pantalla gira también el lienzo', () => {
+  let s = initialState(normalizeTheme({ ...json, canvas: { width: 1920, height: 480 } }))
+  s = reducer(s, { type: 'setOrientation', orientation: 'portrait' })
+  assert.deepEqual(s.present.theme.canvas, { width: 480, height: 1920 })
+  assert.deepEqual(validateTheme(s.present.theme), [])
+  s = reducer(s, { type: 'setOrientation', orientation: 'reverse-portrait' })
+  assert.deepEqual(s.present.theme.canvas, { width: 480, height: 1920 })
+})
+
+test('un elemento fuera del lienzo da error con el tamaño del lienzo', () => {
+  const t2 = normalizeTheme({
+    ...json,
+    canvas: { width: 800, height: 480 },
+    widgets: [{ type: 'text', text: 'X', box: { x: 790, y: 0, width: 20, height: 20 } }],
+  })
+  const issues = validateTheme(t2)
+  assert.equal(issues.length, 1)
+  assert.equal(issues[0].path, 'widgets.0.box.width')
+  assert.ok(issues[0].message.includes('800'), issues[0].message)
+})
+
+test('un lienzo que no es de ninguna pantalla da error en su campo', () => {
+  const odd = normalizeTheme({ ...json, canvas: { width: 500, height: 300 } })
+  assert.deepEqual(validateTheme(odd).map((i) => i.path)[0], 'canvas')
+  const turned = normalizeTheme({ ...json, canvas: { width: 480, height: 800 } }) // vertical en horizontal
+  assert.deepEqual(validateTheme(turned).map((i) => i.path), ['canvas'])
+})
+
+test('un lienzo que no está en la lista sale primero y deshabilitado en el selector', () => {
+  const ok = canvasOptions(normalizeTheme({ ...json, canvas: { width: 800, height: 480 } }))
+  assert.equal(ok.length, 5)
+  assert.ok(ok.every((o) => !o.disabled))
+  const odd = canvasOptions(normalizeTheme({ ...json, canvas: { width: 500, height: 300 } }))
+  assert.equal(odd.length, 6)
+  assert.deepEqual(odd[0], { size: { width: 500, height: 300 }, disabled: true })
+  assert.ok(odd.slice(1).every((o) => !o.disabled))
 })

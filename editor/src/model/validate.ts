@@ -6,6 +6,7 @@ import {
   COLOR_RE,
   FONT_EXTENSIONS,
   IMAGE_EXTENSIONS,
+  isAllowedCanvas,
   LANG_CODE_RE,
   LIMITS,
   MAX_WIDGETS,
@@ -162,6 +163,10 @@ export function validateTheme(theme: Theme): Issue[] {
   if (theme.background.image !== null) {
     const err = checkPath(theme.background.image, IMAGE_EXTENSIONS)
     if (err) out.push({ path: 'background.image', message: err })
+  }
+  // El lienzo: solo los tamaños de pantallas conocidas, con su orientación (CANVAS_SIZES).
+  if (theme.canvas && !isAllowedCanvas(theme.canvas, theme.orientation)) {
+    out.push({ path: 'canvas', message: t('modelo.validar.lienzo') })
   }
   if (theme.widgets.length > MAX_WIDGETS) {
     out.push({ path: 'widgets', message: t('modelo.validar.elementos', { max: MAX_WIDGETS }) })

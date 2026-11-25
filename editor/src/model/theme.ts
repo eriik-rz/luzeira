@@ -2,7 +2,9 @@
 // Funciones puras: se prueban con `node --test` (tests/*.test.ts).
 
 import {
+  canvasSizesFor,
   FORMAT,
+  ORIENTATION_SIZES,
   screenSize,
   type Background,
   type Box,
@@ -104,9 +106,39 @@ export function normalizeTheme(t: ThemeJson): Theme {
     name: t.name,
     author: t.author ?? null,
     orientation: t.orientation,
+    ...canvasField(t.orientation, t.canvas),
     background,
     widgets: (t.widgets ?? []).map(normalizeWidget),
   }
+}
+
+/**
+ * El campo `canvas` tal como se guarda: nada si es el tamaño de siempre de esa orientación
+ * (un tema así lo siguen leyendo las versiones viejas de Luzeira), o una copia si no.
+ */
+export function canvasField(orientation: Orientation, canvas: Size | null | undefined): { canvas?: Size } {
+  if (!canvas) return {}
+  const base = ORIENTATION_SIZES[orientation]
+  if (canvas.width === base.width && canvas.height === base.height) return {}
+  return { canvas: { width: canvas.width, height: canvas.height } }
+}
+
+/**
+ * Opciones del selector de lienzo: los tamaños de esa orientación y, si el tema trae uno que
+ * no está en la lista (un tema roto a mano), ese primero y deshabilitado. Sin él, el
+ * `<select>` enseñaría la primera opción y elegirla no haría nada (no hay cambio).
+ */
+export function canvasOptions(theme: Pick<Theme, 'orientation' | 'canvas'>): { size: Size; disabled: boolean }[] {
+  const current = screenSize(theme)
+  const sizes = canvasSizesFor(theme.orientation)
+  const listed = sizes.some((s) => s.width === current.width && s.height === current.height)
+  const options = sizes.map((size) => ({ size, disabled: false }))
+  return listed ? options : [{ size: current, disabled: true }, ...options]
+}
+
+/** «480 × 800» (con el signo de multiplicar, como el resto del editor). */
+export function sizeLabel(size: Size): string {
+  return `${size.width} × ${size.height}`
 }
 
 // --- Textos para el usuario ----------------------------------------------------------

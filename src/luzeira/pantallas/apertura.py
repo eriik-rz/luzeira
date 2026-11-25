@@ -15,6 +15,7 @@ from luzeira.pantallas.comun import (
     ChosenDisplayMissing,
     ConfirmationNeeded,
     DisplayError,
+    ModelToChoose,
     ModelToConfirm,
     SerialFactory,
     UnsupportedModel,
@@ -26,15 +27,25 @@ from luzeira.pantallas.modelos import (
     REV_A,
     REV_B,
     REV_C,
+    REV_C_SIZES,
     VID_PID_CH552,
+    WEACT,
+    WEACT_MODELS,
     DisplayChoice,
     PortInfo,
     identify,
+    is_rev_c_awake,
+    is_rev_c_bridge,
     list_ports,
     match_choice,
     model_by_key,
+    rev_c_size,
 )
 from luzeira.pantallas.turing_rev_a import Command, TuringRevA
+from luzeira.pantallas.turing_rev_c import SIZES as REV_C_DRIVER_SIZES
+from luzeira.pantallas.turing_rev_c import TuringRevC, wake
+from luzeira.pantallas.weact import PANELS as WEACT_PANELS
+from luzeira.pantallas.weact import WeAct
 from luzeira.pantallas.xuanfang_rev_b import XuanFangRevB
 
 MSG_NOT_FOUND = "pantallas.no_encuentro"  # clave del catálogo (el mensaje de la rev A)
@@ -100,10 +111,16 @@ def open_auto(
        decide el usuario), como antes.
     4. Una Kipye → :class:`ModelToConfirm`: solo por su USB, la confirma el usuario
        (el servicio sigue buscando mientras: si aparece una rev A, se abre sola).
-    5. Una rev C → :class:`UnsupportedModel`.
-    6. Nada → el mismo error de siempre.
+    5. Una rev C → :class:`ModelToConfirm` con su tamaño si el serie de su puente lo dice
+       (como la Kipye: la confirma el usuario); si no, :class:`ModelToChoose` (que la
+       elija con su tamaño en el menú). Una que solo lo parece por su serie, con otro USB
+       → :class:`UnsupportedModel`.
+    6. Una WeAct → :class:`ModelToConfirm` si el prefijo del serie dice el tamaño (beta,
+       con USB y serie sacados solo de código ajeno: la confirma el usuario); si no,
+       :class:`ModelToChoose`.
+    7. Nada → el mismo error de siempre.
 
-    En 3, 4 y 5 no se abre ningún puerto.
+    En 3 a 6 no se abre ningún puerto (ni siquiera para despertar la rev C).
     """
     found = [(p, identify(p)) for p in list_ports(ports)]
     found = [(p, ident) for p, ident in found if ident is not None]
@@ -123,9 +140,25 @@ def open_auto(
     port = first(KIPYE, sure=False)
     if port is not None:
         raise ModelToConfirm(DisplayChoice.for_port(KIPYE, port), KIPYE.label_text)
-    port = next((p for p, i in found if i.model is REV_C), None)
+    rev_c = [p for p, i in found if i.model is REV_C]
+    # El puente primero: es el que se ve siempre, duerma o no, y su serie puede decir el
+    # tamaño. Despierta, Windows ve además el otro aparato (los dos a la vez, #1030).
+    port = next((p for p in rev_c if is_rev_c_bridge(p)), None)
+    port = port or next((p for p in rev_c if is_rev_c_awake(p)), None)
     if port is not None:
-        raise UnsupportedModel(port.device, REV_C.label_text)
+        size = rev_c_size(port)
+        if size is not None:
+            raise ModelToConfirm(DisplayChoice.for_port(size, port), size.label_text)
+        raise ModelToChoose(port.device, REV_C.label_text)
+    if rev_c:
+        raise UnsupportedModel(rev_c[0].device, REV_C.label_text)
+    port = next((p for p, i in found if i.model in WEACT_MODELS), None)
+    if port is not None:
+        model = identify(port).model
+        raise ModelToConfirm(DisplayChoice.for_port(model, port), model.label_text)
+    port = next((p for p, i in found if i.model is WEACT), None)
+    if port is not None:
+        raise ModelToChoose(port.device, WEACT.label_text)
     raise DisplayError(Text(MSG_NOT_FOUND))
 
 
@@ -135,6 +168,7 @@ def open_chosen(
     *,
     serial_factory: SerialFactory | None = None,
     sleep: Callable[[float], None] = time.sleep,
+    relist: Callable[[], Iterable] | None = None,
 ):
     """Abre la pantalla que eligió el usuario, con el driver de ese modelo y nada más.
 
@@ -145,7 +179,10 @@ def open_chosen(
     La pantalla devuelta lleva ``verified``: False si su primera prueba no ha podido
     demostrar que es ese modelo (la Kipye, que no tiene saludo, o una rev A que no
     contesta en un puerto que no es ``1a86:5722``). Esa elección no se recuerda sin que
-    el usuario confirme que se ve bien.
+    el usuario confirme que se ve bien. La rev C siempre: su saludo no dice el tamaño.
+
+    ``relist`` vuelve a listar los puertos (por defecto, los de Windows o ``ports`` si se
+    dan): la rev C cambia de puerto al despertar.
     """
     model = model_by_key(choice.model)
     port = match_choice(choice, list_ports(ports))
@@ -159,4 +196,82 @@ def open_chosen(
         return XuanFangRevB.open(port.device, serial_factory=serial_factory, sleep=sleep)
     if model is KIPYE:
         return KipyeRevD.open(port.device, serial_factory=serial_factory, sleep=sleep)
+    if model in WEACT_MODELS:
+        return WeAct.open(
+            port.device, WEACT_PANELS[model.key], serial_factory=serial_factory, sleep=sleep
+        )
+    if model in REV_C_SIZES:
+        if relist is None:
+            relist = (lambda: ports) if ports is not None else (lambda: None)
+        return open_rev_c(
+            choice,
+            port,
+            lambda: list_ports(relist()),
+            serial_factory=serial_factory,
+            sleep=sleep,
+        )
     raise ChosenDisplayMissing()  # modelo sin driver: no se llega (match_choice lo filtra)
+
+
+def open_rev_c(
+    choice: DisplayChoice,
+    port: PortInfo,
+    list_now: Callable[[], list[PortInfo]],
+    *,
+    serial_factory: SerialFactory | None = None,
+    sleep: Callable[[float], None] = time.sleep,
+) -> TuringRevC:
+    """Abre la rev C elegida (``port`` es el que ha dado :func:`match_choice`).
+
+    🔴 Al aparato despierto (ids genéricos de gadget de Linux) solo se le manda algo si es
+    seguro que es el de esta pantalla (R5, punto 6):
+
+    - Se eligió el propio aparato despierto: ``port`` ya lo es (mismo COM y mismos ids).
+    - Se eligió el puente y el COM guardado en la elección es un aparato despierto que
+      sigue ahí: es el que Luzeira despertó y comprobó la otra vez (al recordar la elección
+      se guarda el COM con el que se abrió). Despierta, la pantalla deja ver los dos.
+    - Si no, se despierta (:func:`~luzeira.pantallas.turing_rev_c.wake`) y vale solo el
+      aparato que aparece a raíz de eso. Uno que ya estaba no cuenta.
+
+    - Se eligió el puente y en **esta sesión** Luzeira ya despertó y comprobó (con su
+      ``chs_``) un aparato despierto suyo que sigue ahí con el mismo COM, USB y serie
+      (:data:`AWAKE_THIS_SESSION`). Sin esto, volver a elegirla por su puente (otro
+      tamaño tras «No se ve bien», una conexión perdida, la vuelta del reposo) la
+      despertaba otra vez, no aparecía nada nuevo y se pedía desenchufarla (revisor de la
+      fase 5).
+
+    Y luego el saludo tiene que contestar ``chs_…``: si no, :class:`WrongModel` (y se
+    olvida ese despierto).
+    """
+    size = REV_C_DRIVER_SIZES[choice.model]
+    bridge = _identity(port)
+    device = port.device
+    if is_rev_c_bridge(port):
+        awake = [p for p in list_now() if is_rev_c_awake(p)]
+        known = AWAKE_THIS_SESSION.get(bridge)
+        found = next((p for p in awake if p.device == choice.device), None)
+        found = found or next((p for p in awake if _identity(p) == known), None)
+        if found is not None:
+            device = found.device
+        else:
+            device = wake(port.device, list_now, serial_factory=serial_factory, sleep=sleep)
+    try:
+        display = TuringRevC.open(device, size, serial_factory=serial_factory, sleep=sleep)
+    except WrongModel:
+        AWAKE_THIS_SESSION.pop(bridge, None)
+        raise
+    if is_rev_c_bridge(port):
+        awake_now = next((p for p in list_now() if p.device == device), None)
+        if awake_now is not None and is_rev_c_awake(awake_now):
+            AWAKE_THIS_SESSION[bridge] = _identity(awake_now)
+    return display
+
+
+# Puente de rev C → el aparato despierto que Luzeira despertó (o reconoció) y que contestó
+# ``chs_`` en esta sesión; cada uno por su COM, USB y serie. Solo en memoria: al cerrar
+# Luzeira se pierde (lo que dura entre arranques es el COM guardado en la elección).
+AWAKE_THIS_SESSION: dict[tuple, tuple] = {}
+
+
+def _identity(port: PortInfo) -> tuple:
+    return (port.device, port.usb_id, port.serial)

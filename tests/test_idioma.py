@@ -157,6 +157,12 @@ MODEL_NAME_KEYS = (
     "pantallas.modelo_xuanfang",
     "pantallas.modelo_kipye",
     "pantallas.modelo_rev_c",
+    # Fase 5: los tamaños de la rev C y la WeAct con decimales (el 5" y la familia WeAct,
+    # sin cifras decimales, no entran: el test busca un decimal en cada nombre).
+    "pantallas.modelo_rev_c_21",
+    "pantallas.modelo_rev_c_88",
+    "pantallas.modelo_weact_35",
+    "pantallas.modelo_weact_096",
 )
 
 

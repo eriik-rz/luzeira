@@ -2,9 +2,9 @@
 
 import type { Dispatch } from 'react'
 import type { Action } from '../model/editorState.ts'
-import { orientationInfo } from '../model/theme.ts'
+import { canvasOptions, orientationInfo, sizeLabel } from '../model/theme.ts'
 import { useT } from '../i18n/contexto.ts'
-import { LIMITS, type Orientation, type Theme } from '../model/types.ts'
+import { canvasSizesFor, LIMITS, screenSize, type Orientation, type Size, type Theme } from '../model/types.ts'
 import type { Issue } from '../model/validate.ts'
 import { ColorField, Field, TextField } from './fields.tsx'
 import { ImagePicker } from './ResourcePicker.tsx'
@@ -18,6 +18,14 @@ interface Props {
 }
 
 const ORIENTATIONS: Orientation[] = ['landscape', 'portrait', 'reverse-landscape', 'reverse-portrait']
+
+/** Clave del valor de un lienzo en el `<select>` («480x800»). */
+const sizeKey = (s: Size) => `${s.width}x${s.height}`
+
+/** Qué pantalla es cada lienzo («5 pulgadas»): la clave va con el tamaño en vertical. */
+function canvasHelp(t: (key: string) => string, s: Size): string {
+  return t(`tema.lienzo.${Math.min(s.width, s.height)}x${Math.max(s.width, s.height)}`)
+}
 
 export function ThemePanel({ theme, issues, services, dispatch }: Props) {
   const t = useT()
@@ -67,6 +75,26 @@ export function ThemePanel({ theme, issues, services, dispatch }: Props) {
                 {ORIENTATIONS.map((o) => (
                   <option key={o} value={o}>
                     {orientationInfo(o).label} — {orientationInfo(o).help}
+                  </option>
+                ))}
+              </select>
+            )}
+          </Field>
+          <Field label={t('tema.lienzo')} hint={t('tema.lienzo.ayuda')} error={err('canvas')}>
+            {({ inputId, describedBy }) => (
+              <select
+                id={inputId}
+                className="input"
+                aria-describedby={describedBy}
+                value={sizeKey(screenSize(theme))}
+                onChange={(e) => {
+                  const chosen = canvasSizesFor(theme.orientation).find((s) => sizeKey(s) === e.target.value)
+                  if (chosen) dispatch({ type: 'setCanvas', canvas: chosen })
+                }}
+              >
+                {canvasOptions(theme).map(({ size: s, disabled }) => (
+                  <option key={sizeKey(s)} value={sizeKey(s)} disabled={disabled}>
+                    {disabled ? sizeLabel(s) : `${sizeLabel(s)} — ${canvasHelp(t, s)}`}
                   </option>
                 ))}
               </select>

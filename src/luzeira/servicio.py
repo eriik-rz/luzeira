@@ -25,6 +25,7 @@ import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 from enum import StrEnum
+from functools import partial
 from pathlib import Path
 from typing import Protocol
 
@@ -43,12 +44,13 @@ from luzeira.pantallas import (
     WrongModel,
 )
 from luzeira.pantallas.apertura import open_auto, open_chosen, open_confirmed_rev_a
-from luzeira.pantallas.comun import ImageCut
+from luzeira.pantallas.comun import ImageCut, OpenInterrupted
 from luzeira.pantallas.modelos import list_ports as list_system_ports
 from luzeira.render import Renderer
 from luzeira.sensores import default_hub
 from luzeira.sensores.base import Reading
 from luzeira.temas import ThemeError, load_theme, resolve_font
+from luzeira.temas.modelo import MAX_CANVAS_SIDE
 
 log = logging.getLogger(__name__)
 
@@ -58,6 +60,9 @@ ORIENTATIONS = {
     "landscape": Orientation.LANDSCAPE,
     "reverse-landscape": Orientation.REVERSE_LANDSCAPE,
 }
+# Lado más largo que se cree a un driver (el de la pantalla mayor conocida, la de 8,8":
+# 480x1920). Con más, el lienzo de la imagen completa dejaría de estar acotado.
+MAX_SCREEN_SIDE = MAX_CANVAS_SIDE
 # Girar 180°: el mismo tamaño, del revés (para pantallas montadas al contrario).
 FLIPPED = {
     Orientation.PORTRAIT: Orientation.REVERSE_PORTRAIT,
@@ -153,6 +158,17 @@ class DisplayInfo:
     verified: bool = True
 
 
+def display_size(display: object) -> tuple[int, int] | None:
+    """(ancho, alto) de la pantalla con su orientación aplicada, o None si el driver no
+    lo dice (o dice algo que no es un tamaño): entonces se pinta al tamaño del tema."""
+    width, height = getattr(display, "width", None), getattr(display, "height", None)
+    if type(width) is not int or type(height) is not int:
+        return None
+    if not (0 < width <= MAX_SCREEN_SIDE and 0 < height <= MAX_SCREEN_SIDE):
+        return None
+    return (width, height)
+
+
 def open_once(port: str | None) -> Display:
     """Un solo intento de abrir la pantalla.
 
@@ -222,7 +238,7 @@ class DisplayService:
         *,
         open_display: OpenDisplay = open_once,
         choice: DisplayChoice | None = None,
-        open_choice: OpenChoice = open_chosen,
+        open_choice: OpenChoice | None = None,
         make_hub: Callable[[], Hub] = default_hub,
         monotonic: Callable[[], float] = time.monotonic,
         on_status: StatusCallback = lambda status, message: None,
@@ -231,7 +247,9 @@ class DisplayService:
     ) -> None:
         self._open_display = open_display
         self._list_ports = list_ports  # solo enumera (no abre nada): ver ``_parked``
-        self._open_choice = open_choice
+        # Sin uno inyectado (los tests), el de verdad con esperas que atienden a stop() y
+        # suspend(): despertar una rev C son hasta ~20 s de esperas (C-44, fase 5).
+        self._open_choice = open_choice or partial(open_chosen, sleep=self._pause_while_opening)
         self._make_hub = make_hub
         self._monotonic = monotonic
         self._on_status = on_status
@@ -488,6 +506,15 @@ class DisplayService:
         with self._cond:
             self._cond.wait_for(lambda: self._version != self._seen, timeout)
 
+    def _pause_while_opening(self, seconds: float) -> None:
+        """Las esperas al abrir una pantalla, atendiendo a stop() y suspend(): si llega una
+        de las dos, la apertura se corta (:class:`OpenInterrupted`). Lo que sigue sin poder
+        cortarse son cada apertura de puerto y cada lectura (1 s de timeout): stop() sigue
+        en < 2 s."""
+        with self._cond:
+            if self._cond.wait_for(lambda: self._stop_requested or self._want_suspend, seconds):
+                raise OpenInterrupted
+
     def _try_connect(self) -> None:
         now = self._monotonic()
         if now < self._retry_at:
@@ -500,6 +527,8 @@ class DisplayService:
             return
         try:
             display, opened_with = self._open()
+        except OpenInterrupted:
+            return  # stop() o suspend() a mitad de abrir: el driver ya cerró lo que abrió
         except ModelToConfirm as exc:
             # Una beta reconocida solo por su USB (Kipye): no se le manda nada, pero se sigue
             # buscando (enumerar puertos no manda nada). Si mientras tanto aparece una rev A
@@ -550,6 +579,7 @@ class DisplayService:
         except DisplayError as exc:
             self._lost(exc)
             return
+        self._fit_renderer()
         try:
             self._hub_poll()
         except Exception as exc:  # lo mismo que en _step (R2-02): ya se reintenta allí
@@ -663,6 +693,13 @@ class DisplayService:
                 display.draw_image(patch.image, patch.x, patch.y)
         except DisplayError as exc:
             self._lost(exc)
+        except Exception as exc:
+            # Cualquier otro fallo al pintar: el driver rechaza un parche que no cabe
+            # (ValueError), o un bug del driver (un RecursionError de la rev C, revisores
+            # de la fase 4). Nunca puede subir hasta run() y matar el hilo: se trata como
+            # un fallo del render (aviso y reintento con una imagen entera, con espera
+            # creciente). DisplayError e ImageCut siguen arriba con lo suyo.
+            self._render_failed(exc)
 
     def _render_failed(self, exc: Exception) -> None:
         """El render (o los sensores) ha fallado: se deja la última imagen en pantalla, se
@@ -768,6 +805,7 @@ class DisplayService:
             if self._load_theme(new):
                 if display is not None:
                     self._safely(display.set_orientation, self._orientation)
+                    self._fit_renderer()
                     self._safely(display.set_brightness, new.brightness)
                     self._schedule_full()
                 return
@@ -786,9 +824,26 @@ class DisplayService:
         if orientation != self._orientation:
             self._orientation = orientation
             self._safely(display.set_orientation, orientation)  # borra la copia: repintar
+            self._fit_renderer()
             self._schedule_full()
         if new.brightness != old.brightness:
             self._safely(display.set_brightness, new.brightness)
+
+    def _fit_renderer(self) -> None:
+        """El tema, al tamaño de la pantalla abierta (con su orientación ya puesta).
+
+        Un tema de 320x480 en una pantalla de 480x800 se pinta escalado y centrado
+        (``render.motor.fit``). El driver da ``width`` y ``height`` ya girados; una
+        pantalla que no los diga se queda con el tamaño del tema. Solo anota el tamaño:
+        preparar el tema a ese tamaño se hace en la próxima imagen completa, dentro del
+        ``try`` de :meth:`_step` (si falla, se avisa y se reintenta como cualquier fallo
+        del render)."""
+        display, renderer = self._display, self._renderer
+        if display is None or renderer is None:
+            return
+        size = display_size(display)
+        if size is not None:
+            renderer.set_output_size(size)
 
     def _schedule_full(self) -> None:
         if self._display is not None:

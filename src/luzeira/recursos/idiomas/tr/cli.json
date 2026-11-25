@@ -16,6 +16,8 @@
   "cli.detectar_segura": "{model}. Seri numarasından tanındı.",
   "cli.detectar_segura_beta": "{model} (beta: henüz gerçek bir ekranla denenmedi). Seri numarasından tanındı.",
   "cli.detectar_parece": "{model} (beta) gibi görünüyor, ama yalnızca USB'sine göre: kesin değil. Onayın olmadan ona hiçbir şey gönderilmeyecek.",
+  "cli.detectar_beta_confirmar": "USB'sine ve seri numarasına göre bir {model} (beta) gibi görünüyor. Onayın olmadan ona hiçbir şey gönderilmeyecek.",
+  "cli.detectar_elegir_tamano": "bir {model} (beta), ama boyutunu bilmiyorum: “Ekran” > “Model ve port seç” bölümünden seç. Onayın olmadan ona hiçbir şey gönderilmeyecek.",
   "cli.demo_hola": "Merhaba!",
   "cli.demo_funciona": "Ekranın çalışıyor.",
   "cli.demo_conectado": "Bağlı: {model} ({width}x{height}).",

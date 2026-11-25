@@ -126,6 +126,17 @@ class UnsupportedModel(DisplayError):
         super().__init__(Text("pantallas.no_compatible", device=device, model=label))
 
 
+class ModelToChoose(UnsupportedModel):
+    """Una rev C o una WeAct reconocida por su USB cuyo tamaño no se sabe (el saludo de
+    la rev C no lo dice; la WeAct, por un prefijo de serie desconocido). No se abre ni se
+    propone: el usuario la elige con su tamaño en «Elegir modelo y puerto».
+    Para el servicio es como :class:`UnsupportedModel`: se dice y se sigue buscando."""
+
+    def __init__(self, device: str, label: str) -> None:
+        self.device = device
+        DisplayError.__init__(self, Text("pantallas.elegir_modelo", device=device, model=label))
+
+
 class ChosenDisplayMissing(DisplayError):
     """La pantalla elegida a mano no está conectada ahora (o su USB ya no coincide)."""
 
@@ -138,12 +149,20 @@ class ImageCut(DisplayError):
     agotado) en una pantalla que puede seguir esperando el resto de los píxeles: lo
     próximo que se le mande (el saludo al reabrir) lo tomaría por imagen.
 
-    Lo lanzan los drivers beta (rev B y Kipye). La rev A no: se reinicia al abrir el puerto
+    Lo lanzan los drivers beta (rev B, Kipye y rev C). La rev A no: se reinicia al abrir el puerto
     (medido), así que reabrir ya la deja limpia. El servicio no la vuelve a abrir a ciegas:
     pide desenchufarla y espera a ver cambiar la lista de puertos (o un rato largo)."""
 
     def __init__(self) -> None:
         super().__init__(Text("pantallas.imagen_cortada"))
+
+
+class OpenInterrupted(Exception):  # una señal, no un fallo
+    """La apertura de una pantalla se ha cortado porque el servicio tiene que parar o
+    suspender. La lanza el ``sleep`` que el servicio pasa a los drivers (despertar la rev C
+    son hasta ~20 s de esperas). No es un :class:`DisplayError` a propósito: los bucles de
+    reintento de los drivers no la atrapan, así que sube hasta quien la pidió. Los puertos
+    que llegaran a abrirse se cierran por el camino (``open_probed``)."""
 
 
 class Transport(Protocol):
@@ -241,6 +260,11 @@ def open_probed(
             _close_quietly(transport)
             # «No contesta» ya es un mensaje para el usuario; lo demás, el genérico.
             last_error = exc if isinstance(exc, NoAnswer) else open_error(device, exc)
+        except BaseException:
+            # Cualquier otra cosa (p. ej. :class:`OpenInterrupted` desde ``sleep``): el
+            # puerto se cierra igual y la excepción sigue su camino, sin reintentar.
+            _close_quietly(transport)
+            raise
         if attempt < retries - 1:
             sleep(delay)
     raise last_error

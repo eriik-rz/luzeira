@@ -52,16 +52,17 @@ from luzeira.editor.ventana import EXIT_NO_WEBVIEW2
 from luzeira.idioma import t
 from luzeira.marca import STAR, draw_mark
 from luzeira.pantallas.modelos import (
-    REV_C,
-    SUPPORTED,
+    ADVANCED,
+    REV_C_SIZES,
     DisplayChoice,
     DisplayModel,
     PortInfo,
     compatible_models,
     identify,
-    is_rev_c,
+    is_own_usb_only,
     list_ports,
     model_by_key,
+    remembered_device,
 )
 from luzeira.servicio import DisplayService, Settings, Status
 from luzeira.sistema import autoarranque, paquete, tarea_inicio
@@ -107,6 +108,9 @@ TITLE_BETA = "bandeja.beta_titulo"
 MSG_BETA = "bandeja.beta_texto"
 # Para los modelos sin saludo (Kipye): la prueba no puede fallar, así que no se promete.
 MSG_BETA_UNCHECKED = "bandeja.beta_texto_sin_saludo"
+# Para la rev C: además del saludo, hay que despertarla primero (hasta ~15 s abriendo su
+# puente y unos segundos de saludos: ``pantallas.turing_rev_c``).
+MSG_BETA_REV_C = "bandeja.beta_texto_rev_c"
 TITLE_LOOKS_RIGHT = "bandeja.se_ve_bien_titulo"
 MSG_LOOKS_RIGHT = "bandeja.se_ve_bien_texto"
 MSG_TRIAL_REJECTED = "bandeja.prueba_rechazada"
@@ -164,6 +168,27 @@ def clip(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
+def beta_template(model: DisplayModel) -> str:
+    """El aviso de «vas a probar un modelo en beta» que le toca a ``model``."""
+    if model in REV_C_SIZES:
+        return MSG_BETA_REV_C
+    return MSG_BETA if model.has_hello else MSG_BETA_UNCHECKED
+
+
+def unsupported_line(port: PortInfo) -> str | None:
+    """La línea deshabilitada «todavía no compatible» de un puerto, o None.
+
+    Solo si se reconoce un modelo sin driver **y** la lista cerrada no ofrece nada en ese
+    puerto: una rev C o una WeAct de verdad ya salen con sus tamaños (fase 5). Queda, por
+    ejemplo, para un aparato que anuncia el serie de una rev C con otro USB."""
+    found = identify(port)
+    if found is None or found.model is None or found.model.supported:
+        return None
+    if compatible_models(port):
+        return None
+    return t("bandeja.no_compatible", device=port.device, model=found.model.label)
+
+
 def make_icon(color: tuple[int, int, int] = STAR) -> Image.Image:
     """Icono de 64x64: el lucero de Luzeira con el color del estado."""
     return draw_mark(64, color)
@@ -210,7 +235,7 @@ class EditorSettings:
         advanced: list[dict] = []
         for port in app._ports():
             for model in compatible_models(port):
-                template = MSG_BETA if model.has_hello else MSG_BETA_UNCHECKED
+                template = beta_template(model)
                 closed.append(
                     {
                         "id": f"lista:{port.device}:{model.key}",
@@ -225,21 +250,21 @@ class EditorSettings:
                         "action": (model, port, False),
                     }
                 )
-            found = identify(port)
-            if found is not None and found.model is REV_C:
+            unsupported = unsupported_line(port)
+            if unsupported is not None:
                 closed.append(
                     {
                         "id": None,
-                        "label": t("bandeja.no_compatible", device=port.device, model=REV_C.label),
+                        "label": unsupported,
                         "beta": True,
                         "current": False,
                         "warning": None,
                         "action": None,
                     }
                 )
-            if is_rev_c(port):
-                continue  # 🔴 ni en modo avanzado (R5-02): su protocolo tiene órdenes de borrar
-            for model in SUPPORTED:
+            if is_own_usb_only(port):
+                continue  # 🔴 ni rev C (R5-02: órdenes que borran) ni WeAct (sin marco)
+            for model in ADVANCED:  # sin rev C ni WeAct: solo casan con su propio USB
                 advanced.append(
                     {
                         "id": f"avanzado:{port.device}:{model.key}",
@@ -570,7 +595,7 @@ class TrayApp:
             return
         self._trial = None
         from_editor = self._trial_from_editor
-        found = replace(trial, device=info.device or trial.device)
+        found = replace(trial, device=remembered_device(trial, info.device))
         if info.verified:
             self._remember(found)
         else:
@@ -751,8 +776,7 @@ class TrayApp:
             if not self._ask(t(TITLE_ADVANCED), text, warning=True):
                 return
         elif model.beta:
-            template = MSG_BETA if model.has_hello else MSG_BETA_UNCHECKED
-            text = t(template, device=port.device, model=model.label)
+            text = t(beta_template(model), device=port.device, model=model.label)
             if not self._ask(t(TITLE_BETA), text):
                 return
         self._try_choice(DisplayChoice.for_port(model, port, advanced=advanced))
@@ -1154,25 +1178,22 @@ class TrayApp:
                         pick(model, port, False),
                         checked=is_current(model, port),
                     )
-                found = identify(port)
-                if found is not None and found.model is REV_C:
+                unsupported = unsupported_line(port)
+                if unsupported is not None:
                     offered = True
-                    yield Item(
-                        t("bandeja.no_compatible", device=port.device, model=REV_C.label),
-                        None,
-                        enabled=False,
-                    )
+                    yield Item(unsupported, None, enabled=False)
             if not offered:
                 yield Item(t("bandeja.menu_sin_compatibles"), None, enabled=False)
 
         def advanced_models(port):
-            return Menu(*[Item(m.menu_label, pick(m, port, True)) for m in SUPPORTED])
+            return Menu(*[Item(m.menu_label, pick(m, port, True)) for m in ADVANCED])
 
         def advanced_items():
             # 🔴 Una rev C no sale ni aquí (R5-02): es el único protocolo de la familia con
             # órdenes que borran, y un tema podría formarlas con sus píxeles si se le
             # mandara el protocolo de otro modelo. Ya sale, deshabilitada, en la lista.
-            ports = [p for p in self._ports() if not is_rev_c(p)]
+            # Tampoco una WeAct: su protocolo no tiene marco (revisor de la fase 5).
+            ports = [p for p in self._ports() if not is_own_usb_only(p)]
             if not ports:
                 yield Item(t("bandeja.menu_sin_puertos"), None, enabled=False)
             for port in ports:

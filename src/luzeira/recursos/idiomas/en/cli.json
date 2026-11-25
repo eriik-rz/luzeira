@@ -16,6 +16,8 @@
   "cli.detectar_segura": "{model}. Recognized by its serial number.",
   "cli.detectar_segura_beta": "{model} (beta: not tested with a real display yet). Recognized by its serial number.",
   "cli.detectar_parece": "looks like a {model} (beta), but only by its USB: not certain. Nothing will be sent to it without your confirmation.",
+  "cli.detectar_beta_confirmar": "looks like a {model} (beta) by its USB and serial number. Nothing will be sent to it without your confirmation.",
+  "cli.detectar_elegir_tamano": "a {model} (beta), but I don't know its size: choose it in “Display” > “Choose model and port”. Nothing will be sent to it without your confirmation.",
   "cli.demo_hola": "Hello!",
   "cli.demo_funciona": "Your display works.",
   "cli.demo_conectado": "Connected: {model} ({width}x{height}).",

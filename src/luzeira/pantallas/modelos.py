@@ -14,8 +14,13 @@ Reglas (C-44):
   *fabricante* de muchas rev A: ese campo no cuenta) y con el USB ``1a86:5722``.
 - Kipye (``454d:4e41``): no tiene serie conocido, así que solo se propone; el usuario
   confirma.
-- Rev C (``CT…INCH`` dormida, ``20080411`` despierta): se reconoce para decir que aún
-  no es compatible; nunca se abre.
+- Rev C (beta): se reconoce por su «puente» USB (``1a86:ca21``/``ca50``, el que se ve
+  mientras duerme, serie ``CT…INCH``) o por el aparato despierto (ids de gadget de Linux
+  **y** serie ``20080411``). Su saludo no dice el tamaño, así que hay un modelo por tamaño
+  (2,1"/2,8", 5" y 8,8") y lo elige el usuario; ``REV_C`` es la familia, para reconocerla.
+  Nunca se abre sola: como mucho se propone (si el serie del puente dice el tamaño).
+- WeAct Display FS (beta): ``1a86:fe0c`` **y** el prefijo del serie (``AB`` 3,5",
+  ``AD`` 0,96"). Se propone (el usuario confirma); con otro prefijo, que elija el tamaño.
 - Un ``1a86:5722`` sin serie conocido puede ser rev A o rev B: se pregunta.
 """
 
@@ -28,6 +33,12 @@ from luzeira.idioma import Text, t
 
 VID_PID_CH552 = (0x1A86, 0x5722)  # rev A, UsbPCMonitor y XuanFang rev B
 VID_PID_KIPYE = (0x454D, 0x4E41)
+# WeAct Display FS: el mismo USB en los dos tamaños; el serie empieza por «AB» (3,5") o
+# «AD» (0,96"). Fuente: ``lcd_comm_weact_a.py``/``_b.py`` de turing-smart-screen-python
+# (commit 36ebc0a), resumido en ``docs/investigacion/tanda-11/weact-y-otras/informe.md``.
+# Sale del código, no de un volcado USB real [SIN VERIFICAR].
+VID_PID_WEACT = (0x1A86, 0xFE0C)
+WEACT_SERIAL_PREFIXES = {"AB": "weact-35", "AD": "weact-096"}
 REV_A_SERIAL_PREFIX = "USB35INCHIPS"
 REV_B_SERIAL = "2017-2-25"
 REV_C_SLEEPING_SERIALS = frozenset({"CT21INCH", "USB7INCH", "CT88INCH", "CT50INCH"})
@@ -93,6 +104,9 @@ KIPYE = DisplayModel(
     has_hello=False,
     label_key="pantallas.modelo_kipye",
 )
+# La familia rev C, para reconocerla (``identify``) y nombrarla. No se abre con este
+# modelo (``supported=False``): sin tamaño no hay driver. Se abre con uno de los tres de
+# abajo, que tienen el driver de ``turing_rev_c``.
 REV_C = DisplayModel(
     "turing-rev-c",
     'Turing 2,1"/5"/8,8"',
@@ -101,9 +115,75 @@ REV_C = DisplayModel(
     supported=False,
     label_key="pantallas.modelo_rev_c",
 )
+# Las claves no llevan puntos: el patrón de ``config.DisplaySetting.model`` no los admite.
+REV_C_21 = DisplayModel(
+    "turing-rev-c-21",
+    'Turing 2,1"/2,8"',
+    REV_C.usb_ids,
+    beta=True,
+    label_key="pantallas.modelo_rev_c_21",
+)
+REV_C_5 = DisplayModel(
+    "turing-rev-c-5", 'Turing 5"', REV_C.usb_ids, beta=True, label_key="pantallas.modelo_rev_c_5"
+)
+REV_C_88 = DisplayModel(
+    "turing-rev-c-88",
+    'Turing 8,8"',
+    REV_C.usb_ids,
+    beta=True,
+    label_key="pantallas.modelo_rev_c_88",
+)
+REV_C_SIZES: tuple[DisplayModel, ...] = (REV_C_21, REV_C_5, REV_C_88)
+# Qué tamaño dice el serie del puente. Solo los que tienen una fuente:
+# - ``CT50INCH``: un 5" de Lian Li que contesta «chs_5inch» (issue #1030 de TSP).
+# - ``USB7INCH`` (5", a pesar del nombre) y ``CT88INCH`` (8,8"): Libre Panel
+#   (``turing_rev_c.rs``); la referencia no asocia series a tamaños [SIN VERIFICAR].
+# - ``CT21INCH`` no dice nada: lo llevan el 2,1", el 2,8" redondo de SAMA (#1022) y
+#   también un 5" (#1075, #1022). Ahí elige el usuario.
+REV_C_SIZE_BY_SERIAL = {"CT50INCH": REV_C_5, "USB7INCH": REV_C_5, "CT88INCH": REV_C_88}
 
-MODELS: tuple[DisplayModel, ...] = (REV_A, REV_B, KIPYE, REV_C)
+# WeAct: la familia (para reconocer un ``fe0c`` con un serie desconocido) y los dos
+# tamaños, que son los que tienen driver (``weact``).
+WEACT = DisplayModel(
+    "weact",
+    "WeAct Display FS",
+    frozenset({VID_PID_WEACT}),
+    beta=True,
+    supported=False,
+    label_key="pantallas.modelo_weact",
+)
+WEACT_35 = DisplayModel(
+    "weact-35",
+    'WeAct Display FS 3,5"',
+    frozenset({VID_PID_WEACT}),
+    beta=True,
+    label_key="pantallas.modelo_weact_35",
+)
+WEACT_096 = DisplayModel(
+    "weact-096",
+    'WeAct Display FS 0,96"',
+    frozenset({VID_PID_WEACT}),
+    beta=True,
+    label_key="pantallas.modelo_weact_096",
+)
+WEACT_MODELS: tuple[DisplayModel, ...] = (WEACT_35, WEACT_096)
+
+MODELS: tuple[DisplayModel, ...] = (
+    REV_A,
+    REV_B,
+    KIPYE,
+    *REV_C_SIZES,
+    REV_C,
+    *WEACT_MODELS,
+    WEACT,
+)
 SUPPORTED: tuple[DisplayModel, ...] = tuple(m for m in MODELS if m.supported)
+# Lo que el «Modo avanzado» puede mandar a cualquier puerto. Ni la rev C ni la WeAct: sus
+# modelos solo casan con su propio USB (``match_choice``), así que ofrecerlas en otro
+# puerto sería una opción muerta, y mandarlas a otro aparato, lo que R5-01/R5-02 prohíben.
+ADVANCED: tuple[DisplayModel, ...] = tuple(
+    m for m in SUPPORTED if m not in REV_C_SIZES and m not in WEACT_MODELS
+)
 
 
 def model_by_key(key: str) -> DisplayModel | None:
@@ -193,6 +273,9 @@ def identify(port: PortInfo) -> Identification | None:
         if port.serial == REV_B_SERIAL:
             return Identification(REV_B, sure=True)
         return Identification(None, sure=False)
+    if usb_id == VID_PID_WEACT:
+        model = model_by_key(WEACT_SERIAL_PREFIXES.get(port.serial[:2], ""))
+        return Identification(model or WEACT, sure=model is not None)
     if usb_id == VID_PID_KIPYE:
         return Identification(KIPYE, sure=False)
     if port.serial in REV_C_SLEEPING_SERIALS or usb_id in REV_C_SLEEPING_IDS:
@@ -203,11 +286,54 @@ def identify(port: PortInfo) -> Identification | None:
 
 
 def is_rev_c(port: PortInfo) -> bool:
-    """¿Es una rev C (o lo parece por su USB)? Es el único protocolo de la familia con
-    órdenes que borran o reinician (R5-02): a un puerto así no se le manda nada, ni en el
-    modo avanzado."""
+    """¿Es una rev C (o lo parece por su USB o su serie)? Es el único protocolo de la
+    familia con órdenes que borran o reinician (R5-02): a un puerto así no se le manda el
+    protocolo de ningún otro modelo, ni en el modo avanzado."""
     found = identify(port)
     return found is not None and found.model is REV_C
+
+
+def is_rev_c_bridge(port: PortInfo) -> bool:
+    """¿Es el puente USB de una rev C (lo que Windows ve mientras duerme)? Por su USB: el
+    serie ``CT…INCH`` con otro VID:PID no basta (cualquiera puede anunciarlo, R5-07)."""
+    return port.usb_id in REV_C_SLEEPING_IDS
+
+
+def is_weact(port: PortInfo) -> bool:
+    """¿Tiene el USB de una WeAct (``1a86:fe0c``), con el serie que sea?"""
+    return port.usb_id == VID_PID_WEACT
+
+
+def is_own_usb_only(port: PortInfo) -> bool:
+    """¿Es un puerto al que solo se le manda el protocolo de su propio modelo, ni en el
+    modo avanzado? La rev C (R5-02: tiene órdenes que borran) y la WeAct (sin marco: el
+    protocolo de otro modelo se leería como píxeles u órdenes suyas; revisor de la fase 5)."""
+    return is_rev_c(port) or is_weact(port)
+
+
+def remembered_device(choice: DisplayChoice, opened: str | None) -> str:
+    """El COM que se guarda al recordar ``choice`` tras abrirla en ``opened``.
+
+    Normalmente el abierto (Windows puede haberla movido de COM). Con la rev C elegida por
+    su puente, el abierto es el aparato despierto: se guarda ese, porque es como se
+    reconoce el despierto que Luzeira ya comprobó (``apertura.open_rev_c``)… salvo si el
+    puente no tiene serie: entonces ``match_choice`` exige el mismo COM del puente, y
+    guardar el del despierto haría que no casara nunca más (revisor de la fase 5)."""
+    bridge = PortInfo(choice.device, choice.vid, choice.pid, choice.serial)
+    if is_rev_c_bridge(bridge) and not choice.serial:
+        return choice.device
+    return opened or choice.device
+
+
+def is_rev_c_awake(port: PortInfo) -> bool:
+    """¿Parece una rev C despierta? Ids de gadget **y** su serie: los ids solos los
+    comparten otros aparatos (una Raspberry Pi en modo gadget)."""
+    return port.usb_id in REV_C_AWAKE_IDS and port.serial == REV_C_AWAKE_SERIAL
+
+
+def rev_c_size(port: PortInfo) -> DisplayModel | None:
+    """El tamaño que dice el serie del puente, si lo dice (:data:`REV_C_SIZE_BY_SERIAL`)."""
+    return REV_C_SIZE_BY_SERIAL.get(port.serial) if is_rev_c_bridge(port) else None
 
 
 def compatible_models(port: PortInfo) -> list[DisplayModel]:
@@ -221,10 +347,14 @@ def compatible_models(port: PortInfo) -> list[DisplayModel]:
     usb_id = port.usb_id
     if usb_id is None:
         return []
+    if is_rev_c_bridge(port) or is_rev_c_awake(port):
+        return list(REV_C_SIZES)  # el saludo no dice el tamaño: los tres
     found = identify(port)
     if found is not None and found.sure and found.model is not None:
         return [found.model] if found.model.supported else []
-    return [m for m in SUPPORTED if usb_id in m.usb_ids]
+    # Los tamaños de la rev C solo en su puente o su despierto (arriba): un gadget con sus
+    # ids y otro serie (una Raspberry Pi) no es una rev C.
+    return [m for m in SUPPORTED if usb_id in m.usb_ids and m not in REV_C_SIZES]
 
 
 def match_choice(choice: DisplayChoice, ports: Iterable[PortInfo]) -> PortInfo | None:
@@ -239,12 +369,21 @@ def match_choice(choice: DisplayChoice, ports: Iterable[PortInfo]) -> PortInfo |
       COM sería mandarle píxeles a una máquina sin preguntar.
     - Sin USB (solo en modo avanzado): el mismo COM y que siga sin USB. No hay nada más con
       lo que reconocerlo.
-    - 🔴 Nunca un puerto que se identifica como rev C (R5-02).
+    - 🔴 Nunca un puerto que se identifica como rev C (R5-02)…
+    - …salvo para un modelo rev C, que solo vale en una rev C (:func:`_match_rev_c`).
     """
     model = model_by_key(choice.model)
     if model is None or not model.supported:
         return None
-    ports = [p for p in ports if not is_rev_c(p)]
+    if model in WEACT_MODELS:
+        # 🔴 Una WeAct elegida solo casa con un USB de WeAct, también en modo avanzado.
+        ports = [p for p in ports if p.usb_id == VID_PID_WEACT]
+    if model in REV_C_SIZES:
+        return _match_rev_c(choice, ports)
+    if model not in WEACT_MODELS:
+        ports = [p for p in ports if not is_own_usb_only(p)]
+    else:
+        ports = [p for p in ports if not is_rev_c(p)]
     if choice.vid is None or choice.pid is None:
         return next((p for p in ports if p.device == choice.device and p.usb_id is None), None)
     usb_id = (choice.vid, choice.pid)
@@ -257,3 +396,29 @@ def match_choice(choice: DisplayChoice, ports: Iterable[PortInfo]) -> PortInfo |
     if choice.advanced or not choice.serial:
         return here  # el mismo aparato solo se reconoce por su COM
     return here or (same[0] if same else None)
+
+
+def _match_rev_c(choice: DisplayChoice, ports: Iterable[PortInfo]) -> PortInfo | None:
+    """El puerto de una rev C elegida: su puente, o el aparato despierto si se eligió ese.
+
+    - Elegida sobre el puente: mismo VID:PID y mismo serie (``CT…INCH`` dice el modelo, no
+      la unidad, como el de la rev A), preferiblemente en el mismo COM; sin serie, el mismo
+      COM (R5-01). ``apertura`` la despierta después.
+    - Elegida sobre el aparato despierto: su serie ``20080411`` es el de cualquier gadget
+      de ese tipo, así que vale solo el mismo COM con los mismos ids (como sin serie).
+    - Nunca un puerto que no sea de rev C, aunque se eligiera en el modo avanzado.
+    """
+    if choice.vid is None or choice.pid is None:
+        return None
+    usb_id = (choice.vid, choice.pid)
+    same = [
+        p
+        for p in ports
+        if p.usb_id == usb_id
+        and p.serial == choice.serial
+        and (is_rev_c_bridge(p) or is_rev_c_awake(p))
+    ]
+    here = next((p for p in same if p.device == choice.device), None)
+    if not same or not is_rev_c_bridge(same[0]) or not choice.serial:
+        return here
+    return here or same[0]

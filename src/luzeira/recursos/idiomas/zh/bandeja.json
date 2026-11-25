@@ -2,6 +2,7 @@
   "bandeja.sin_webview2": "编辑器需要 Microsoft Edge WebView2 Runtime（微软免费提供）。安装后再重新打开编辑器。",
   "bandeja.beta_titulo": "Luzeira：试用测试版型号",
   "bandeja.beta_texto": "你将在 {device} 上用 {model} 试用 Luzeira。\n\n这个型号还处于测试阶段：尚未在真实的副屏上测试过。\n\nLuzeira 会先只发一个问候。如果它没有正确回应，Luzeira 会关闭端口并提醒你，不再做其他尝试。\n\n要试一下吗？",
+  "bandeja.beta_texto_rev_c": "你将在 {device} 上用 {model} 试用 Luzeira。\n\n这个型号还处于测试阶段：尚未在真实的副屏上测试过。\n\n需要先唤醒它：Luzeira 会打开再关闭它的端口，不向它发送任何内容，可能需要大约 20 秒。\n\nLuzeira 会先只发一个问候。如果它没有正确回应，Luzeira 会关闭端口并提醒你，不再做其他尝试。\n\n要试一下吗？",
   "bandeja.beta_texto_sin_saludo": "你将在 {device} 上用 {model} 试用 Luzeira。\n\n这个型号还处于测试阶段：尚未在真实的副屏上测试过。\n\n另外，这个型号不回应任何问候，所以 Luzeira 无法确认它就是你的副屏：会直接把画面发过去。\n\n如果看到条纹或什么都不显示，请拔掉它，或选择“重新自动检测”（在图标菜单的“副屏”中，或在编辑器的“设置”中）。\n\n要试一下吗？",
   "bandeja.se_ve_bien_titulo": "Luzeira：显示正常吗？",
   "bandeja.se_ve_bien_texto": "Luzeira 正在把主题发送到 {device} 上的 {model}，但无法自行确认是否显示出来。\n\n副屏上的主题显示正常吗？\n\n如果你回答“是”，我下次会记住它。如果看到条纹、颜色异常或什么都没有，请回答“否”，我就不再使用它。",

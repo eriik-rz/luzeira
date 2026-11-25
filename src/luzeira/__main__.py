@@ -22,7 +22,7 @@ from luzeira.idioma import t
 from luzeira.pantallas import DisplayError, Orientation, TuringRevA
 
 if TYPE_CHECKING:
-    from luzeira.pantallas.modelos import Identification
+    from luzeira.pantallas.modelos import Identification, PortInfo
 
 # Vite del editor en desarrollo: escucha solo en 127.0.0.1 (contrato de la fase 5). Con
 # «localhost» el navegador manda Origin «http://localhost:5173» y el servidor lo rechaza.
@@ -40,16 +40,33 @@ def _detect(ports: Iterable | None = None) -> int:
         print(t("cli.detectar_ninguna"))
         return 1
     for port, ident in found:
-        print(f"{port.device}: {_detect_line(ident)}")
+        print(f"{port.device}: {_detect_line(ident, port)}")
     return 0
 
 
-def _detect_line(ident: Identification) -> str:
+def _detect_line(ident: Identification, port: PortInfo) -> str:
+    """Una línea por pantalla. Dice lo mismo que hará la detección sola
+    (``pantallas.apertura.open_auto``): la rev C y la WeAct nunca se abren solas.
+
+    - Una familia sin driver propio (rev C, WeAct) cuyos tamaños sí se ofrecen: con el
+      tamaño si el serie lo dice (se propone y el usuario confirma); si no, que lo elija.
+    - Una WeAct con su prefijo de serie: se propone, no se abre sola (beta, USB y serie
+      sacados solo de código ajeno).
+    """
+    from luzeira.pantallas.modelos import WEACT_MODELS, compatible_models, rev_c_size
+
     model = ident.model
     if model is None:
         return t("cli.detectar_rev_a_o_b")
     if not model.supported:
-        return t("cli.detectar_no_compatible", model=model.label)
+        if not compatible_models(port):
+            return t("cli.detectar_no_compatible", model=model.label)
+        size = rev_c_size(port)
+        if size is not None:
+            return t("cli.detectar_beta_confirmar", model=size.label)
+        return t("cli.detectar_elegir_tamano", model=model.label)
+    if model in WEACT_MODELS:
+        return t("cli.detectar_beta_confirmar", model=model.label)
     if ident.sure:
         key = "cli.detectar_segura_beta" if model.beta else "cli.detectar_segura"
         return t(key, model=model.label)

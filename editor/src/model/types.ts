@@ -104,6 +104,8 @@ export interface ThemeJson {
   name: string
   author?: string | null
   orientation: Orientation
+  /** Tamaño de la pantalla para la que está hecho (opcional; sin él, `ORIENTATION_SIZES`). */
+  canvas?: Size | null
   background?: BackgroundJson
   widgets?: WidgetJson[]
 }
@@ -163,6 +165,11 @@ export interface Theme {
   name: string
   author: string | null
   orientation: Orientation
+  /**
+   * Solo si no es el de siempre (320 × 480 / 480 × 320): así un tema sin lienzo se guarda
+   * igual que antes y lo siguen leyendo las versiones viejas de Luzeira.
+   */
+  canvas?: Size
   background: Background
   widgets: Widget[]
 }
@@ -197,7 +204,7 @@ export const REL_PATH_RE = /^([A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+\.[A-Za-z0-9]{2,5}
 export const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif'] as const
 export const FONT_EXTENSIONS = ['ttf', 'otf'] as const
 
-/** Tamaño de la pantalla (ancho, alto) según la orientación. */
+/** Tamaño de un tema sin lienzo (ancho, alto) según la orientación. */
 export const ORIENTATION_SIZES: Record<Orientation, { width: number; height: number }> = {
   portrait: { width: 320, height: 480 },
   'reverse-portrait': { width: 320, height: 480 },
@@ -205,11 +212,37 @@ export const ORIENTATION_SIZES: Record<Orientation, { width: number; height: num
   'reverse-landscape': { width: 480, height: 320 },
 }
 
+/**
+ * Lienzos que puede pedir un tema, en vertical (`CANVAS_SIZES_PORTRAIT` en modelo.py, que
+ * cuenta de qué pantalla sale cada uno; un test de Python compara las dos tablas). En
+ * horizontal, los mismos girados.
+ */
+export const CANVAS_SIZES_PORTRAIT: readonly (readonly [number, number])[] = [
+  [320, 480],
+  [480, 480],
+  [480, 800],
+  [600, 1024],
+  [480, 1920],
+]
+
 export interface Size {
   width: number
   height: number
 }
 
-export function screenSize(theme: Pick<Theme, 'orientation'>): Size {
-  return ORIENTATION_SIZES[theme.orientation]
+export function isLandscape(o: Orientation): boolean {
+  return o === 'landscape' || o === 'reverse-landscape'
+}
+
+/** Los lienzos que van con una orientación (vertical: ancho ≤ alto), del más pequeño al mayor. */
+export function canvasSizesFor(o: Orientation): Size[] {
+  return CANVAS_SIZES_PORTRAIT.map(([w, h]) => (isLandscape(o) ? { width: h, height: w } : { width: w, height: h }))
+}
+
+export function isAllowedCanvas(size: Size, o: Orientation): boolean {
+  return canvasSizesFor(o).some((c) => c.width === size.width && c.height === size.height)
+}
+
+export function screenSize(theme: Pick<Theme, 'orientation'> & { canvas?: Size | null }): Size {
+  return theme.canvas ? { width: theme.canvas.width, height: theme.canvas.height } : ORIENTATION_SIZES[theme.orientation]
 }

@@ -16,6 +16,8 @@
   "cli.detectar_segura": "{model}。シリアル番号で認識しました。",
   "cli.detectar_segura_beta": "{model} (ベータ版: 実際のディスプレイではまだテストされていません)。シリアル番号で認識しました。",
   "cli.detectar_parece": "{model} (ベータ版) のようですが、USB の情報だけで判断しているため確実ではありません。確認するまで何も送信しません。",
+  "cli.detectar_beta_confirmar": "USB とシリアル番号から {model} (ベータ版) と思われます。確認するまで何も送信しません。",
+  "cli.detectar_elegir_tamano": "{model} (ベータ版) ですが、サイズがわかりません。「ディスプレイ」>「モデルとポートを選択」で選んでください。確認するまで何も送信しません。",
   "cli.demo_hola": "こんにちは！",
   "cli.demo_funciona": "ディスプレイは正常に動作しています。",
   "cli.demo_conectado": "接続しました: {model} ({width}x{height})。",

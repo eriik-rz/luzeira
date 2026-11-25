@@ -37,6 +37,7 @@
   "modelo.validar.max_min": "最大値は最小値より大きくする必要があります。",
   "modelo.validar.nombre": "テーマには名前が必要です。",
   "modelo.validar.elementos": "1 つのテーマに置ける要素は {max} 個までです。",
+  "modelo.validar.lienzo": "この画面サイズはこの向きでは使えません。一覧から選んでください。",
   "modelo.validar.traducciones": "このテキストの翻訳が無効です。",
   "modelo.validar.traducciones_muchas": "1 つのテキストに使える言語は {max} 個までです。",
   "modelo.validar.traduccion_codigo": "「{codigo}」は有効な言語コードではありません (「en」のような小文字 2 文字です)。",

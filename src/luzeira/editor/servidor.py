@@ -69,6 +69,7 @@ from luzeira.sensores.base import Reading, SensorInfo
 from luzeira.temas import ThemeError, font_for_text, load_theme, missing_glyphs, resolve_font
 from luzeira.temas.cargar import MAX_ZIP_BYTES
 from luzeira.temas.modelo import (
+    CANVAS_SIZES,
     ORIENTATION_SIZES,
     ClockWidget,
     SensorWidget,
@@ -142,6 +143,8 @@ CSP = (
 PREVIEW_SUPERSEDED = 409  # código de una vista previa que ya no hace falta (ver arriba)
 # Memoria máxima de la caché de imágenes ya escaladas. Una imagen de pantalla completa
 # (480x320 RGBA) son 600 KB: caben unas cien, de sobra para los 64 elementos de un tema.
+# Con el lienzo mayor (480x1920, 3,7 MB) caben 17 de pantalla completa; las imágenes de
+# un tema suelen ser mucho más pequeñas, y si no caben solo se recalculan (más lento).
 SCALED_CACHE_BYTES = 64 * 1024 * 1024
 
 
@@ -423,6 +426,10 @@ class EditorServer:
     def info(self) -> dict:
         status, message = self._status()
         sizes = {k: {"width": w, "height": h} for k, (w, h) in ORIENTATION_SIZES.items()}
+        # Lienzos que admite un tema (``canvas``), en vertical y horizontal: la misma
+        # tabla que ``CANVAS_SIZES_PORTRAIT`` de editor/src/model/types.ts (lo comprueba
+        # test_editor_servidor).
+        canvases = [{"width": w, "height": h} for w, h in CANVAS_SIZES]
         active = self._active_theme() if self._active_theme is not None else None
         return {
             "version": __version__,
@@ -431,6 +438,7 @@ class EditorServer:
             "status": str(status),
             "message": message,
             "sizes": sizes,
+            "canvases": canvases,
             "active_theme": active,
             # «¿Se ve bien?» de una pantalla elegida en el editor: la interfaz la muestra
             # en cuanto la ve aquí (pregunta por /api/info cada pocos segundos).

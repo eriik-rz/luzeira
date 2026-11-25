@@ -16,6 +16,8 @@
   "cli.detectar_segura": "{model}. Reconocida por su número de serie.",
   "cli.detectar_segura_beta": "{model} (beta: todavía sin probar con una pantalla de verdad). Reconocida por su número de serie.",
   "cli.detectar_parece": "parece una {model} (beta), pero solo por su USB: no es seguro. No se le enviará nada sin tu confirmación.",
+  "cli.detectar_beta_confirmar": "parece una {model} (beta) por su USB y su número de serie. No se le enviará nada sin tu confirmación.",
+  "cli.detectar_elegir_tamano": "una {model} (beta), pero no sé de qué tamaño es: elígela en «Pantalla» > «Elegir modelo y puerto». No se le enviará nada sin tu confirmación.",
   "cli.demo_hola": "¡Hola!",
   "cli.demo_funciona": "Tu pantalla funciona.",
   "cli.demo_conectado": "Conectado: {model} ({width}x{height}).",

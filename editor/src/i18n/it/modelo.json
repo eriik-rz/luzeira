@@ -37,6 +37,7 @@
   "modelo.validar.max_min": "Il massimo deve essere maggiore del minimo.",
   "modelo.validar.nombre": "Il tema ha bisogno di un nome.",
   "modelo.validar.elementos": "Al massimo {max} elementi per tema.",
+  "modelo.validar.lienzo": "Questa dimensione dello schermo non va con questo orientamento. Scegline una dall'elenco.",
   "modelo.validar.traducciones": "Le traduzioni di questo testo non sono valide.",
   "modelo.validar.traducciones_muchas": "Al massimo {max} lingue per testo.",
   "modelo.validar.traduccion_codigo": "«{codigo}» non è un codice di lingua valido (due lettere minuscole, come «en»).",
