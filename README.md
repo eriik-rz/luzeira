@@ -4,7 +4,7 @@ Tu pantalla USB de monitorización del PC, en tu idioma y como tú quieras.
 
 ### [⬇ Descargar en Microsoft Store](https://apps.microsoft.com/detail/9MSNPHG5NZ40) · [Instalador (GitHub)](https://github.com/eriik-rz/luzeira/releases/latest)
 
-¿Quieres verlo antes? [Mira la web de Luzeira](https://eriik-rz.github.io/luzeira/): ahí puedes probar el editor sin instalar nada. Síguela en [X](https://x.com/eriik_rz_dev), y hay vídeos en [TikTok](https://www.tiktok.com/@eriik_rz.dev) e [Instagram](https://www.instagram.com/eriik_rz.dev/).
+¿Quieres verlo antes? [Mira la web de Luzeira](https://eriik-rz.github.io/luzeira/): ahí puedes probar el editor sin instalar nada. Síguela en [X](https://x.com/eriik_rz_dev) y [Facebook](https://www.facebook.com/eriik.rz.dev), y hay vídeos en [TikTok](https://www.tiktok.com/@eriik_rz.dev) e [Instagram](https://www.instagram.com/eriik_rz.dev/).
 
 Luzeira es una app libre para las pequeñas pantallas USB que se ponen dentro o encima del PC (tipo *Turing Smart Screen* / *UsbPCMonitor*). Muestra la hora, el uso y la frecuencia de la CPU, la GPU y la RAM, la red, el disco y la temperatura de la gráfica (y la de la CPU, con un módulo opcional), con 32 temas incluidos y un editor visual para hacer los tuyos, sin tocar ficheros.
 
