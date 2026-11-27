@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Luzeira — your PC on the little USB display</title>
-  <meta name="description" content="Luzeira is a free and open-source Windows app that shows your CPU, graphics card, memory and network on Turing Smart Screen–style USB displays. No ads, no telemetry.">
+  <title>Luzeira: free app for Turing Smart Screen–style USB displays</title>
+  <meta name="description" content="Luzeira is a free and open-source Windows app that shows your CPU, graphics card, memory and network on Turing Smart Screen–style USB displays. With 32 themes and a visual editor. No ads, no telemetry.">
   <meta name="color-scheme" content="dark light">
   <!-- Para compartir en redes (LinkedIn, X…): sin esto cogen la primera foto que encuentran. -->
   <meta property="og:type" content="website">
@@ -14,14 +14,55 @@
   <meta property="og:image" content="https://eriik-rz.github.io/luzeira/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="627">
+  <meta property="og:image:alt" content="The Luzeira visual editor next to nine of its themes">
+  <meta property="og:site_name" content="Luzeira">
   <meta property="og:locale" content="en_US">
+  <meta property="og:locale:alternate" content="es_ES">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@eriik_rz_dev">
   <!-- Sin recursos de fuera: ni fuentes, ni analíticas, ni scripts de terceros. -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'none'; frame-src 'self'; base-uri 'none'; form-action 'none'">
   <!-- La misma página en otros idiomas (para buscadores): URL absolutas, como pide Google. -->
+  <link rel="canonical" href="https://eriik-rz.github.io/luzeira/en/">
   <link rel="alternate" hreflang="es" href="https://eriik-rz.github.io/luzeira/">
   <link rel="alternate" hreflang="en" href="https://eriik-rz.github.io/luzeira/en/">
   <link rel="alternate" hreflang="x-default" href="https://eriik-rz.github.io/luzeira/">
+  <!-- Datos para buscadores (schema.org). No es código: con script-src 'none' el
+       navegador no lo ejecuta, solo lo leen los buscadores. -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Luzeira",
+    "url": "https://eriik-rz.github.io/luzeira/en/",
+    "description": "Luzeira is a free and open-source Windows app that shows your CPU, graphics card, memory and network on Turing Smart Screen–style USB displays. With 32 themes and a visual editor. No ads, no telemetry.",
+    "applicationCategory": "UtilitiesApplication",
+    "operatingSystem": "Windows 10, Windows 11",
+    "offers": {
+      "@type": "Offer",
+      "price": 0,
+      "priceCurrency": "EUR"
+    },
+    "license": "https://github.com/eriik-rz/luzeira/blob/main/LICENSE",
+    "installUrl": "https://apps.microsoft.com/detail/9MSNPHG5NZ40",
+    "image": "https://eriik-rz.github.io/luzeira/og.png",
+    "inLanguage": "en",
+    "sameAs": [
+      "https://github.com/eriik-rz/luzeira",
+      "https://apps.microsoft.com/detail/9MSNPHG5NZ40"
+    ],
+    "author": {
+      "@type": "Person",
+      "name": "eriik-rz",
+      "url": "https://github.com/eriik-rz",
+      "sameAs": [
+        "https://x.com/eriik_rz_dev",
+        "https://www.tiktok.com/@eriik_rz.dev",
+        "https://www.instagram.com/eriik_rz.dev/"
+      ]
+    }
+  }
+  </script>
   <link rel="icon" type="image/png" href="../favicon.png">
   <link rel="stylesheet" href="../estilo.css">
 </head>
@@ -163,7 +204,7 @@
   </main>
 
   <footer class="pie">
-    <p>Luzeira videos on <a href="https://www.tiktok.com/@eriik_rz.dev">TikTok</a> and <a href="https://www.instagram.com/eriik_rz.dev/">Instagram</a>.</p>
+    <p>Luzeira on <a href="https://x.com/eriik_rz_dev">X</a>, and videos on <a href="https://www.tiktok.com/@eriik_rz.dev">TikTok</a> and <a href="https://www.instagram.com/eriik_rz.dev/">Instagram</a>.</p>
     <p>Luzeira is free software under the <a href="https://github.com/eriik-rz/luzeira/blob/main/LICENSE">GPL-3.0</a> license. It isn't affiliated with Turing, XuanFang, Kipye or WeAct.</p>
     <p>This website uses no cookies or analytics and doesn't load anything from other sites. <a href="privacidad.html">Privacy policy</a>.</p>
   </footer>

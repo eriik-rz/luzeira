@@ -7,9 +7,11 @@ que la política de privacidad en inglés tenga las mismas piezas que la españo
 """
 
 import importlib.util
+import json
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlsplit
+from xml.etree import ElementTree
 
 import pytest
 
@@ -39,7 +41,10 @@ class _Page(HTMLParser):
         self.refs: list[str] = []  # href y src de enlaces, imágenes, CSS, iframes
         self.switch: list[tuple[str, str | None]] = []  # (lang, href) del selector
         self.tags: list[str] = []  # h2, h3, li, p, strong: el esqueleto del texto
+        self.canonical: list[str] = []
+        self.ld_json: list[str] = []  # bloques <script type="application/ld+json">
         self._in_switch = 0
+        self._in_ld = False
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
@@ -47,8 +52,13 @@ class _Page(HTMLParser):
             self.lang = a.get("lang")
         if tag == "link" and a.get("rel") == "alternate":
             self.alternates[a["hreflang"]] = a["href"]
+        if tag == "link" and a.get("rel") == "canonical":
+            self.canonical.append(a["href"])
+        if tag == "script" and a.get("type") == "application/ld+json":
+            self._in_ld = True
+            self.ld_json.append("")
         for key in ("href", "src"):
-            if a.get(key):
+            if a.get(key) and a.get("rel") != "canonical":  # la canónica es la de cada idioma
                 self.refs.append(a[key])
         if tag in {"h2", "h3", "li", "p", "strong"}:
             self.tags.append(tag)
@@ -63,6 +73,12 @@ class _Page(HTMLParser):
     def handle_endtag(self, tag):
         if tag == "span" and self._in_switch:
             self._in_switch -= 1
+        if tag == "script":
+            self._in_ld = False
+
+    def handle_data(self, data):
+        if self._in_ld:
+            self.ld_json[-1] += data
 
 
 def parse(rel: str) -> _Page:
@@ -127,6 +143,51 @@ def test_relative_links_exist_in_the_built_site(rel):
         if not target.is_file():
             missing.append(ref)
     assert missing == []
+
+
+@pytest.mark.parametrize("rel", PAGES)
+def test_each_page_is_its_own_canonical(rel):
+    # Con hreflang, cada idioma se declara canónico a sí mismo (Google Search Central):
+    # si la inglesa apuntara a la española, Google dejaría de indexar la inglesa.
+    assert parse(rel).canonical == [public_url(rel)]
+
+
+def test_sitemap_lists_every_page_and_nothing_else():
+    """``web/sitemap.xml`` (se envía en Search Console): las páginas de ``PAGES``, con
+    su URL pública. Sin robots.txt: en ``/luzeira/`` Google no lo lee (va en la raíz
+    del dominio, que es otro repo)."""
+    tree = ElementTree.parse(WEB / "sitemap.xml")  # noqa: S314 — fichero del repo
+    ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+    locs = sorted(loc.text for loc in tree.getroot().findall("s:url/s:loc", ns))
+    assert locs == sorted(public_url(rel) for rel in PAGES)
+
+
+def _software_app(rel: str) -> dict:
+    blocks = parse(rel).ld_json
+    assert len(blocks) == 1
+    data = json.loads(blocks[0])
+    assert data["@context"] == "https://schema.org"
+    assert data["@type"] == "SoftwareApplication"
+    return data
+
+
+@pytest.mark.parametrize("rel", ["index.html", "en/index.html"])
+def test_structured_data_matches_the_page(rel):
+    data = _software_app(rel)
+    assert data["url"] == public_url(rel)
+    assert data["inLanguage"] == PAGES[rel][0]
+    assert data["offers"]["price"] == 0
+    # Sin valoraciones inventadas: Google las exige para el resultado enriquecido,
+    # pero tienen que ser de usuarios reales.
+    assert "aggregateRating" not in data and "review" not in data
+
+
+def test_structured_data_is_the_same_in_both_languages():
+    es, en = _software_app("index.html"), _software_app("en/index.html")
+    for data in (es, en):
+        for key in ("url", "description", "inLanguage"):
+            data.pop(key)
+    assert en == es
 
 
 def test_english_page_opens_the_demo_in_english():
